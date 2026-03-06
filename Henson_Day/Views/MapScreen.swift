@@ -222,4 +222,5 @@ struct MapScreen: View {
 
 #Preview {
     MapScreen()
+        .environmentObject(ModelController())
 }
