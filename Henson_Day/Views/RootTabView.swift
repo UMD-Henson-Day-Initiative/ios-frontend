@@ -13,7 +13,7 @@ import SwiftUI
 struct RootTabView: View {
     var body: some View {
         TabView {
-            HomeScreen()
+            HensonCameraRootView()
                 .tabItem {
                     Image(systemName: "house.fill")
                     Text("Home")
