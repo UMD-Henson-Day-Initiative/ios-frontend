@@ -1,55 +1,53 @@
 import SwiftUI
 
 struct CollectionScreen: View {
-    @EnvironmentObject var appState: AppState
-    @State private var selectedTab = 0  // 0 = collectibles, 1 = badges
+    @EnvironmentObject private var modelController: ModelController
+    @State private var selectedTab = 0  // 0 = collected, 1 = catalog
 
-    var obtainedCount: Int {
-        appState.collectibles.filter { $0.obtained }.count
+    private var collectedItems: [CollectedItemEntity] {
+        UserDatabase.collectedItems(from: modelController)
     }
 
-    var totalPoints: Int {
-        appState.collectibles.filter { $0.obtained }.map(\.points).reduce(0, +)
+    private var collectedNames: Set<String> {
+        Set(collectedItems.map(\.collectibleName))
     }
 
-    var unlockedBadges: Int {
-        appState.badges.filter { $0.unlocked }.count
+    private var totalPointsFromCollection: Int {
+        modelController.currentUser?.totalPoints ?? 0
     }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    // Header stats
                     HStack(spacing: 12) {
                         StatChip(
                             title: "Collected",
-                            value: "\(obtainedCount)/\(appState.collectibles.count)",
+                            value: "\(collectedItems.count)/\(modelController.collectibleCatalog.count)",
                             color: Color("UMDRed")
                         )
                         StatChip(
                             title: "Points",
-                            value: "\(totalPoints)",
+                            value: "\(totalPointsFromCollection)",
                             color: Color("UMDGold")
                         )
                         StatChip(
                             title: "Badges",
-                            value: "\(unlockedBadges)/\(appState.badges.count)",
+                            value: "3/3",
                             color: .orange
                         )
                     }
 
-                    // Segmented control
                     Picker("", selection: $selectedTab) {
-                        Text("Collectibles").tag(0)
-                        Text("Badges").tag(1)
+                        Text("Collected").tag(0)
+                        Text("Catalog").tag(1)
                     }
                     .pickerStyle(.segmented)
 
                     if selectedTab == 0 {
-                        collectiblesGrid
+                        collectedList
                     } else {
-                        badgesList
+                        catalogGrid
                     }
                 }
                 .padding()
@@ -58,88 +56,72 @@ struct CollectionScreen: View {
         }
     }
 
-    // MARK: - Subviews
-
-    private var collectiblesGrid: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
-            ForEach(appState.collectibles) { c in
-                VStack(spacing: 6) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color(.secondarySystemBackground))
-                            .frame(height: 100)
-
-                        // Use your emoji; if Collectible.emoji is non-optional, remove ??
-                        Text(c.emoji)
-                            .font(.system(size: 40))
-                    }
-
+    private var collectedList: some View {
+        VStack(spacing: 10) {
+            if collectedItems.isEmpty {
+                Text("No collectibles captured yet")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                ForEach(collectedItems, id: \.id) { item in
                     HStack {
-                        Text(c.name)
-                            .font(.headline)
-                            .lineLimit(1)
-                        Spacer()
-                        Text("\(c.points)")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(10)
-                .background(
-                    RoundedRectangle(cornerRadius: 14)
-                        .strokeBorder(Color.gray.opacity(0.2))
-                )
-                .overlay(
-                    Group {
-                        if !c.obtained {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 14)
-                                    .fill(Color.black.opacity(0.25))
-                                Image(systemName: "lock.fill")
-                                    .foregroundStyle(.white)
-                            }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.collectibleName)
+                                .font(.headline)
+                            Text("\(item.rarity) • Found at \(item.foundAtTitle)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
+                        Spacer()
                     }
-                )
+                    .padding(12)
+                    .background(Color(.secondarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
             }
         }
     }
 
-    // Simple badges list
-    private var badgesList: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            ForEach(appState.badges) { badge in
-                HStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(badge.unlocked ? Color.green.opacity(0.2)
-                                                 : Color.gray.opacity(0.15))
-                            .frame(width: 44, height: 44)
-                        Image(systemName: badge.unlocked ? "checkmark.seal.fill" : "seal")
-                            .foregroundStyle(badge.unlocked ? .green : .gray)
-                    }
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(badge.name)            // <- use .name, not .title
-                            .font(.headline)
-                        Text(badge.description)
-                            .font(.subheadline)
+    private var catalogGrid: some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+            ForEach(modelController.collectibleCatalog) { collectible in
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text(collectible.name)
+                            .font(.subheadline.weight(.semibold))
+                            .lineLimit(1)
+                        Spacer()
+                        Text(collectible.rarity)
+                            .font(.caption2)
                             .foregroundStyle(.secondary)
-                            .lineLimit(2)
                     }
 
-                    Spacer()
+                    Text(collectible.foundAt)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
 
-                    if badge.unlocked {
-                        Image(systemName: "star.fill")
-                            .foregroundStyle(.yellow)
+                    Text("+\(collectible.points) pts")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color("UMDRed"))
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, minHeight: 90, alignment: .topLeading)
+                .background(Color(.systemBackground))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .strokeBorder(Color.gray.opacity(0.2))
+                )
+                .overlay {
+                    if !collectedNames.contains(collectible.name) {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.black.opacity(0.18))
+                            .overlay(
+                                Image(systemName: "lock.fill")
+                                    .foregroundStyle(.white)
+                            )
                     }
                 }
-                .padding(12)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(.secondarySystemBackground))
-                )
             }
         }
     }
@@ -147,4 +129,5 @@ struct CollectionScreen: View {
 
 #Preview {
     CollectionScreen()
+        .environmentObject(ModelController())
 }

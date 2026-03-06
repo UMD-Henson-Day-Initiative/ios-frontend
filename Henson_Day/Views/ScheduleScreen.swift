@@ -1,39 +1,26 @@
-//
-//  ScheduleScreen.swift
-//  Henson_Day
-//
-//  Created by Jake Frischmann on 2/27/26.
-//
-
-
-// ScheduleScreen.swift
-
 import SwiftUI
 
 struct ScheduleScreen: View {
-    @EnvironmentObject var appState: AppState
+    @EnvironmentObject private var modelController: ModelController
     @State private var selectedDay: Int = 1
 
-    var dayEvents: [Event] {
-        appState.events.filter { $0.day == selectedDay }
+    private var dayEvents: [DatabaseEvent] {
+        modelController.scheduleEvents.filter { $0.dayNumber == selectedDay }
     }
 
-    var recommendedEvents: [Event] {
-        appState.events.filter { $0.type == .rare || $0.type == .homebase }.prefix(3).map { $0 }
+    private var days: [Int] {
+        let available = Set(modelController.scheduleEvents.map(\.dayNumber))
+        return Array(available).sorted()
     }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
-                    // Day selector
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
-                            ForEach(1...7, id: \.self) { day in
-                                FilterChip(
-                                    label: "Day \(day)",
-                                    isSelected: day == selectedDay
-                                ) {
+                            ForEach(days.isEmpty ? Array(1...7) : days, id: \.self) { day in
+                                FilterChip(label: "Day \(day)", isSelected: day == selectedDay) {
                                     selectedDay = day
                                 }
                             }
@@ -42,31 +29,6 @@ struct ScheduleScreen: View {
                         .padding(.vertical, 4)
                     }
 
-                    // Recommended section (e.g. only for Day 1)
-                    if selectedDay == 1 && !recommendedEvents.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Image(systemName: "arrow.up.right.square")
-                                    .foregroundStyle(Color("UMDRed"))
-                                Text("Recommended for You")
-                                    .font(.headline)
-                            }
-
-                            VStack(spacing: 8) {
-                                ForEach(recommendedEvents) { event in
-                                    NavigationLink {
-                                        EventDetailScreen(eventId: event.id)
-                                    } label: {
-                                        RecommendedEventCard(event: event)
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                        }
-                        .padding(.horizontal)
-                    }
-
-                    // Timeline for the day
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Day \(selectedDay) Schedule")
                             .font(.headline)
@@ -74,26 +36,19 @@ struct ScheduleScreen: View {
 
                         if dayEvents.isEmpty {
                             VStack(spacing: 8) {
-                                Text("📅")
-                                    .font(.largeTitle)
-                                Text("No events scheduled")
+                                Text("No events for this day")
                                     .font(.headline)
-                                Text("Check back later for Day \(selectedDay) events.")
+                                Text("Choose another day to see upcoming activities.")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 40)
                         } else {
-                            VStack(spacing: 16) {
+                            VStack(spacing: 12) {
                                 ForEach(dayEvents) { event in
-                                    NavigationLink {
-                                        EventDetailScreen(eventId: event.id)
-                                    } label: {
-                                        TimelineEventRow(event: event)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .padding(.horizontal)
+                                    ScheduleEventCard(event: event)
+                                        .padding(.horizontal)
                                 }
                             }
                         }
@@ -106,136 +61,52 @@ struct ScheduleScreen: View {
     }
 }
 
-struct RecommendedEventCard: View {
-    @EnvironmentObject var appState: AppState
-    let event: Event
-
-    var collectible: Collectible? {
-        guard let id = event.collectibleId else { return nil }
-        return appState.collectibles.first { $0.id == id }
-    }
+private struct ScheduleEventCard: View {
+    let event: DatabaseEvent
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            if let c = collectible {
-                Text(c.emoji)
-                    .font(.largeTitle)
-                    .frame(width: 56, height: 56)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(Color("UMDGold").opacity(0.25))
-                    )
-            }
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(event.pinType.displayLabel)
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(event.pinType.headerColor.opacity(0.18))
+                    .clipShape(Capsule())
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(event.name)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
+                Spacer()
 
-                HStack(spacing: 6) {
-                    Image(systemName: "clock")
-                        .font(.caption2)
-                    Text(event.time)
-                        .font(.caption)
-                    Image(systemName: "mappin.and.ellipse")
-                        .font(.caption2)
-                    Text(event.location)
-                        .font(.caption)
-                }
-                .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .padding(10)
-        .background(
-            LinearGradient(
-                colors: [Color("UMDRed").opacity(0.05), Color("UMDGold").opacity(0.08)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18)
-                .stroke(Color("UMDRed").opacity(0.15), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 18))
-    }
-}
-
-struct TimelineEventRow: View {
-    @EnvironmentObject var appState: AppState
-    let event: Event
-
-    var collectible: Collectible? {
-        guard let id = event.collectibleId else { return nil }
-        return appState.collectibles.first { $0.id == id }
-    }
-
-    var typeColor: Color {
-        switch event.type {
-        case .homebase: return Color("UMDRed")
-        case .rare: return Color("UMDGold")
-        case .common: return .gray
-        }
-    }
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(typeColor.opacity(0.2))
-                    .frame(width: 36, height: 36)
-                Image(systemName: event.type == .homebase ? "house.fill" :
-                        event.type == .rare ? "star.fill" :
-                        "mappin.circle.fill")
-                    .font(.caption)
-                    .foregroundStyle(typeColor)
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(event.name)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-
-                HStack(spacing: 6) {
-                    Image(systemName: "clock")
-                        .font(.caption2)
-                    Text(event.time)
-                        .font(.caption)
-                    Image(systemName: "mappin.and.ellipse")
-                        .font(.caption2)
-                    Text(event.location)
-                        .font(.caption)
-                }
-                .foregroundStyle(.secondary)
-
-                Text(event.description)
+                Text(event.timeRange)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
             }
 
-            Spacer()
+            Text(event.title)
+                .font(.headline)
 
-            if let c = collectible {
-                Text(c.emoji)
-                    .font(.title2)
+            Text(event.metadataLine)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            Text(event.description)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(3)
+
+            if let collectibleName = event.collectibleName {
+                Text("Collectible: \(collectibleName)")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color("UMDRed"))
             }
         }
-        .padding(10)
+        .padding(12)
         .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 18))
-        .shadow(radius: 2)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .shadow(color: .black.opacity(0.06), radius: 3, x: 0, y: 2)
     }
 }
 
 #Preview {
     ScheduleScreen()
+        .environmentObject(ModelController())
 }

@@ -11,33 +11,40 @@
 import SwiftUI
 
 struct RootTabView: View {
+    @EnvironmentObject private var tabRouter: TabRouter
+
     var body: some View {
-        TabView {
+        TabView(selection: $tabRouter.selectedTab) {
             MapScreen()
+                .tag(AppTab.map)
                 .tabItem {
                     Image(systemName: "map.fill")
                     Text("Map")
                 }
 
             HomeScreen()
+                .tag(AppTab.home)
                 .tabItem {
                     Image(systemName: "house.fill")
                     Text("Home")
                 }
 
             ScheduleScreen()
+                .tag(AppTab.schedule)
                 .tabItem {
                     Image(systemName: "calendar")
                     Text("Schedule")
                 }
 
             CollectionScreen()
+                .tag(AppTab.collection)
                 .tabItem {
                     Image(systemName: "cube.box.fill")
                     Text("Collection")
                 }
 
             ProfileScreen()
+                .tag(AppTab.profile)
                 .tabItem {
                     Image(systemName: "person.crop.circle")
                     Text("Profile")
@@ -49,6 +56,6 @@ struct RootTabView: View {
 
 #Preview {
     RootTabView()
-        .environmentObject(AppState())
     .environmentObject(ModelController())
+    .environmentObject(TabRouter())
 }

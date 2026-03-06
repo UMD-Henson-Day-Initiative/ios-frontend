@@ -208,6 +208,13 @@ struct ARPlacementView: UIViewRepresentable {
             guard let modelEntity else { return }
             modelEntity.model?.materials = [SimpleMaterial(color: .systemRed, roughness: 0.2, isMetallic: false)]
             modelEntity.scale = SIMD3<Float>(repeating: 1.15)
+
+            // To support direct tap-to-collect on the AR muppet:
+            // 1) Add CollisionComponent(shapes: [.generateSphere(radius: ...)]) to `modelEntity`.
+            // 2) Add InputTargetComponent() to `modelEntity`.
+            // 3) In SwiftUI, attach a targeted gesture to ARView content (or use a raycast hit test)
+            //    and call `modelController.captureCollectible(...)` when this entity is tapped.
+            // 4) Optionally remove the entity or swap material after collection to prevent duplicate captures.
         }
     }
 }

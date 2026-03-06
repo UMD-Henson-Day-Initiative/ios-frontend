@@ -24,6 +24,10 @@ struct MapScreen: View {
     @State private var arPin: PinEntity?
     @State private var showLeaderboard = false
     @State private var showCollection = false
+    @State private var isCameraPrimary = false
+
+    @StateObject private var cameraPermission = CameraPermissionManager()
+    @StateObject private var worldAnchorManager = WorldAnchorManager()
 
     private var selectedPin: PinEntity? {
         modelController.pins.first(where: { $0.id == selectedPinID })
@@ -38,7 +42,7 @@ struct MapScreen: View {
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
-                mapView
+                primaryPanel
                     .ignoresSafeArea()
 
                 VStack(spacing: 0) {
@@ -46,6 +50,8 @@ struct MapScreen: View {
                     Spacer()
                     floatingActions
                 }
+
+                miniSwapPanel
 
                 if let selectedPin, isDetailPresented {
                     PinDetailBottomSheet(
@@ -91,6 +97,20 @@ struct MapScreen: View {
         }
         .onAppear {
             modelController.refreshPublishedData()
+            cameraPermission.requestIfNeeded()
+        }
+    }
+
+    @ViewBuilder
+    private var primaryPanel: some View {
+        if isCameraPrimary {
+            if cameraPermission.isDeniedOrRestricted {
+                CameraPermissionPlaceholderView()
+            } else {
+                ARCameraView(isCameraAuthorized: cameraPermission.isAuthorized, worldAnchorManager: worldAnchorManager)
+            }
+        } else {
+            mapView
         }
     }
 
@@ -136,9 +156,63 @@ struct MapScreen: View {
                     .background(.thinMaterial)
                     .clipShape(Capsule())
             }
+
+            HStack {
+                Spacer()
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isCameraPrimary.toggle()
+                    }
+                } label: {
+                    Label(isCameraPrimary ? "Map" : "Camera", systemImage: isCameraPrimary ? "map.fill" : "camera.fill")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(.thinMaterial)
+                        .clipShape(Capsule())
+                }
+            }
         }
         .padding(.horizontal, 14)
         .padding(.top, 12)
+    }
+
+    private var miniSwapPanel: some View {
+        GeometryReader { geometry in
+            VStack {
+                HStack {
+                    Spacer()
+                    Group {
+                        if isCameraPrimary {
+                            mapView
+                        } else {
+                            if cameraPermission.isDeniedOrRestricted {
+                                CameraPermissionPlaceholderView()
+                            } else {
+                                ARCameraView(isCameraAuthorized: cameraPermission.isAuthorized, worldAnchorManager: worldAnchorManager)
+                            }
+                        }
+                    }
+                    .frame(width: min(170, geometry.size.width * 0.4), height: 205)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(.white.opacity(0.85), lineWidth: 1)
+                    )
+                    .shadow(radius: 6)
+                    .onTapGesture {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isCameraPrimary.toggle()
+                        }
+                    }
+                }
+                .padding(.top, 58)
+                .padding(.horizontal, 12)
+
+                Spacer()
+            }
+        }
+        .allowsHitTesting(true)
     }
 
     private var floatingActions: some View {

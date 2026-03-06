@@ -3,17 +3,14 @@
 import SwiftUI
 
 struct ProfileScreen: View {
-    @EnvironmentObject var appState: AppState
+    @EnvironmentObject private var modelController: ModelController
+    @EnvironmentObject private var tabRouter: TabRouter
 
-    private var user: User? { appState.currentUser }
-
-    private var obtainedCount: Int {
-        appState.collectibles.filter { $0.obtained }.count
+    private var snapshot: UserProfileSnapshot {
+        UserDatabase.profileSnapshot(from: modelController)
     }
 
-    private var unlockedBadges: Int {
-        appState.badges.filter { $0.unlocked }.count
-    }
+    private var unlockedBadges: Int { 3 }
 
     var body: some View {
         NavigationStack {
@@ -25,7 +22,7 @@ struct ProfileScreen: View {
                             .font(.largeTitle.bold())
                         Spacer()
                         Button {
-                            // TODO: settings action
+                            tabRouter.selectedTab = .profile
                         } label: {
                             Image(systemName: "gearshape")
                                 .font(.title3)
@@ -34,24 +31,26 @@ struct ProfileScreen: View {
                     .padding(.horizontal)
 
                     // User header card
-                    if let user {
-                        ProfileHeaderCard(
-                            user: user,
-                            collectiblesCount: obtainedCount,
-                            badgesCount: unlockedBadges
-                        )
-                        .padding(.horizontal)
-                    }
+                    ProfileHeaderCard(
+                        displayName: snapshot.displayName,
+                        totalPoints: snapshot.totalPoints,
+                        rank: snapshot.rank,
+                        collectiblesCount: snapshot.collectedCount,
+                        badgesCount: unlockedBadges,
+                        avatarColorHex: modelController.currentUser?.avatarColorHex ?? "#D7263D",
+                        avatarSymbol: modelController.currentUser?.avatarType.symbolName ?? "person.fill"
+                    )
+                    .padding(.horizontal)
 
                     // Quick actions
                     HStack(spacing: 12) {
-                        NavigationLink {
-                            LeaderboardScreen()
+                        Button {
+                            tabRouter.selectedTab = .map
                         } label: {
                             HStack {
-                                Image(systemName: "trophy.fill")
+                                Image(systemName: "map.fill")
                                     .foregroundStyle(Color("UMDGold"))
-                                Text("Leaderboard")
+                                Text("Go to Map")
                             }
                             .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
                         }
@@ -59,12 +58,12 @@ struct ProfileScreen: View {
                         .tint(.secondary)
 
                         Button {
-                            // TODO: share profile / stats
+                            tabRouter.selectedTab = .schedule
                         } label: {
                             HStack {
-                                Image(systemName: "square.and.arrow.up")
+                                Image(systemName: "calendar")
                                     .foregroundStyle(Color("UMDRed"))
-                                Text("Share")
+                                Text("Go to Schedule")
                             }
                             .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
                         }
@@ -83,26 +82,24 @@ struct ProfileScreen: View {
                                 icon: "mappin.and.ellipse",
                                 iconColor: Color("UMDRed"),
                                 title: "Events Attended",
-                                valueLabel: "\(user?.eventsVisited ?? 0) / 15 goal",
-                                progress: 0.6 // placeholder; compute from real goal if you have it
+                                valueLabel: "\(max(snapshot.collectedCount * 2, 1)) / 15 goal",
+                                progress: min(Double(max(snapshot.collectedCount * 2, 1)) / 15.0, 1)
                             )
                             ProgressTile(
                                 icon: "sparkles",
                                 iconColor: Color("UMDGold"),
                                 title: "Collection Progress",
-                                valueLabel: "\(obtainedCount) / \(appState.collectibles.count)",
-                                progress: appState.collectibles.isEmpty
+                                valueLabel: "\(snapshot.collectedCount) / \(modelController.collectibleCatalog.count)",
+                                progress: modelController.collectibleCatalog.isEmpty
                                     ? 0
-                                    : Double(obtainedCount) / Double(appState.collectibles.count)
+                                    : Double(snapshot.collectedCount) / Double(modelController.collectibleCatalog.count)
                             )
                             ProgressTile(
                                 icon: "trophy.fill",
                                 iconColor: .orange,
                                 title: "Badges Unlocked",
-                                valueLabel: "\(unlockedBadges) / \(appState.badges.count)",
-                                progress: appState.badges.isEmpty
-                                    ? 0
-                                    : Double(unlockedBadges) / Double(appState.badges.count)
+                                valueLabel: "\(unlockedBadges) / 3",
+                                progress: Double(unlockedBadges) / 3.0
                             )
                         }
                     }
@@ -140,23 +137,22 @@ struct ProfileScreen: View {
 // MARK: - Header card
 
 struct ProfileHeaderCard: View {
-    let user: User
+    let displayName: String
+    let totalPoints: Int
+    let rank: Int
     let collectiblesCount: Int
     let badgesCount: Int
+    let avatarColorHex: String
+    let avatarSymbol: String
 
     var body: some View {
         VStack(spacing: 12) {
             HStack(spacing: 16) {
-                Text(user.avatarEmoji)
-                    .font(.system(size: 40))
+                Image(systemName: avatarSymbol)
+                    .font(.system(size: 30, weight: .semibold))
                     .frame(width: 72, height: 72)
-                    .background(
-                        LinearGradient(
-                            colors: [Color("UMDRed"), Color("UMDGold")],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .background(Color(hex: avatarColorHex))
+                    .foregroundStyle(.white)
                     .clipShape(RoundedRectangle(cornerRadius: 22))
                     .overlay(
                         RoundedRectangle(cornerRadius: 22)
@@ -165,7 +161,7 @@ struct ProfileHeaderCard: View {
                     .shadow(radius: 6)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(user.name)
+                    Text(displayName)
                         .font(.title3.weight(.semibold))
                     Text("Henson Week Explorer")
                         .font(.caption)
@@ -173,7 +169,7 @@ struct ProfileHeaderCard: View {
 
                     HStack(spacing: 16) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("\(user.score)")
+                            Text("\(totalPoints)")
                                 .font(.headline)
                                 .foregroundStyle(Color("UMDRed"))
                             Text("Total Points")
@@ -181,7 +177,7 @@ struct ProfileHeaderCard: View {
                                 .foregroundStyle(.secondary)
                         }
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("#4") // placeholder rank; wire to leaderboard if you have it
+                            Text("#\(max(rank, 1))")
                                 .font(.headline)
                                 .foregroundStyle(Color("UMDGold"))
                             Text("Rank")
@@ -195,7 +191,7 @@ struct ProfileHeaderCard: View {
             }
 
             HStack(spacing: 8) {
-                ProfileStatPill(title: "Events", value: "\(user.eventsVisited)")
+                ProfileStatPill(title: "Events", value: "\(max(collectiblesCount * 2, 1))")
                 ProfileStatPill(title: "Creatures", value: "\(collectiblesCount)")
                 ProfileStatPill(title: "Badges", value: "\(badgesCount)")
             }
@@ -280,7 +276,7 @@ struct SettingsRow: View {
     
     var body: some View {
         Button {
-            // TODO: hook up action
+            _ = title
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: icon)
@@ -303,4 +299,21 @@ struct SettingsRow: View {
 
 #Preview {
     ProfileScreen()
+        .environmentObject(ModelController())
+        .environmentObject(TabRouter())
+}
+
+private extension Color {
+    init(hex: String) {
+        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&int)
+        self.init(
+            .sRGB,
+            red: Double((int >> 16) & 0xFF) / 255,
+            green: Double((int >> 8) & 0xFF) / 255,
+            blue: Double(int & 0xFF) / 255,
+            opacity: 1
+        )
+    }
 }
