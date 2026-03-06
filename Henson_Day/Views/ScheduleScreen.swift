@@ -6,7 +6,6 @@ struct ScheduleScreen: View {
     @Environment(\.openURL) private var openURL
     @State private var selectedDay: Int = 1
     @State private var selectedEvent: DatabaseEvent?
-    @State private var showEventPopup = false
 
     private var dayEvents: [DatabaseEvent] {
         modelController.scheduleEvents.filter { $0.dayNumber == selectedDay }
@@ -53,14 +52,11 @@ struct ScheduleScreen: View {
                                 ForEach(dayEvents) { event in
                                     Button {
                                         selectedEvent = event
-                                        withAnimation(.spring(response: 0.36, dampingFraction: 0.82)) {
-                                            showEventPopup = true
-                                        }
                                     } label: {
                                         ScheduleEventCard(event: event)
                                     }
                                     .buttonStyle(.plain)
-                                        .padding(.horizontal)
+                                    .padding(.horizontal)
                                 }
                             }
                         }
@@ -69,64 +65,38 @@ struct ScheduleScreen: View {
                 .padding(.vertical, 8)
             }
             .navigationTitle("Event Schedule")
-            .overlay {
-                if showEventPopup, let selectedEvent {
-                    ZStack {
-                        Color.black.opacity(0.28)
-                            .ignoresSafeArea()
-                            .onTapGesture {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) {
-                                    showEventPopup = false
-                                }
-                            }
-
-                        ScheduleEventDetailPopup(
-                            event: selectedEvent,
-                            onClose: {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) {
-                                    showEventPopup = false
-                                }
-                            },
-                            onOpenMap: {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) {
-                                    showEventPopup = false
-                                }
-                                tabRouter.selectedTab = .map
-                            },
-                            onOpenWebsite: {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) {
-                                    showEventPopup = false
-                                }
-                                openURL(URL(string: "https://umd.edu/")!)
-                            },
-                            onOpenCollection: {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) {
-                                    showEventPopup = false
-                                }
-                                tabRouter.selectedTab = .collection
-                            }
-                        )
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 20)
-                        .transition(.scale(scale: 0.74, anchor: .center).combined(with: .opacity))
+            .fullScreenCover(item: $selectedEvent) { event in
+                ScheduleEventDetailFullScreen(
+                    event: event,
+                    onClose: {
+                        selectedEvent = nil
+                    },
+                    onOpenMap: {
+                        selectedEvent = nil
+                        tabRouter.selectedTab = .map
+                    },
+                    onOpenWebsite: {
+                        selectedEvent = nil
+                        openURL(URL(string: "https://umd.edu/")!)
+                    },
+                    onOpenCollection: {
+                        selectedEvent = nil
+                        tabRouter.selectedTab = .collection
                     }
-                }
+                )
             }
             .onChange(of: tabRouter.focusedScheduleEventID) { _, newValue in
                 guard let newValue,
                       let event = modelController.scheduleEvents.first(where: { $0.id == newValue }) else { return }
                 selectedDay = event.dayNumber
                 selectedEvent = event
-                withAnimation(.spring(response: 0.36, dampingFraction: 0.82)) {
-                    showEventPopup = true
-                }
                 tabRouter.focusedScheduleEventID = nil
             }
         }
     }
 }
 
-private struct ScheduleEventDetailPopup: View {
+private struct ScheduleEventDetailFullScreen: View {
     let event: DatabaseEvent
     let onClose: () -> Void
     let onOpenMap: () -> Void
@@ -134,22 +104,9 @@ private struct ScheduleEventDetailPopup: View {
     let onOpenCollection: () -> Void
 
     var body: some View {
-        VStack {
+        NavigationStack {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 16) {
-                    HStack {
-                        Spacer()
-
-                        Button(action: onClose) {
-                            Image(systemName: "xmark")
-                                .font(.headline)
-                                .foregroundStyle(.gray)
-                                .padding(9)
-                                .background(Color(.secondarySystemBackground))
-                                .clipShape(Circle())
-                        }
-                    }
-
                     Text(event.title)
                         .font(.title2.weight(.bold))
 
@@ -175,19 +132,24 @@ private struct ScheduleEventDetailPopup: View {
                         }
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(20)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .navigationTitle("Event Details")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(action: onClose) {
+                        Image(systemName: "xmark")
+                            .font(.headline)
+                            .foregroundStyle(.gray)
+                            .padding(8)
+                            .background(Color(.secondarySystemBackground))
+                            .clipShape(Circle())
+                    }
+                }
+            }
         }
-        .padding(20)
-        .frame(maxWidth: 620)
-        .frame(maxHeight: .infinity)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(.white.opacity(0.25), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.24), radius: 18, x: 0, y: 10)
     }
 }
 

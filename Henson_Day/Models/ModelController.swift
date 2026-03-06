@@ -138,7 +138,42 @@ final class ModelController: ObservableObject {
     }
 
     func scheduleEventID(matchingPinTitle title: String) -> String? {
-        scheduleEvents.first(where: { $0.title == title })?.id
+        let normalizedPinTitle = normalizeForMatching(title)
+
+        if let exactMatch = scheduleEvents.first(where: {
+            normalizeForMatching($0.title) == normalizedPinTitle
+        }) {
+            return exactMatch.id
+        }
+
+        if let containsMatch = scheduleEvents.first(where: {
+            let candidate = normalizeForMatching($0.title)
+            return candidate.contains(normalizedPinTitle) || normalizedPinTitle.contains(candidate)
+        }) {
+            return containsMatch.id
+        }
+
+        let pinTokens = Set(normalizedPinTitle.split(separator: " ").map(String.init))
+        if pinTokens.isEmpty { return nil }
+
+        let scored = scheduleEvents.compactMap { event -> (id: String, score: Int)? in
+            let eventTokens = Set(normalizeForMatching(event.title).split(separator: " ").map(String.init))
+            let overlap = pinTokens.intersection(eventTokens).count
+            return overlap > 0 ? (event.id, overlap) : nil
+        }
+        .sorted { $0.score > $1.score }
+
+        return scored.first?.id
+    }
+
+    private func normalizeForMatching(_ text: String) -> String {
+        let lowered = text.lowercased()
+        let cleaned = lowered.unicodeScalars.map { scalar -> Character in
+            CharacterSet.alphanumerics.contains(scalar) ? Character(scalar) : " "
+        }
+        return String(cleaned)
+            .split(separator: " ")
+            .joined(separator: " ")
     }
 
     private func seedPlayers() {
