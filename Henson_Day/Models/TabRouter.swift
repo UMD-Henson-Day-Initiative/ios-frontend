@@ -12,4 +12,5 @@ enum AppTab: Hashable {
 @MainActor
 final class TabRouter: ObservableObject {
     @Published var selectedTab: AppTab = .map
+    @Published var focusedScheduleEventID: String?
 }

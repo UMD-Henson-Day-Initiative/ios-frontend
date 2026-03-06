@@ -124,6 +124,23 @@ final class ModelController: ObservableObject {
         }
     }
 
+    func updateCurrentUserAvatar(type: AvatarType, colorHex: String) {
+        guard let user = currentUser else { return }
+        user.avatarType = type
+        user.avatarColorHex = colorHex
+
+        do {
+            try context.save()
+            refreshPublishedData()
+        } catch {
+            print("Avatar update error: \(error)")
+        }
+    }
+
+    func scheduleEventID(matchingPinTitle title: String) -> String? {
+        scheduleEvents.first(where: { $0.title == title })?.id
+    }
+
     private func seedPlayers() {
         Database.players.forEach { row in
             let user = PlayerEntity(

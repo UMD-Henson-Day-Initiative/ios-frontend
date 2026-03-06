@@ -14,6 +14,7 @@ import CoreLocation
 
 struct MapScreen: View {
     @EnvironmentObject private var modelController: ModelController
+    @EnvironmentObject private var tabRouter: TabRouter
 
     @State private var region = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 38.9869, longitude: -76.9426),
@@ -70,17 +71,14 @@ struct MapScreen: View {
                         },
                         onPrimaryAction: {
                             handlePrimaryAction(for: selectedPin)
+                        },
+                        onDetails: {
+                            openEventDetails(for: selectedPin)
                         }
                     )
                 }
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("Henson Day Map")
-                        .font(.headline)
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
         }
         .sheet(isPresented: $showLeaderboard) {
             MinimalLeaderboardSheet(
@@ -139,11 +137,31 @@ struct MapScreen: View {
     }
 
     private var topStatusStrip: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 10) {
             HStack {
                 Text(dayTimeLabel)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .font(.headline.weight(.bold))
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+                Spacer()
+            }
+
+            HStack {
+                if let user = modelController.currentUser {
+                    Circle()
+                        .fill(Color(hex: user.avatarColorHex))
+                        .frame(width: 44, height: 44)
+                        .overlay(
+                            Image(systemName: user.avatarType.symbolName)
+                                .foregroundStyle(.white)
+                        )
+                        .onTapGesture {
+                            tabRouter.selectedTab = .profile
+                        }
+                }
                 Spacer()
             }
 
@@ -174,7 +192,7 @@ struct MapScreen: View {
             }
         }
         .padding(.horizontal, 14)
-        .padding(.top, 12)
+        .padding(.top, 6)
     }
 
     private var miniSwapPanel: some View {
@@ -206,7 +224,7 @@ struct MapScreen: View {
                         }
                     }
                 }
-                .padding(.top, 58)
+                .padding(.top, 30)
                 .padding(.horizontal, 12)
 
                 Spacer()
@@ -292,9 +310,33 @@ struct MapScreen: View {
             MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeWalking
         ])
     }
+
+    private func openEventDetails(for pin: PinEntity) {
+        guard let eventID = modelController.scheduleEventID(matchingPinTitle: pin.title) else { return }
+        isDetailPresented = false
+        selectedPinID = nil
+        tabRouter.focusedScheduleEventID = eventID
+        tabRouter.selectedTab = .schedule
+    }
 }
 
 #Preview {
     MapScreen()
         .environmentObject(ModelController())
+        .environmentObject(TabRouter())
+}
+
+private extension Color {
+    init(hex: String) {
+        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&int)
+        self.init(
+            .sRGB,
+            red: Double((int >> 16) & 0xFF) / 255,
+            green: Double((int >> 8) & 0xFF) / 255,
+            blue: Double(int & 0xFF) / 255,
+            opacity: 1
+        )
+    }
 }

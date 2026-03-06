@@ -5,6 +5,7 @@ struct PinDetailBottomSheet: View {
     @Binding var isPresented: Bool
     var onNavigate: () -> Void = {}
     var onPrimaryAction: () -> Void = {}
+    var onDetails: (() -> Void)? = nil
 
     @GestureState private var dragOffset: CGFloat = 0
 
@@ -101,6 +102,15 @@ struct PinDetailBottomSheet: View {
                             actionButton(title: primaryActionTitle, fill: detail.pinType.headerColor, foreground: .white, action: onPrimaryAction)
                         }
                     }
+                }
+
+                if let onDetails {
+                    Button("Details") {
+                        onDetails()
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
                 }
             }
             .padding(18)

@@ -12,6 +12,8 @@ struct ProfileScreen: View {
 
     private var unlockedBadges: Int { 3 }
 
+    private let avatarColors = ["#D7263D", "#2D7FF9", "#22C55E", "#F59E0B", "#A855F7", "#14B8A6"]
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -26,6 +28,50 @@ struct ProfileScreen: View {
                         } label: {
                             Image(systemName: "gearshape")
                                 .font(.title3)
+                        }
+                    }
+                    .padding(.horizontal)
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Customize Avatar")
+                            .font(.headline)
+
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 10) {
+                                ForEach(AvatarType.allCases, id: \.self) { avatar in
+                                    Button {
+                                        modelController.updateCurrentUserAvatar(
+                                            type: avatar,
+                                            colorHex: modelController.currentUser?.avatarColorHex ?? "#D7263D"
+                                        )
+                                    } label: {
+                                        Image(systemName: avatar.symbolName)
+                                            .font(.headline)
+                                            .foregroundStyle(.white)
+                                            .frame(width: 34, height: 34)
+                                            .background(Color(hex: modelController.currentUser?.avatarColorHex ?? "#D7263D"))
+                                            .clipShape(Circle())
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+
+                        HStack(spacing: 8) {
+                            ForEach(avatarColors, id: \.self) { colorHex in
+                                Button {
+                                    modelController.updateCurrentUserAvatar(
+                                        type: modelController.currentUser?.avatarType ?? .turtle,
+                                        colorHex: colorHex
+                                    )
+                                } label: {
+                                    Circle()
+                                        .fill(Color(hex: colorHex))
+                                        .frame(width: 24, height: 24)
+                                        .overlay(Circle().stroke(.white, lineWidth: 1))
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
                     }
                     .padding(.horizontal)
