@@ -55,6 +55,8 @@ struct MapScreen: View {
                 miniSwapPanel
 
                 if let selectedPin, isDetailPresented {
+                    let hasEventDetails = modelController.scheduleEventID(matchingPinTitle: selectedPin.title) != nil
+
                     PinDetailBottomSheet(
                         detail: detailForPin(selectedPin),
                         isPresented: Binding(
@@ -72,9 +74,9 @@ struct MapScreen: View {
                         onPrimaryAction: {
                             handlePrimaryAction(for: selectedPin)
                         },
-                        onDetails: {
+                        onDetails: hasEventDetails ? {
                             openEventDetails(for: selectedPin)
-                        }
+                        } : nil
                     )
                 }
             }

@@ -53,7 +53,7 @@ struct ScheduleScreen: View {
                                 ForEach(dayEvents) { event in
                                     Button {
                                         selectedEvent = event
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.84)) {
+                                        withAnimation(.spring(response: 0.36, dampingFraction: 0.82)) {
                                             showEventPopup = true
                                         }
                                     } label: {
@@ -75,7 +75,7 @@ struct ScheduleScreen: View {
                         Color.black.opacity(0.28)
                             .ignoresSafeArea()
                             .onTapGesture {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.84)) {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) {
                                     showEventPopup = false
                                 }
                             }
@@ -83,31 +83,32 @@ struct ScheduleScreen: View {
                         ScheduleEventDetailPopup(
                             event: selectedEvent,
                             onClose: {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.84)) {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) {
                                     showEventPopup = false
                                 }
                             },
                             onOpenMap: {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.84)) {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) {
                                     showEventPopup = false
                                 }
                                 tabRouter.selectedTab = .map
                             },
                             onOpenWebsite: {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.84)) {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) {
                                     showEventPopup = false
                                 }
                                 openURL(URL(string: "https://umd.edu/")!)
                             },
                             onOpenCollection: {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.84)) {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) {
                                     showEventPopup = false
                                 }
                                 tabRouter.selectedTab = .collection
                             }
                         )
-                        .padding(.horizontal, 20)
-                        .transition(.scale(scale: 0.8).combined(with: .opacity))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 20)
+                        .transition(.scale(scale: 0.74, anchor: .center).combined(with: .opacity))
                     }
                 }
             }
@@ -116,7 +117,7 @@ struct ScheduleScreen: View {
                       let event = modelController.scheduleEvents.first(where: { $0.id == newValue }) else { return }
                 selectedDay = event.dayNumber
                 selectedEvent = event
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.84)) {
+                withAnimation(.spring(response: 0.36, dampingFraction: 0.82)) {
                     showEventPopup = true
                 }
                 tabRouter.focusedScheduleEventID = nil
@@ -133,49 +134,60 @@ private struct ScheduleEventDetailPopup: View {
     let onOpenCollection: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Button(action: onClose) {
-                    Image(systemName: "xmark")
-                        .font(.headline)
-                        .foregroundStyle(.gray)
-                        .padding(8)
-                        .background(Color(.secondarySystemBackground))
-                        .clipShape(Circle())
+        VStack {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        Spacer()
+
+                        Button(action: onClose) {
+                            Image(systemName: "xmark")
+                                .font(.headline)
+                                .foregroundStyle(.gray)
+                                .padding(9)
+                                .background(Color(.secondarySystemBackground))
+                                .clipShape(Circle())
+                        }
+                    }
+
+                    Text(event.title)
+                        .font(.title2.weight(.bold))
+
+                    Text(event.metadataLine)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    Text(event.description)
+                        .font(.body)
+
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        Button("Open on Map") { onOpenMap() }
+                            .font(.subheadline.weight(.semibold))
+
+                        Button("Visit UMD Website") { onOpenWebsite() }
+                            .font(.subheadline.weight(.semibold))
+
+                        if event.collectibleName != nil {
+                            Button("Go to Collection") { onOpenCollection() }
+                                .font(.subheadline.weight(.semibold))
+                        }
+                    }
                 }
-
-                Spacer()
             }
-
-            Text(event.title)
-                .font(.title2.weight(.bold))
-
-            Text(event.metadataLine)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
-            Text(event.description)
-                .font(.body)
-
-            Divider()
-
-            VStack(alignment: .leading, spacing: 10) {
-                Button("Open on Map") { onOpenMap() }
-                    .font(.subheadline.weight(.semibold))
-
-                Button("Visit UMD Website") { onOpenWebsite() }
-                    .font(.subheadline.weight(.semibold))
-
-                if event.collectibleName != nil {
-                    Button("Go to Collection") { onOpenCollection() }
-                        .font(.subheadline.weight(.semibold))
-                }
-            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(18)
+        .padding(20)
+        .frame(maxWidth: 620)
+        .frame(maxHeight: .infinity)
         .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .shadow(color: .black.opacity(0.2), radius: 12, x: 0, y: 8)
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(.white.opacity(0.25), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.24), radius: 18, x: 0, y: 10)
     }
 }
 
