@@ -1,6 +1,7 @@
 import SwiftUI
 import AVFoundation
 import CoreLocation
+import Combine
 
 struct LaunchGateView: View {
     @EnvironmentObject private var modelController: ModelController

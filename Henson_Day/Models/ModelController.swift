@@ -75,7 +75,7 @@ final class ModelController: ObservableObject {
         do {
             let itemDescriptor = FetchDescriptor<CollectedItemEntity>(
                 predicate: #Predicate { item in
-                    item.collectibleName == collectibleName && item.player?.id == user.id
+                    item.collectibleName == collectibleName && item.playerID == user.id
                 }
             )
             let existing = try context.fetch(itemDescriptor)
@@ -85,6 +85,7 @@ final class ModelController: ObservableObject {
                 collectibleName: collectibleName,
                 rarity: pin.collectibleRarity ?? "Common",
                 foundAtTitle: pin.title,
+                playerID: user.id,
                 player: user
             )
             context.insert(collected)
@@ -105,7 +106,7 @@ final class ModelController: ObservableObject {
         do {
             let descriptor = FetchDescriptor<CollectedItemEntity>(
                 predicate: #Predicate { item in
-                    item.player?.id == user.id
+                    item.playerID == user.id
                 },
                 sortBy: [SortDescriptor(\CollectedItemEntity.foundAtDate, order: .reverse)]
             )

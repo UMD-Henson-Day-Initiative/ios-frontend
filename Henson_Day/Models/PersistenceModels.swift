@@ -132,6 +132,7 @@ final class CollectedItemEntity {
     var rarity: String
     var foundAtTitle: String
     var foundAtDate: Date
+    var playerID: UUID
 
     var player: PlayerEntity?
 
@@ -141,6 +142,7 @@ final class CollectedItemEntity {
         rarity: String,
         foundAtTitle: String,
         foundAtDate: Date = .now,
+        playerID: UUID,
         player: PlayerEntity? = nil
     ) {
         self.id = id
@@ -148,6 +150,7 @@ final class CollectedItemEntity {
         self.rarity = rarity
         self.foundAtTitle = foundAtTitle
         self.foundAtDate = foundAtDate
+        self.playerID = playerID
         self.player = player
     }
 }

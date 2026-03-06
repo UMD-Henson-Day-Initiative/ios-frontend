@@ -13,16 +13,16 @@ import SwiftUI
 struct RootTabView: View {
     var body: some View {
         TabView {
-            HensonCameraRootView()
-                .tabItem {
-                    Image(systemName: "house.fill")
-                    Text("Home")
-                }
-
             MapScreen()
                 .tabItem {
                     Image(systemName: "map.fill")
                     Text("Map")
+                }
+
+            HomeScreen()
+                .tabItem {
+                    Image(systemName: "house.fill")
+                    Text("Home")
                 }
 
             ScheduleScreen()
