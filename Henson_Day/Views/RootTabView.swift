@@ -15,12 +15,6 @@ struct RootTabView: View {
 
     var body: some View {
         TabView(selection: $tabRouter.selectedTab) {
-            MapScreen()
-                .tag(AppTab.map)
-                .tabItem {
-                    Image(systemName: "map.fill")
-                    Text("Map")
-                }
 
             HomeScreen()
                 .tag(AppTab.home)
@@ -34,6 +28,13 @@ struct RootTabView: View {
                 .tabItem {
                     Image(systemName: "calendar")
                     Text("Schedule")
+                }
+            
+            MapScreen()
+                .tag(AppTab.map)
+                .tabItem {
+                    Image(systemName: "map.fill")
+                    Text("Map")
                 }
 
             CollectionScreen()
