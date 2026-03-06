@@ -33,14 +33,18 @@ enum PinType: String, Codable, CaseIterable {
         case .event:
             return .red
         case .collectible:
-            return .green
+            return .yellow
         case .battle:
-            return .orange
-        case .homebase:
-            return .indigo
-        case .concert:
             return .purple
+        case .homebase:
+            return .green
+        case .concert:
+            return .orange
         }
+    }
+
+    var mapMarkerColor: Color {
+        headerColor
     }
 }
 

@@ -23,6 +23,15 @@ struct PinDetailBottomSheet: View {
         }
     }
 
+    private var primaryActionFirst: Bool {
+        switch detail.pinType {
+        case .collectible, .battle, .homebase:
+            return true
+        case .event, .site, .concert:
+            return false
+        }
+    }
+
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .bottom) {
@@ -82,10 +91,15 @@ struct PinDetailBottomSheet: View {
                 Spacer(minLength: 8)
 
                 HStack(spacing: 12) {
-                    actionButton(title: "Navigate", fill: .gray.opacity(0.2), foreground: .primary, action: onNavigate)
-
-                    if let primaryActionTitle {
+                    if let primaryActionTitle, primaryActionFirst {
                         actionButton(title: primaryActionTitle, fill: detail.pinType.headerColor, foreground: .white, action: onPrimaryAction)
+                        actionButton(title: "Navigate", fill: .gray.opacity(0.2), foreground: .primary, action: onNavigate)
+                    } else {
+                        actionButton(title: "Navigate", fill: .gray.opacity(0.2), foreground: .primary, action: onNavigate)
+
+                        if let primaryActionTitle {
+                            actionButton(title: primaryActionTitle, fill: detail.pinType.headerColor, foreground: .white, action: onPrimaryAction)
+                        }
                     }
                 }
             }
