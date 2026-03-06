@@ -71,11 +71,12 @@ final class ModelController: ObservableObject {
     func captureCollectible(from pin: PinEntity, points: Int = 50) {
         guard let user = currentUser else { return }
         guard let collectibleName = pin.collectibleName else { return }
+        let userID = user.id
 
         do {
             let itemDescriptor = FetchDescriptor<CollectedItemEntity>(
                 predicate: #Predicate { item in
-                    item.collectibleName == collectibleName && item.playerID == user.id
+                    item.collectibleName == collectibleName && item.playerID == userID
                 }
             )
             let existing = try context.fetch(itemDescriptor)
@@ -85,7 +86,7 @@ final class ModelController: ObservableObject {
                 collectibleName: collectibleName,
                 rarity: pin.collectibleRarity ?? "Common",
                 foundAtTitle: pin.title,
-                playerID: user.id,
+                playerID: userID,
                 player: user
             )
             context.insert(collected)
@@ -102,11 +103,12 @@ final class ModelController: ObservableObject {
 
     func collectionItemsForCurrentUser() -> [CollectedItemEntity] {
         guard let user = currentUser else { return [] }
+        let userID = user.id
 
         do {
             let descriptor = FetchDescriptor<CollectedItemEntity>(
                 predicate: #Predicate { item in
-                    item.playerID == user.id
+                    item.playerID == userID
                 },
                 sortBy: [SortDescriptor(\CollectedItemEntity.foundAtDate, order: .reverse)]
             )
