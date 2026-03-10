@@ -13,6 +13,9 @@ import MapKit
 import CoreLocation
 
 struct MapScreen: View {
+    // Toggle this to hide all location-teleport testing controls in camera mode.
+    private let isInTestingMode = true
+
     @EnvironmentObject private var modelController: ModelController
     @EnvironmentObject private var tabRouter: TabRouter
 
@@ -29,6 +32,7 @@ struct MapScreen: View {
 
     @StateObject private var cameraPermission = CameraPermissionManager()
     @StateObject private var worldAnchorManager = WorldAnchorManager()
+    @StateObject private var locationManager = LocationPermissionManager()
 
     private var selectedPin: PinEntity? {
         modelController.pins.first(where: { $0.id == selectedPinID })
@@ -94,10 +98,13 @@ struct MapScreen: View {
         .fullScreenCover(item: $arPin) { pin in
             ARCollectibleExperienceView(pin: pin)
                 .environmentObject(modelController)
+                .environmentObject(tabRouter)
+                .environmentObject(locationManager)
         }
         .onAppear {
             modelController.refreshPublishedData()
             cameraPermission.requestIfNeeded()
+            locationManager.requestWhenInUseAuthorizationIfNeeded()
         }
     }
 
@@ -190,6 +197,21 @@ struct MapScreen: View {
                         .padding(.vertical, 6)
                         .background(.thinMaterial)
                         .clipShape(Capsule())
+                }
+            }
+
+            if isCameraPrimary && isInTestingMode {
+                HStack {
+                    Spacer()
+                    // TESTING ONLY: This button spoofs the user's location to a not-yet-collected collectible pin.
+                    Button("Teleport to a collectible location") {
+                        teleportToUncollectedCollectiblePin()
+                    }
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(.thinMaterial)
+                    .clipShape(Capsule())
                 }
             }
         }
@@ -319,6 +341,22 @@ struct MapScreen: View {
         selectedPinID = nil
         tabRouter.focusedScheduleEventID = eventID
         tabRouter.selectedTab = .schedule
+    }
+
+    private func teleportToUncollectedCollectiblePin() {
+        let collectedNames = Set(modelController.collectionItemsForCurrentUser().map(\.collectibleName))
+
+        guard let targetPin = modelController.pins.first(where: {
+            guard $0.hasARCollectible, let collectibleName = $0.collectibleName else { return false }
+            return !collectedNames.contains(collectibleName)
+        }) else {
+            return
+        }
+
+        let targetCoordinate = CLLocationCoordinate2D(latitude: targetPin.latitude, longitude: targetPin.longitude)
+        locationManager.setTestingCoordinate(targetCoordinate)
+        region.center = targetCoordinate
+        arPin = targetPin
     }
 }
 

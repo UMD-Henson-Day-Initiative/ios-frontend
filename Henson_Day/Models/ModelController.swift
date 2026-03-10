@@ -124,6 +124,22 @@ final class ModelController: ObservableObject {
         }
     }
 
+    func hasCollectedCollectible(named collectibleName: String) -> Bool {
+        guard let user = currentUser else { return false }
+        let userID = user.id
+
+        do {
+            let descriptor = FetchDescriptor<CollectedItemEntity>(
+                predicate: #Predicate { item in
+                    item.playerID == userID && item.collectibleName == collectibleName
+                }
+            )
+            return try !context.fetch(descriptor).isEmpty
+        } catch {
+            return false
+        }
+    }
+
     func updateCurrentUserAvatar(type: AvatarType, colorHex: String) {
         guard let user = currentUser else { return }
         user.avatarType = type

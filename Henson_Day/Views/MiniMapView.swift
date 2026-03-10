@@ -50,6 +50,8 @@ struct LocationPermissionPlaceholder: View {
 final class LocationPermissionManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published var authorizationStatus: CLAuthorizationStatus
     @Published var region: MKCoordinateRegion
+    @Published private(set) var currentCoordinate: CLLocationCoordinate2D?
+    @Published var testingOverrideCoordinate: CLLocationCoordinate2D?
 
     private let manager = CLLocationManager()
 
@@ -67,6 +69,21 @@ final class LocationPermissionManager: NSObject, ObservableObject, CLLocationMan
 
     var isDeniedOrRestricted: Bool {
         authorizationStatus == .denied || authorizationStatus == .restricted
+    }
+
+    // Returns the mocked coordinate in testing mode, otherwise the live GPS coordinate.
+    var effectiveCoordinate: CLLocationCoordinate2D? {
+        testingOverrideCoordinate ?? currentCoordinate
+    }
+
+    // Teleports the app's effective position for testing AR proximity flows.
+    func setTestingCoordinate(_ coordinate: CLLocationCoordinate2D?) {
+        testingOverrideCoordinate = coordinate
+        guard let coordinate else { return }
+        region = MKCoordinateRegion(
+            center: coordinate,
+            span: MKCoordinateSpan(latitudeDelta: 0.007, longitudeDelta: 0.007)
+        )
     }
 
     func requestWhenInUseAuthorizationIfNeeded() {
@@ -94,6 +111,7 @@ final class LocationPermissionManager: NSObject, ObservableObject, CLLocationMan
         guard let location = locations.last else { return }
 
         DispatchQueue.main.async {
+            self.currentCoordinate = location.coordinate
             self.region = MKCoordinateRegion(
                 center: location.coordinate,
                 span: MKCoordinateSpan(latitudeDelta: 0.007, longitudeDelta: 0.007)
