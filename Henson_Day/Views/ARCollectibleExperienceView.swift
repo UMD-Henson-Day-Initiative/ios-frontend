@@ -209,6 +209,7 @@ struct ARPlacementView: UIViewRepresentable {
             modelEntity.model?.materials = [SimpleMaterial(color: .systemRed, roughness: 0.2, isMetallic: false)]
             modelEntity.scale = SIMD3<Float>(repeating: 1.15)
 
+            // From YouTube
             // To support direct tap-to-collect on the AR muppet:
             // 1) Add CollisionComponent(shapes: [.generateSphere(radius: ...)]) to `modelEntity`.
             // 2) Add InputTargetComponent() to `modelEntity`.
