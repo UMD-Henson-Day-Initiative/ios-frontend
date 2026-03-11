@@ -3,7 +3,6 @@ import RealityKit
 import ARKit
 import AVFoundation
 import CoreLocation
-import Combine
 
 struct ARCameraView: UIViewRepresentable {
     let isCameraAuthorized: Bool
@@ -25,40 +24,11 @@ struct ARCameraView: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator {
         Coordinator(worldAnchorManager: worldAnchorManager)
-        
     }
 
-    final class Coordinator { // Placing, tap, scaling etc: https://www.youtube.com/watch?v=gq88Lw3KMJ8
+    final class Coordinator {
         private var hasConfigured = false
         private let worldAnchorManager: WorldAnchorManager
-        var selectedEntity: ModelEntity?
-        var initialScale: SIMD3<Float> = [0.1, 0.1, 0.1]
-        
-        let minScale: Float = 0.01
-        let maxScale: Float = 1
-        
-        // Tap Gesture
-        @objc  func handleTap(_ recognizer: UITapGestureRecognizer){
-            guard let arView = recognizer.view as? ARView else { return }
-            
-            let tapLocation = recognizer.location(in: arView)
-            
-            // raycast to find surface
-            let results = arView.raycast(from: tapLocation, allowing: .estimatedPlane, alignment: .horizontal)
-            
-            guard let fristResult = results.first else {
-                print("No surface was found - point camera at flat surface")
-                return
-            }
-            
-            if let selectedEntity = selectedEntity {
-                UIView.animate(withDuration: 0.2) {
-                    selectedEntity.scale = SIMD3(repeating: self.initialScale.x)
-                }
-                self.selectedEntity = nil
-                return
-            }
-        }
 
         init(worldAnchorManager: WorldAnchorManager) {
             self.worldAnchorManager = worldAnchorManager
@@ -88,7 +58,7 @@ struct ARCameraView: UIViewRepresentable {
                 configuration.planeDetection = []
 
                 arView.session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
-                // Intentionally skip adding the red starter wall test mesh.
+                _ = worldAnchorManager
                 hasConfigured = true
             }
         }

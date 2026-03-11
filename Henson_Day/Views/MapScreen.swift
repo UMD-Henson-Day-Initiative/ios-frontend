@@ -115,6 +115,10 @@ struct MapScreen: View {
                 CameraPermissionPlaceholderView()
             } else {
                 ARCameraView(isCameraAuthorized: cameraPermission.isAuthorized, worldAnchorManager: worldAnchorManager, isPaused: arPin != nil)
+            }
+        } else {
+            mapView
+        }
     }
 
     private var mapView: some View {
@@ -228,6 +232,10 @@ struct MapScreen: View {
                                 CameraPermissionPlaceholderView()
                             } else {
                                 ARCameraView(isCameraAuthorized: cameraPermission.isAuthorized, worldAnchorManager: worldAnchorManager, isPaused: arPin != nil)
+                            }
+                        }
+                    }
+                    .frame(width: min(170, geometry.size.width * 0.4), height: 205)
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 14, style: .continuous)

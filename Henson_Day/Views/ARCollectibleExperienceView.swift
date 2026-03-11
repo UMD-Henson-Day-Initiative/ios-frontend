@@ -418,9 +418,22 @@ struct ARPlacementView: UIViewRepresentable {
         private var currentModelAssetName: String?
         private var loadCancellable: AnyCancellable?
         private var horizontalPlaneAnchorCount = 0
+        private var isCollectAnimationRunning = false
         var didTapCollectible: (() -> Void)?
 
         private let collectibleEntityName = "ar.collectible.entity"
+        private let defaultTargetMaxDimension: Float = 0.20
+        private let smallCollectibleTargetMaxDimension: Float = 0.14
+        private let largeCollectibleTargetMaxDimension: Float = 0.25
+
+        // Long-term sizing control by asset: mix smaller/larger target footprints.
+        private let targetDimensionByModelAsset: [String: Float] = [
+            "toy_car": 0.14,
+            "hummingbird_anim": 0.14,
+            "robot": 0.25,
+            "toy_biplane_realistic": 0.25,
+            "slide": 0.20
+        ]
 
         func configure(_ arView: ARView) {
             self.arView = arView
@@ -452,6 +465,14 @@ struct ARPlacementView: UIViewRepresentable {
                 removeCollectibleIfNeeded()
                 surfaceDetected.wrappedValue = false
                 hasPlaced.wrappedValue = false
+                return
+            }
+
+            // Keep the collectible anchored in world space once placed so it doesn't
+            // drift with camera movement as `updateUIView` runs repeatedly.
+            if collectibleAnchor != nil {
+                surfaceDetected.wrappedValue = true
+                hasPlaced.wrappedValue = collectibleEntity != nil
                 return
             }
 
@@ -490,8 +511,6 @@ struct ARPlacementView: UIViewRepresentable {
                 let anchor = AnchorEntity(world: targetPosition)
                 collectibleAnchor = anchor
                 arView.scene.addAnchor(anchor)
-            } else {
-                collectibleAnchor?.position = targetPosition
             }
 
             guard collectibleEntity == nil || currentModelAssetName != modelAssetName else { return }
@@ -511,7 +530,8 @@ struct ARPlacementView: UIViewRepresentable {
                     guard let self else { return }
 
                     entity.name = self.collectibleEntityName
-                    entity.scale = SIMD3<Float>(repeating: 0.25)
+                    let targetDimension = self.targetMaxDimension(for: modelAssetName)
+                    entity.scale = self.normalizedScale(for: entity, targetMaxDimension: targetDimension)
                     entity.generateCollisionShapes(recursive: true)
                     entity.components.set(InputTargetComponent())
 
@@ -537,10 +557,40 @@ struct ARPlacementView: UIViewRepresentable {
             let fallbackMaterial = SimpleMaterial(color: .gray, roughness: 0.3, isMetallic: false)
             let fallbackEntity = ModelEntity(mesh: fallbackMesh, materials: [fallbackMaterial])
             fallbackEntity.name = collectibleEntityName
+            fallbackEntity.scale = SIMD3<Float>(repeating: 0.6)
             fallbackEntity.generateCollisionShapes(recursive: true)
             fallbackEntity.components.set(InputTargetComponent())
             collectibleAnchor?.addChild(fallbackEntity)
             collectibleEntity = fallbackEntity
+        }
+
+        private func normalizedScale(for entity: Entity, targetMaxDimension: Float) -> SIMD3<Float> {
+            let bounds = entity.visualBounds(relativeTo: nil)
+            let extents = bounds.extents
+            let maxDimension = max(extents.x, max(extents.y, extents.z))
+            guard maxDimension.isFinite, maxDimension > 0 else {
+                return SIMD3<Float>(repeating: 0.12)
+            }
+
+            let uniformScale = targetMaxDimension / maxDimension
+            let clampedScale = min(max(uniformScale, 0.03), 0.35)
+            return SIMD3<Float>(repeating: clampedScale)
+        }
+
+        private func targetMaxDimension(for modelAssetName: String) -> Float {
+            if let mapped = targetDimensionByModelAsset[modelAssetName] {
+                return mapped
+            }
+
+            if modelAssetName.contains("toy_") {
+                return smallCollectibleTargetMaxDimension
+            }
+
+            if modelAssetName.contains("robot") || modelAssetName.contains("biplane") {
+                return largeCollectibleTargetMaxDimension
+            }
+
+            return defaultTargetMaxDimension
         }
 
         private func removeCollectibleIfNeeded() {
@@ -564,7 +614,58 @@ struct ARPlacementView: UIViewRepresentable {
                 .contains(where: { $0.name == collectibleEntityName })
 
             if tappedCollectible {
+                animateCollectibleTowardCameraAndCollect()
+            }
+        }
+
+        private func animateCollectibleTowardCameraAndCollect() {
+            guard !isCollectAnimationRunning else { return }
+            guard let arView, let collectibleEntity else {
                 didTapCollectible?()
+                return
+            }
+
+            isCollectAnimationRunning = true
+
+            let cameraMatrix = arView.cameraTransform.matrix
+            let cameraPosition = SIMD3<Float>(
+                cameraMatrix.columns.3.x,
+                cameraMatrix.columns.3.y,
+                cameraMatrix.columns.3.z
+            )
+            let forward = normalize(SIMD3<Float>(
+                -cameraMatrix.columns.2.x,
+                -cameraMatrix.columns.2.y,
+                -cameraMatrix.columns.2.z
+            ))
+            let up = normalize(SIMD3<Float>(
+                cameraMatrix.columns.1.x,
+                cameraMatrix.columns.1.y,
+                cameraMatrix.columns.1.z
+            ))
+
+            let targetPosition = cameraPosition + (forward * 0.18) - (up * 0.06)
+            let currentScale = collectibleEntity.scale(relativeTo: nil)
+            let targetScale = currentScale * SIMD3<Float>(repeating: 0.05)
+            let targetTransform = Transform(
+                scale: targetScale,
+                rotation: collectibleEntity.orientation(relativeTo: nil),
+                translation: targetPosition
+            )
+
+            collectibleEntity.move(
+                to: targetTransform,
+                relativeTo: nil,
+                duration: 0.45,
+                timingFunction: .easeInOut
+            )
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.48) { [weak self] in
+                guard let self else { return }
+                collectibleEntity.removeFromParent()
+                self.collectibleEntity = nil
+                self.didTapCollectible?()
+                self.isCollectAnimationRunning = false
             }
         }
     }
