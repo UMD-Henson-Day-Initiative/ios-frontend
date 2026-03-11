@@ -52,6 +52,7 @@ final class LocationPermissionManager: NSObject, ObservableObject, CLLocationMan
     @Published var region: MKCoordinateRegion
     @Published private(set) var currentCoordinate: CLLocationCoordinate2D?
     @Published var testingOverrideCoordinate: CLLocationCoordinate2D?
+    @Published private(set) var lastTeleportDate: Date?
 
     private let manager = CLLocationManager()
 
@@ -79,6 +80,7 @@ final class LocationPermissionManager: NSObject, ObservableObject, CLLocationMan
     // Teleports the app's effective position for testing AR proximity flows.
     func setTestingCoordinate(_ coordinate: CLLocationCoordinate2D?) {
         testingOverrideCoordinate = coordinate
+        lastTeleportDate = Date()
         guard let coordinate else { return }
         region = MKCoordinateRegion(
             center: coordinate,

@@ -41,6 +41,7 @@ final class AppState: ObservableObject {
                 rarity: .rare,
                 points: 150,
                 location: "IRB Atrium",
+                modelFileName: "../3DModels/toy_car.usdz",
                 flavorText: "A curious critter who loves quantum talks.",
                 obtained: true
             ),
@@ -52,6 +53,7 @@ final class AppState: ObservableObject {
                 rarity: .common,
                 points: 40,
                 location: "McKeldin Mall",
+                modelFileName: "../3DModels/robot.usdz",
                 flavorText: "Muppet smthing",
                 obtained: false
             )

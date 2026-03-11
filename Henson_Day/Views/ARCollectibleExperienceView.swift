@@ -7,11 +7,13 @@ import Combine
 struct ARCollectibleExperienceView: View {
     enum FlowState {
         case tooFar
+        case waitingForSecondSurface
         case detectSurface
         case placed
         case alreadyCollected
         case collecting
         case captured
+        case noCollectiblesConfigured
     }
 
     let pin: PinEntity
@@ -26,38 +28,27 @@ struct ARCollectibleExperienceView: View {
     @State private var didTapCollectible = false
     @State private var isWithinSpawnRadius = false
     @State private var distanceMeters: Double?
+    @State private var activeCollectible: DatabaseCollectible?
+    @State private var secondHorizontalSurfaceDetected = false
+    @State private var teleportFallbackReady = false
 
-    // Per-pin configurable radius (meters). If a pin title is not listed, fallback radius is used.
-    private let spawnRadiusByPinTitle: [String: CLLocationDistance] = [
-        "Stadium Spirit Rally": 45,
-        "McKeldin Time Capsule": 35,
-        "Evening Concert": 40,
-        "Quantum Courtyard Pop-Up": 30,
-        "Finale Badge Sprint": 50
-    ]
-    private let defaultSpawnRadiusMeters: CLLocationDistance = 35
-    private let collectiblePoints: Int = 50
+    // Global AR spawn radius in meters. Keep this low while testing close-range interactions.
+    private let spawnRadiusMeters: CLLocationDistance = 5
 
     private var collectibleName: String {
-        pin.collectibleName ?? pin.title
+        activeCollectible?.name ?? (pin.collectibleName ?? pin.title)
     }
 
     private var collectibleModelAssetName: String {
-        // Maps each collectible to a USDZ model in /3DModels.
-        switch collectibleName {
-        case "Stadium Stomper":
-            return "robot"
-        case "Mall Muppet":
-            return "toy_car"
-        case "Soundwave Snare":
-            return "hummingbird_anim"
-        case "Quantum Smth":
-            return "toy_biplane_realistic"
-        case "Finale Flare":
-            return "slide"
-        default:
-            return "robot"
-        }
+        activeCollectible?.modelFileName ?? "robot"
+    }
+
+    private var collectibleRarity: String {
+        activeCollectible?.rarity ?? (pin.collectibleRarity ?? "Common")
+    }
+
+    private var collectiblePoints: Int {
+        activeCollectible?.points ?? 50
     }
 
     private var formattedDistance: String {
@@ -65,39 +56,94 @@ struct ARCollectibleExperienceView: View {
         return "\(Int(distanceMeters.rounded())) m"
     }
 
-    private var spawnRadiusMeters: CLLocationDistance {
-        spawnRadiusByPinTitle[pin.title] ?? defaultSpawnRadiusMeters
-    }
-
     private var locationModeLabel: String {
         locationManager.testingOverrideCoordinate == nil ? "LIVE" : "TESTING OVERRIDE"
+    }
+
+    private var debugCollectibleID: String {
+        activeCollectible.map { "ID: \($0.id)" } ?? "ID: none"
+    }
+
+    private var debugSpawnPath: String {
+        guard isTeleportFlow else { return "via: proximity" }
+        if secondHorizontalSurfaceDetected { return "via: 2nd surface" }
+        if teleportFallbackReady { return "via: 10s fallback" }
+        return "via: waiting…"
+    }
+
+    private var isTeleportFlow: Bool {
+        locationManager.testingOverrideCoordinate != nil
     }
 
     private var alreadyCollected: Bool {
         modelController.hasCollectedCollectible(named: collectibleName)
     }
 
+    // Teleport flow: spawn only after second detected horizontal surface OR after 10 seconds.
+    private var teleportSpawnGateSatisfied: Bool {
+        !isTeleportFlow || secondHorizontalSurfaceDetected || teleportFallbackReady
+    }
+
+    private var canSpawnCollectible: Bool {
+        isWithinSpawnRadius && !alreadyCollected && activeCollectible != nil && teleportSpawnGateSatisfied
+    }
+
     var body: some View {
         ZStack {
             ARPlacementView(
-                canSpawnCollectible: isWithinSpawnRadius && !alreadyCollected,
+                canSpawnCollectible: canSpawnCollectible,
+                shouldForceSpawnWithoutSurface: isTeleportFlow && teleportFallbackReady && !secondHorizontalSurfaceDetected,
                 modelAssetName: collectibleModelAssetName,
                 surfaceDetected: $surfaceDetected,
                 hasPlaced: $hasPlaced,
-                didTapCollectible: $didTapCollectible
+                didTapCollectible: $didTapCollectible,
+                secondHorizontalSurfaceDetected: $secondHorizontalSurfaceDetected
             )
             .ignoresSafeArea()
 
             VStack {
-                HStack {
-                    // Top-left debug badge to show whether AR location uses live GPS or testing override.
-                    Text(locationModeLabel)
-                        .font(.caption2.weight(.bold))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 5)
-                        .background(.black.opacity(0.55))
-                        .foregroundStyle(.white)
-                        .clipShape(Capsule())
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(collectibleName)
+                            .font(.headline.weight(.bold))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(.black.opacity(0.55))
+                            .foregroundStyle(.white)
+                            .clipShape(Capsule())
+
+                        Text(locationModeLabel)
+                            .font(.caption2.weight(.bold))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
+                            .background(.black.opacity(0.55))
+                            .foregroundStyle(.white)
+                            .clipShape(Capsule())
+
+                        Text(debugCollectibleID)
+                            .font(.caption2)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
+                            .background(.black.opacity(0.45))
+                            .foregroundStyle(.white.opacity(0.85))
+                            .clipShape(Capsule())
+
+                        Text(debugSpawnPath)
+                            .font(.caption2)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
+                            .background(.black.opacity(0.45))
+                            .foregroundStyle(.white.opacity(0.85))
+                            .clipShape(Capsule())
+
+                        Text("dist: \(formattedDistance)")
+                            .font(.caption2)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
+                            .background(.black.opacity(0.45))
+                            .foregroundStyle(.white.opacity(0.85))
+                            .clipShape(Capsule())
+                    }
 
                     Spacer()
 
@@ -115,16 +161,6 @@ struct ARCollectibleExperienceView: View {
                 .padding(.horizontal)
                 .padding(.top, 8)
 
-                if isWithinSpawnRadius && !alreadyCollected {
-                    Text("\(collectibleName) is nearby!")
-                        .font(.headline.weight(.semibold))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(.ultraThinMaterial)
-                        .clipShape(Capsule())
-                        .padding(.top, 8)
-                }
-
                 Spacer()
 
                 overlayCard
@@ -138,17 +174,28 @@ struct ARCollectibleExperienceView: View {
             }
         }
         .onAppear {
-            // Evaluate proximity immediately so the correct AR state appears as soon as the screen opens.
+            chooseCollectibleForCurrentPin()
             recalculateProximityAndFlow()
+
+            // Teleport support: if only one surface is found, allow spawn after 10 seconds.
+            if isTeleportFlow {
+                teleportFallbackReady = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+                    teleportFallbackReady = true
+                    recalculateProximityAndFlow()
+                }
+            }
         }
         .onReceive(locationManager.$currentCoordinate.combineLatest(locationManager.$testingOverrideCoordinate)) { _ in
-            // Re-check radius whenever GPS updates or when the test teleport override changes.
             recalculateProximityAndFlow()
         }
         .onChange(of: surfaceDetected) { _, _ in
             recalculateProximityAndFlow()
         }
         .onChange(of: hasPlaced) { _, _ in
+            recalculateProximityAndFlow()
+        }
+        .onChange(of: secondHorizontalSurfaceDetected) { _, _ in
             recalculateProximityAndFlow()
         }
         .onChange(of: didTapCollectible) { _, tapped in
@@ -160,6 +207,13 @@ struct ARCollectibleExperienceView: View {
     @ViewBuilder
     private var overlayCard: some View {
         switch flowState {
+        case .noCollectiblesConfigured:
+            promptCard(
+                title: "No collectibles configured for this pin",
+                subtitle: "Add collectible IDs to this pin in Database.pins to enable AR spawns."
+            ) {
+                EmptyView()
+            }
         case .tooFar:
             promptCard(
                 title: "Move closer to unlock this collectible",
@@ -167,8 +221,18 @@ struct ARCollectibleExperienceView: View {
             ) {
                 EmptyView()
             }
+        case .waitingForSecondSurface:
+            promptCard(
+                title: "Collectible nearby",
+                subtitle: "Teleport mode active. It appears on the second horizontal surface, or automatically after 10 seconds."
+            ) {
+                EmptyView()
+            }
         case .detectSurface:
-            promptCard(title: "Look around for a horizontal surface", subtitle: "You are in range. The model appears when a floor/table surface is found.") {
+            promptCard(
+                title: "\(collectibleName) is nearby!",
+                subtitle: "Look around for a horizontal surface to place the model."
+            ) {
                 EmptyView()
             }
         case .placed:
@@ -222,7 +286,27 @@ struct ARCollectibleExperienceView: View {
         }
     }
 
+    private func chooseCollectibleForCurrentPin() {
+        let collectedNames = Set(modelController.collectionItemsForCurrentUser().map(\.collectibleName))
+
+        let pinCollectibleIDs = Database.pins.first(where: { $0.title == pin.title })?.collectibleIDs ?? []
+        var candidates = Database.collectibleCatalog.filter { pinCollectibleIDs.contains($0.id) }
+
+        // Backward-compatible fallback for pins still configured by `collectibleName` only.
+        if candidates.isEmpty, let fallbackName = pin.collectibleName {
+            candidates = Database.collectibleCatalog.filter { $0.name == fallbackName }
+        }
+
+        let notCollected = candidates.filter { !collectedNames.contains($0.name) }
+        activeCollectible = (notCollected.isEmpty ? candidates : notCollected).randomElement()
+    }
+
     private func recalculateProximityAndFlow() {
+        guard activeCollectible != nil else {
+            flowState = .noCollectiblesConfigured
+            return
+        }
+
         let pinLocation = CLLocation(latitude: pin.latitude, longitude: pin.longitude)
 
         if let userCoordinate = locationManager.effectiveCoordinate {
@@ -245,6 +329,11 @@ struct ARCollectibleExperienceView: View {
             return
         }
 
+        guard teleportSpawnGateSatisfied else {
+            flowState = .waitingForSecondSurface
+            return
+        }
+
         if hasPlaced {
             flowState = .placed
         } else {
@@ -255,8 +344,12 @@ struct ARCollectibleExperienceView: View {
     private func handleCollectTapped() {
         flowState = .collecting
 
-        // Persist the capture after the tap on the model.
-        modelController.captureCollectible(from: pin, points: collectiblePoints)
+        modelController.captureCollectible(
+            collectibleName: collectibleName,
+            rarity: collectibleRarity,
+            foundAtTitle: pin.title,
+            points: collectiblePoints
+        )
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
             flowState = .captured
@@ -287,10 +380,12 @@ struct ARCollectibleExperienceView: View {
 
 struct ARPlacementView: UIViewRepresentable {
     let canSpawnCollectible: Bool
+    let shouldForceSpawnWithoutSurface: Bool
     let modelAssetName: String
     @Binding var surfaceDetected: Bool
     @Binding var hasPlaced: Bool
     @Binding var didTapCollectible: Bool
+    @Binding var secondHorizontalSurfaceDetected: Bool
 
     func makeUIView(context: Context) -> ARView {
         let arView = ARView(frame: .zero, cameraMode: .ar, automaticallyConfigureSession: false)
@@ -304,10 +399,11 @@ struct ARPlacementView: UIViewRepresentable {
         context.coordinator.syncState(
             arView: uiView,
             canSpawnCollectible: canSpawnCollectible,
+            shouldForceSpawnWithoutSurface: shouldForceSpawnWithoutSurface,
             modelAssetName: modelAssetName,
             surfaceDetected: $surfaceDetected,
             hasPlaced: $hasPlaced,
-            didTapCollectible: $didTapCollectible
+            secondHorizontalSurfaceDetected: $secondHorizontalSurfaceDetected
         )
     }
 
@@ -321,6 +417,7 @@ struct ARPlacementView: UIViewRepresentable {
         private var collectibleEntity: Entity?
         private var currentModelAssetName: String?
         private var loadCancellable: AnyCancellable?
+        private var horizontalPlaneAnchorCount = 0
         var didTapCollectible: (() -> Void)?
 
         private let collectibleEntityName = "ar.collectible.entity"
@@ -335,7 +432,6 @@ struct ARPlacementView: UIViewRepresentable {
             configuration.planeDetection = [.horizontal]
             arView.session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
 
-            // Tap recognizer is used to detect when the user taps directly on the placed 3D collectible.
             let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
             arView.addGestureRecognizer(tapGesture)
         }
@@ -343,13 +439,14 @@ struct ARPlacementView: UIViewRepresentable {
         func syncState(
             arView: ARView,
             canSpawnCollectible: Bool,
+            shouldForceSpawnWithoutSurface: Bool,
             modelAssetName: String,
             surfaceDetected: Binding<Bool>,
             hasPlaced: Binding<Bool>,
-            didTapCollectible: Binding<Bool>
+            secondHorizontalSurfaceDetected: Binding<Bool>
         ) {
             self.arView = arView
-            _ = didTapCollectible
+            secondHorizontalSurfaceDetected.wrappedValue = horizontalPlaneAnchorCount >= 2
 
             if !canSpawnCollectible {
                 removeCollectibleIfNeeded()
@@ -358,13 +455,17 @@ struct ARPlacementView: UIViewRepresentable {
                 return
             }
 
-            // Raycast from screen center so the model appears where the user is currently looking.
             let center = CGPoint(x: arView.bounds.midX, y: arView.bounds.midY)
             let raycastResults = arView.raycast(from: center, allowing: .estimatedPlane, alignment: .horizontal)
 
             if let result = raycastResults.first {
                 surfaceDetected.wrappedValue = true
                 placeOrMoveCollectible(using: result.worldTransform, modelAssetName: modelAssetName)
+                hasPlaced.wrappedValue = collectibleEntity != nil
+            } else if shouldForceSpawnWithoutSurface {
+                // Teleport fallback path: place collectible in front of camera after timeout.
+                surfaceDetected.wrappedValue = true
+                placeCollectibleInFrontOfCamera(modelAssetName: modelAssetName)
                 hasPlaced.wrappedValue = collectibleEntity != nil
             } else {
                 surfaceDetected.wrappedValue = false
@@ -373,7 +474,10 @@ struct ARPlacementView: UIViewRepresentable {
         }
 
         func session(_ session: ARSession, didAdd anchors: [ARAnchor]) {
-            // Keep session delegate for future AR events; placement uses per-frame raycasts in syncState.
+            let newHorizontalCount = anchors.compactMap { $0 as? ARPlaneAnchor }
+                .filter { $0.alignment == .horizontal }
+                .count
+            horizontalPlaneAnchorCount += newHorizontalCount
         }
 
         private func placeOrMoveCollectible(using worldTransform: simd_float4x4, modelAssetName: String) {
@@ -416,9 +520,21 @@ struct ARPlacementView: UIViewRepresentable {
                 })
         }
 
+        private func placeCollectibleInFrontOfCamera(modelAssetName: String) {
+            guard let arView else { return }
+            let cameraTransform = arView.cameraTransform.matrix
+            let forward = SIMD3<Float>(-cameraTransform.columns.2.x, -cameraTransform.columns.2.y, -cameraTransform.columns.2.z)
+            let cameraPosition = SIMD3<Float>(cameraTransform.columns.3.x, cameraTransform.columns.3.y, cameraTransform.columns.3.z)
+            let fallbackPosition = cameraPosition + normalize(forward) * 0.9
+
+            var fallbackTransform = matrix_identity_float4x4
+            fallbackTransform.columns.3 = SIMD4<Float>(fallbackPosition.x, fallbackPosition.y, fallbackPosition.z, 1)
+            placeOrMoveCollectible(using: fallbackTransform, modelAssetName: modelAssetName)
+        }
+
         private func installFallbackEntity() {
             let fallbackMesh = MeshResource.generateSphere(radius: 0.12)
-            let fallbackMaterial = SimpleMaterial(color: .systemRed, roughness: 0.3, isMetallic: false)
+            let fallbackMaterial = SimpleMaterial(color: .gray, roughness: 0.3, isMetallic: false)
             let fallbackEntity = ModelEntity(mesh: fallbackMesh, materials: [fallbackMaterial])
             fallbackEntity.name = collectibleEntityName
             fallbackEntity.generateCollisionShapes(recursive: true)

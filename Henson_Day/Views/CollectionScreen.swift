@@ -97,7 +97,7 @@ struct CollectionScreen: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    Text(collectible.foundAt)
+                    Text(collectible.location)
                         .font(.caption)
                         .foregroundStyle(.secondary)
 

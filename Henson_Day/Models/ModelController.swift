@@ -75,8 +75,17 @@ final class ModelController: ObservableObject {
     }
 
     func captureCollectible(from pin: PinEntity, points: Int = 50) {
-        guard let user = currentUser else { return }
         guard let collectibleName = pin.collectibleName else { return }
+        captureCollectible(
+            collectibleName: collectibleName,
+            rarity: pin.collectibleRarity ?? "Common",
+            foundAtTitle: pin.title,
+            points: points
+        )
+    }
+
+    func captureCollectible(collectibleName: String, rarity: String, foundAtTitle: String, points: Int) {
+        guard let user = currentUser else { return }
         let userID = user.id
 
         do {
@@ -90,8 +99,8 @@ final class ModelController: ObservableObject {
 
             let collected = CollectedItemEntity(
                 collectibleName: collectibleName,
-                rarity: pin.collectibleRarity ?? "Common",
-                foundAtTitle: pin.title,
+                rarity: rarity,
+                foundAtTitle: foundAtTitle,
                 playerID: userID,
                 player: user
             )

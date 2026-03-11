@@ -114,11 +114,7 @@ struct MapScreen: View {
             if cameraPermission.isDeniedOrRestricted {
                 CameraPermissionPlaceholderView()
             } else {
-                ARCameraView(isCameraAuthorized: cameraPermission.isAuthorized, worldAnchorManager: worldAnchorManager)
-            }
-        } else {
-            mapView
-        }
+                ARCameraView(isCameraAuthorized: cameraPermission.isAuthorized, worldAnchorManager: worldAnchorManager, isPaused: arPin != nil)
     }
 
     private var mapView: some View {
@@ -231,11 +227,7 @@ struct MapScreen: View {
                             if cameraPermission.isDeniedOrRestricted {
                                 CameraPermissionPlaceholderView()
                             } else {
-                                ARCameraView(isCameraAuthorized: cameraPermission.isAuthorized, worldAnchorManager: worldAnchorManager)
-                            }
-                        }
-                    }
-                    .frame(width: min(170, geometry.size.width * 0.4), height: 205)
+                                ARCameraView(isCameraAuthorized: cameraPermission.isAuthorized, worldAnchorManager: worldAnchorManager, isPaused: arPin != nil)
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -346,19 +338,31 @@ struct MapScreen: View {
     private func teleportToUncollectedCollectiblePin() {
         let collectedNames = Set(modelController.collectionItemsForCurrentUser().map(\.collectibleName))
 
-        guard let targetPin = modelController.pins.first(where: {
-            guard $0.hasARCollectible, let collectibleName = $0.collectibleName else { return false }
-            return !collectedNames.contains(collectibleName)
-        }) else {
-            return
-        }
+        let targetPin = modelController.pins
+            .filter { $0.hasARCollectible }
+            .first { pin in
+                let pinCollectibleIDs = Database.pins.first(where: { $0.title == pin.title })?.collectibleIDs ?? []
+                let pinCollectibles = Database.collectibleCatalog.filter { pinCollectibleIDs.contains($0.id) }
+
+                if !pinCollectibles.isEmpty {
+                    return pinCollectibles.contains(where: { !collectedNames.contains($0.name) })
+                }
+
+                if let legacyName = pin.collectibleName {
+                    return !collectedNames.contains(legacyName)
+                }
+
+                return false
+            }
+
+        guard let targetPin else { return }
 
         let targetCoordinate = CLLocationCoordinate2D(latitude: targetPin.latitude, longitude: targetPin.longitude)
         locationManager.setTestingCoordinate(targetCoordinate)
         region.center = targetCoordinate
 
-        // IMPORTANT: Do not auto-open the AR full screen here.
-        // Teleport should only spoof location and keep the current camera/map view responsive.
+        // Teleport opens the AR collectible screen so users immediately see the spawned collectible flow.
+        arPin = targetPin
     }
 }
 
