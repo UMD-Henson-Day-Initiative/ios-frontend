@@ -32,7 +32,7 @@ struct ARCameraView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
+        ZStack(alignment: .bottomTrailing) {
             ARCameraRepresentable(
                 isCameraAuthorized: isCameraAuthorized,
                 isPaused: isPaused,
@@ -42,8 +42,8 @@ struct ARCameraView: View {
 
             if showPlacementControls {
                 placementControls
-                    .padding(.top, 16)
                     .padding(.trailing, 14)
+                    .padding(.bottom, 96)
             }
         }
         .onAppear {

@@ -29,6 +29,7 @@ struct MapScreen: View {
     @State private var showLeaderboard = false
     @State private var showCollection = false
     @State private var isCameraPrimary = false
+    @State private var suppressMiniCameraFeed = false
 
     @StateObject private var cameraPermission = CameraPermissionManager()
     @StateObject private var worldAnchorManager = WorldAnchorManager()
@@ -239,7 +240,9 @@ struct MapScreen: View {
                         if isCameraPrimary {
                             mapView
                         } else {
-                            if cameraPermission.isDeniedOrRestricted {
+                            if suppressMiniCameraFeed {
+                                miniCameraPlaceholder
+                            } else if cameraPermission.isDeniedOrRestricted {
                                 CameraPermissionPlaceholderView()
                             } else {
                                 ARCameraView(
@@ -277,6 +280,20 @@ struct MapScreen: View {
             }
         }
         .allowsHitTesting(true)
+    }
+
+    private var miniCameraPlaceholder: some View {
+        ZStack {
+            Color.black.opacity(0.75)
+            VStack(spacing: 6) {
+                Image(systemName: "camera")
+                    .font(.title3)
+                    .foregroundStyle(.white)
+                Text("Camera")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.9))
+            }
+        }
     }
 
     private var floatingActions: some View {
@@ -386,9 +403,16 @@ struct MapScreen: View {
         locationManager.setTestingCoordinate(targetCoordinate)
         region.center = targetCoordinate
 
-        // Give camera/map state a moment to settle before launching AR to avoid session contention.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+        // Temporarily suspend mini camera feed to avoid camera-session contention during AR launch.
+        suppressMiniCameraFeed = true
+
+        // Give camera/map state a moment to settle before launching AR collectible.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
             arPin = targetPin
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            suppressMiniCameraFeed = false
         }
     }
 }

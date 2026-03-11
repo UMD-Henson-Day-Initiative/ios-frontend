@@ -32,8 +32,8 @@ struct ARCollectibleExperienceView: View {
     @State private var secondHorizontalSurfaceDetected = false
     @State private var teleportFallbackReady = false
 
-    // Global AR spawn radius in meters. Keep this low while testing close-range interactions.
-    private let spawnRadiusMeters: CLLocationDistance = 5
+    // Show nearby collectible state within 30m.
+    private let spawnRadiusMeters: CLLocationDistance = 30
 
     private var collectibleName: String {
         activeCollectible?.name ?? (pin.collectibleName ?? pin.title)
@@ -67,7 +67,7 @@ struct ARCollectibleExperienceView: View {
     private var debugSpawnPath: String {
         guard isTeleportFlow else { return "via: proximity" }
         if secondHorizontalSurfaceDetected { return "via: 2nd surface" }
-        if teleportFallbackReady { return "via: 10s fallback" }
+        if teleportFallbackReady { return "via: 2s fallback" }
         return "via: waiting…"
     }
 
@@ -177,10 +177,10 @@ struct ARCollectibleExperienceView: View {
             chooseCollectibleForCurrentPin()
             recalculateProximityAndFlow()
 
-            // Teleport support: if only one surface is found, allow spawn after 10 seconds.
+            // Teleport support: if only one surface is found, allow spawn after a short delay.
             if isTeleportFlow {
                 teleportFallbackReady = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                     teleportFallbackReady = true
                     recalculateProximityAndFlow()
                 }
@@ -224,7 +224,7 @@ struct ARCollectibleExperienceView: View {
         case .waitingForSecondSurface:
             promptCard(
                 title: "Collectible nearby",
-                subtitle: "Teleport mode active. It appears on the second horizontal surface, or automatically after 10 seconds."
+                subtitle: "Teleport mode active. It appears on the second horizontal surface, or automatically after ~2 seconds."
             ) {
                 EmptyView()
             }
@@ -422,17 +422,17 @@ struct ARPlacementView: UIViewRepresentable {
         var didTapCollectible: (() -> Void)?
 
         private let collectibleEntityName = "ar.collectible.entity"
-        private let defaultTargetMaxDimension: Float = 0.20
-        private let smallCollectibleTargetMaxDimension: Float = 0.14
-        private let largeCollectibleTargetMaxDimension: Float = 0.25
+        private let defaultTargetMaxDimension: Float = 0.10
+        private let smallCollectibleTargetMaxDimension: Float = 0.07
+        private let largeCollectibleTargetMaxDimension: Float = 0.125
 
         // Long-term sizing control by asset: mix smaller/larger target footprints.
         private let targetDimensionByModelAsset: [String: Float] = [
-            "toy_car": 0.14,
-            "hummingbird_anim": 0.14,
-            "robot": 0.25,
-            "toy_biplane_realistic": 0.25,
-            "slide": 0.20
+            "toy_car": 0.07,
+            "hummingbird_anim": 0.07,
+            "robot": 0.125,
+            "toy_biplane_realistic": 0.125,
+            "slide": 0.10
         ]
 
         func configure(_ arView: ARView) {
