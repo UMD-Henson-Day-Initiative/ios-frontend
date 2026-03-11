@@ -11,6 +11,8 @@
 import SwiftUI
 import MapKit
 import CoreLocation
+import RealityKit
+import Combine
 
 struct MapScreen: View {
     // Toggle this to hide all location-teleport testing controls in camera mode.
@@ -30,6 +32,8 @@ struct MapScreen: View {
     @State private var showCollection = false
     @State private var isCameraPrimary = false
     @State private var suppressMiniCameraFeed = false
+    @State private var isPreparingTeleportLaunch = false
+    @State private var teleportPreloadCancellable: AnyCancellable?
 
     @StateObject private var cameraPermission = CameraPermissionManager()
     @StateObject private var worldAnchorManager = WorldAnchorManager()
@@ -124,7 +128,7 @@ struct MapScreen: View {
                     isCameraAuthorized: cameraPermission.isAuthorized,
                     worldAnchorManager: worldAnchorManager,
                     availableCollectibles: collectedCatalogItems,
-                    isPaused: arPin != nil,
+                    isPaused: arPin != nil || isPreparingTeleportLaunch,
                     showPlacementControls: true
                 )
             }
@@ -249,7 +253,7 @@ struct MapScreen: View {
                                     isCameraAuthorized: cameraPermission.isAuthorized,
                                     worldAnchorManager: worldAnchorManager,
                                     availableCollectibles: collectedCatalogItems,
-                                    isPaused: arPin != nil,
+                                    isPaused: arPin != nil || isPreparingTeleportLaunch,
                                     showPlacementControls: false
                                 )
                             }
@@ -405,15 +409,40 @@ struct MapScreen: View {
 
         // Temporarily suspend mini camera feed to avoid camera-session contention during AR launch.
         suppressMiniCameraFeed = true
+        isPreparingTeleportLaunch = true
 
-        // Give camera/map state a moment to settle before launching AR collectible.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-            arPin = targetPin
-        }
+        let modelAssetName = modelAssetNameForPin(targetPin) ?? "robot"
+
+        // Preload before launching AR so model decode doesn't block initial collectible screen.
+        teleportPreloadCancellable = Entity.loadModelAsync(named: modelAssetName)
+            .receive(on: DispatchQueue.main)
+            .sink(receiveCompletion: { _ in
+                teleportPreloadCancellable = nil
+
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    arPin = targetPin
+                }
+            }, receiveValue: { _ in })
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
             suppressMiniCameraFeed = false
+            isPreparingTeleportLaunch = false
         }
+    }
+
+    private func modelAssetNameForPin(_ pin: PinEntity) -> String? {
+        let pinCollectibleIDs = Database.pins.first(where: { $0.title == pin.title })?.collectibleIDs ?? []
+
+        if let byID = Database.collectibleCatalog.first(where: { pinCollectibleIDs.contains($0.id) }) {
+            return byID.modelFileName
+        }
+
+        if let collectibleName = pin.collectibleName,
+           let byName = Database.collectibleCatalog.first(where: { $0.name == collectibleName }) {
+            return byName.modelFileName
+        }
+
+        return nil
     }
 }
 

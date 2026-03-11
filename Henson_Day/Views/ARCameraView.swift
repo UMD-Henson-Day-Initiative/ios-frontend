@@ -43,7 +43,7 @@ struct ARCameraView: View {
             if showPlacementControls {
                 placementControls
                     .padding(.trailing, 14)
-                    .padding(.bottom, 96)
+                    .padding(.bottom, 126)
             }
         }
         .onAppear {
