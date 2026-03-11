@@ -122,26 +122,9 @@ struct MapScreen: View {
     }
 
     private var mapView: some View {
-        Map(coordinateRegion: $region, interactionModes: [.all], showsUserLocation: true, annotationItems: modelController.pins) { pin in
-            MapAnnotation(coordinate: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)) {
-                Button {
-                    selectedPinID = pin.id
-                    isDetailPresented = true
-                } label: {
-                    ZStack {
-                        Circle()
-                            .fill(pin.pinType.mapMarkerColor)
-                            .frame(width: 22, height: 22)
-
-                        if selectedPinID == pin.id {
-                            Circle()
-                                .stroke(Color.white, lineWidth: 3)
-                                .frame(width: 30, height: 30)
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-            }
+        MapView(pins: modelController.pins) { pin in
+            selectedPinID = pin.id
+            isDetailPresented = true
         }
     }
 
