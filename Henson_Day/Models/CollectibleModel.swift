@@ -18,6 +18,8 @@ struct Collectible: Identifiable, Codable {
     let rarity: CollectibleRarity
     let points: Int
     let location: String
+    // Name of the 3D model file used when spawning this collectible in AR.
+    let modelFileName: String
     let flavorText: String
     var obtained: Bool
 }

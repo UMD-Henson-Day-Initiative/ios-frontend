@@ -20,6 +20,8 @@ struct DatabasePinSeed {
     let hasARCollectible: Bool
     let collectibleName: String?
     let collectibleRarity: String?
+    // IDs of collectibles that are allowed to spawn at this pin.
+    let collectibleIDs: [String]
 }
 
 struct DatabaseEvent: Identifiable {
@@ -41,7 +43,10 @@ struct DatabaseCollectible: Identifiable {
     let id: String
     let name: String
     let rarity: String
-    let foundAt: String
+    // Human-readable location for where this collectible belongs.
+    let location: String
+    // File name in /3DModels used when spawning in AR.
+    let modelFileName: String
     let points: Int
 }
 
@@ -74,19 +79,19 @@ enum Database {
     ]
 
     static let collectibleCatalog: [DatabaseCollectible] = [
-        .init(id: "c1", name: "Stadium Stomper", rarity: "Rare", foundAt: "Maryland Stadium", points: 50),
-        .init(id: "c2", name: "Mall Muppet", rarity: "Common", foundAt: "McKeldin Mall", points: 40),
-        .init(id: "c3", name: "Soundwave Snare", rarity: "Rare", foundAt: "Chapel Field", points: 55),
-        .init(id: "c4", name: "Quantum Smth", rarity: "Legendary", foundAt: "IRB Courtyard", points: 75),
-        .init(id: "c5", name: "Finale Flare", rarity: "Legendary", foundAt: "McKeldin Steps", points: 100)
+        .init(id: "c1", name: "Stadium Stomper", rarity: "Rare", location: "Maryland Stadium", modelFileName: "robot", points: 50),
+        .init(id: "c2", name: "Mall Muppet", rarity: "Common", location: "McKeldin Mall", modelFileName: "toy_car", points: 40),
+        .init(id: "c3", name: "Soundwave Snare", rarity: "Rare", location: "Chapel Field", modelFileName: "hummingbird_anim", points: 55),
+        .init(id: "c4", name: "Quantum Smth", rarity: "Legendary", location: "IRB Courtyard", modelFileName: "toy_biplane_realistic", points: 75),
+        .init(id: "c5", name: "Finale Flare", rarity: "Legendary", location: "McKeldin Steps", modelFileName: "slide", points: 100)
     ]
 
     static let pins: [DatabasePinSeed] = [
-        .init(pinType: .event, title: "Stadium Spirit Rally", subtitle: "Day 1 • 5:00 PM – 7:00 PM • Maryland Stadium", latitude: 38.9903, longitude: -76.9457, description: "Show your Terp pride at the opening rally, featuring music and performances.", hasARCollectible: true, collectibleName: "Stadium Stomper", collectibleRarity: "Rare"),
-        .init(pinType: .collectible, title: "McKeldin Time Capsule", subtitle: "Day 1 • 2:30 PM – 4:00 PM • McKeldin Mall", latitude: 38.9857, longitude: -76.9456, description: "A hidden AR collectible near the center of the mall.", hasARCollectible: true, collectibleName: "Mall Muppet", collectibleRarity: "Common"),
-        .init(pinType: .battle, title: "Terp Team Battle", subtitle: "Day 2 • 3:00 PM – 4:00 PM • Stamp Student Union", latitude: 38.9881, longitude: -76.9447, description: "Start a friendly AR faceoff and earn bonus points.", hasARCollectible: false, collectibleName: nil, collectibleRarity: nil),
-        .init(pinType: .homebase, title: "Henson Homebase", subtitle: "Day 4 • 10:00 AM – 8:00 PM • Hornbake Plaza", latitude: 38.9889, longitude: -76.9418, description: "Check in to collect daily perks and hints.", hasARCollectible: false, collectibleName: nil, collectibleRarity: nil),
-        .init(pinType: .concert, title: "Evening Concert", subtitle: "Day 3 • 7:30 PM – 9:00 PM • Chapel Field", latitude: 38.9878, longitude: -76.9392, description: "Live music and performances to close out the night.", hasARCollectible: true, collectibleName: "Soundwave Snare", collectibleRarity: "Rare"),
-        .init(pinType: .site, title: "Idea Lab Showcase", subtitle: "Day 2 • 1:00 PM – 2:30 PM • Idea Factory", latitude: 38.9907, longitude: -76.9375, description: "Explore projects and mini demos built for Henson Day.", hasARCollectible: false, collectibleName: nil, collectibleRarity: nil)
+        .init(pinType: .event, title: "Stadium Spirit Rally", subtitle: "Day 1 • 5:00 PM – 7:00 PM • Maryland Stadium", latitude: 38.9903, longitude: -76.9457, description: "Show your Terp pride at the opening rally, featuring music and performances.", hasARCollectible: true, collectibleName: "Stadium Stomper", collectibleRarity: "Rare", collectibleIDs: ["c1"]),
+        .init(pinType: .collectible, title: "McKeldin Time Capsule", subtitle: "Day 1 • 2:30 PM – 4:00 PM • McKeldin Mall", latitude: 38.9857, longitude: -76.9456, description: "A hidden AR collectible near the center of the mall.", hasARCollectible: true, collectibleName: "Mall Muppet", collectibleRarity: "Common", collectibleIDs: ["c2"]),
+        .init(pinType: .battle, title: "Terp Team Battle", subtitle: "Day 2 • 3:00 PM – 4:00 PM • Stamp Student Union", latitude: 38.9881, longitude: -76.9447, description: "Start a friendly AR faceoff and earn bonus points.", hasARCollectible: false, collectibleName: nil, collectibleRarity: nil, collectibleIDs: []),
+        .init(pinType: .homebase, title: "Henson Homebase", subtitle: "Day 4 • 10:00 AM – 8:00 PM • Hornbake Plaza", latitude: 38.9889, longitude: -76.9418, description: "Check in to collect daily perks and hints.", hasARCollectible: false, collectibleName: nil, collectibleRarity: nil, collectibleIDs: []),
+        .init(pinType: .concert, title: "Evening Concert", subtitle: "Day 3 • 7:30 PM – 9:00 PM • Chapel Field", latitude: 38.9878, longitude: -76.9392, description: "Live music and performances to close out the night.", hasARCollectible: true, collectibleName: "Soundwave Snare", collectibleRarity: "Rare", collectibleIDs: ["c3"]),
+        .init(pinType: .site, title: "Idea Lab Showcase", subtitle: "Day 2 • 1:00 PM – 2:30 PM • Idea Factory", latitude: 38.9907, longitude: -76.9375, description: "Explore projects and mini demos built for Henson Day.", hasARCollectible: false, collectibleName: nil, collectibleRarity: nil, collectibleIDs: [])
     ]
 }
