@@ -123,7 +123,8 @@ struct MapScreen: View {
                     isCameraAuthorized: cameraPermission.isAuthorized,
                     worldAnchorManager: worldAnchorManager,
                     availableCollectibles: collectedCatalogItems,
-                    isPaused: arPin != nil
+                    isPaused: arPin != nil,
+                    showPlacementControls: true
                 )
             }
         } else {
@@ -245,7 +246,8 @@ struct MapScreen: View {
                                     isCameraAuthorized: cameraPermission.isAuthorized,
                                     worldAnchorManager: worldAnchorManager,
                                     availableCollectibles: collectedCatalogItems,
-                                    isPaused: arPin != nil
+                                    isPaused: arPin != nil,
+                                    showPlacementControls: false
                                 )
                             }
                         }
@@ -256,12 +258,17 @@ struct MapScreen: View {
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
                             .stroke(.white.opacity(0.85), lineWidth: 1)
                     )
-                    .shadow(radius: 6)
-                    .onTapGesture {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            isCameraPrimary.toggle()
-                        }
+                    .overlay {
+                        Rectangle()
+                            .fill(Color.clear)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    isCameraPrimary.toggle()
+                                }
+                            }
                     }
+                    .shadow(radius: 6)
                 }
                 .padding(.top, 30)
                 .padding(.horizontal, 12)

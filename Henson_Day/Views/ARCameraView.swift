@@ -12,6 +12,7 @@ struct ARCameraView: View {
     /// Set to true while another AR session (e.g. ARCollectibleExperienceView) is active.
     /// This pauses the session so the two ARViews don't fight over the camera.
     var isPaused: Bool = false
+    var showPlacementControls: Bool = true
 
     @StateObject private var placementState = PlacementState()
     @State private var isPickerPresented = false
@@ -20,12 +21,14 @@ struct ARCameraView: View {
         isCameraAuthorized: Bool,
         worldAnchorManager: WorldAnchorManager,
         availableCollectibles: [DatabaseCollectible] = [],
-        isPaused: Bool = false
+        isPaused: Bool = false,
+        showPlacementControls: Bool = true
     ) {
         self.isCameraAuthorized = isCameraAuthorized
         self.worldAnchorManager = worldAnchorManager
         self.availableCollectibles = availableCollectibles
         self.isPaused = isPaused
+        self.showPlacementControls = showPlacementControls
     }
 
     var body: some View {
@@ -37,9 +40,11 @@ struct ARCameraView: View {
                 placementState: placementState
             )
 
-            placementControls
-                .padding(.top, 16)
-                .padding(.trailing, 14)
+            if showPlacementControls {
+                placementControls
+                    .padding(.top, 16)
+                    .padding(.trailing, 14)
+            }
         }
         .onAppear {
             placementState.availableCollectibles = availableCollectibles
@@ -107,6 +112,16 @@ struct ARCameraView: View {
                 .background(.thinMaterial)
                 .clipShape(Capsule())
 
+            Button("Clear All Placed") {
+                placementState.clearAllRequestCount += 1
+                placementState.statusMessage = "Cleared placed models."
+            }
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(.thinMaterial)
+            .clipShape(Capsule())
+
             if let statusMessage = placementState.statusMessage {
                 Text(statusMessage)
                     .font(.caption2)
@@ -157,6 +172,7 @@ private struct ARCameraRepresentable: UIViewRepresentable {
         private var placedAnchors: [PlacedAnchor] = []
         private let maxPlacements = 3
         private let walkAwayDistanceMeters: Float = 12
+        private var lastHandledClearAllRequestCount = 0
 
         init(worldAnchorManager: WorldAnchorManager, placementState: PlacementState) {
             self.worldAnchorManager = worldAnchorManager
@@ -165,6 +181,11 @@ private struct ARCameraRepresentable: UIViewRepresentable {
 
         func updatePlacementState(_ placementState: PlacementState) {
             self.placementState = placementState
+
+            if placementState.clearAllRequestCount != lastHandledClearAllRequestCount {
+                lastHandledClearAllRequestCount = placementState.clearAllRequestCount
+                clearPlacedAnchors()
+            }
         }
 
         func configureSessionIfPossible(on arView: ARView, isCameraAuthorized: Bool, isPaused: Bool = false) {
@@ -316,6 +337,7 @@ private final class PlacementState: ObservableObject {
     @Published var isPlacementArmed = false
     @Published var statusMessage: String?
     @Published var placedCount = 0
+    @Published var clearAllRequestCount = 0
 }
 
 private struct CollectiblePickerSheet: View {
