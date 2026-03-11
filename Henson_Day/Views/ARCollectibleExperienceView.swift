@@ -27,7 +27,15 @@ struct ARCollectibleExperienceView: View {
     @State private var isWithinSpawnRadius = false
     @State private var distanceMeters: Double?
 
-    private let spawnRadiusMeters: CLLocationDistance = 35
+    // Per-pin configurable radius (meters). If a pin title is not listed, fallback radius is used.
+    private let spawnRadiusByPinTitle: [String: CLLocationDistance] = [
+        "Stadium Spirit Rally": 45,
+        "McKeldin Time Capsule": 35,
+        "Evening Concert": 40,
+        "Quantum Courtyard Pop-Up": 30,
+        "Finale Badge Sprint": 50
+    ]
+    private let defaultSpawnRadiusMeters: CLLocationDistance = 35
     private let collectiblePoints: Int = 50
 
     private var collectibleName: String {
@@ -57,6 +65,14 @@ struct ARCollectibleExperienceView: View {
         return "\(Int(distanceMeters.rounded())) m"
     }
 
+    private var spawnRadiusMeters: CLLocationDistance {
+        spawnRadiusByPinTitle[pin.title] ?? defaultSpawnRadiusMeters
+    }
+
+    private var locationModeLabel: String {
+        locationManager.testingOverrideCoordinate == nil ? "LIVE" : "TESTING OVERRIDE"
+    }
+
     private var alreadyCollected: Bool {
         modelController.hasCollectedCollectible(named: collectibleName)
     }
@@ -74,7 +90,17 @@ struct ARCollectibleExperienceView: View {
 
             VStack {
                 HStack {
+                    // Top-left debug badge to show whether AR location uses live GPS or testing override.
+                    Text(locationModeLabel)
+                        .font(.caption2.weight(.bold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(.black.opacity(0.55))
+                        .foregroundStyle(.white)
+                        .clipShape(Capsule())
+
                     Spacer()
+
                     Button {
                         dismiss()
                     } label: {
@@ -88,6 +114,16 @@ struct ARCollectibleExperienceView: View {
                 }
                 .padding(.horizontal)
                 .padding(.top, 8)
+
+                if isWithinSpawnRadius && !alreadyCollected {
+                    Text("\(collectibleName) is nearby!")
+                        .font(.headline.weight(.semibold))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Capsule())
+                        .padding(.top, 8)
+                }
 
                 Spacer()
 

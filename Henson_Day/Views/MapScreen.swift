@@ -202,7 +202,6 @@ struct MapScreen: View {
 
             if isCameraPrimary && isInTestingMode {
                 HStack {
-                    Spacer()
                     // TESTING ONLY: This button spoofs the user's location to a not-yet-collected collectible pin.
                     Button("Teleport to a collectible location") {
                         teleportToUncollectedCollectiblePin()
@@ -212,6 +211,7 @@ struct MapScreen: View {
                     .padding(.vertical, 6)
                     .background(.thinMaterial)
                     .clipShape(Capsule())
+                    Spacer()
                 }
             }
         }
@@ -356,7 +356,9 @@ struct MapScreen: View {
         let targetCoordinate = CLLocationCoordinate2D(latitude: targetPin.latitude, longitude: targetPin.longitude)
         locationManager.setTestingCoordinate(targetCoordinate)
         region.center = targetCoordinate
-        arPin = targetPin
+
+        // IMPORTANT: Do not auto-open the AR full screen here.
+        // Teleport should only spoof location and keep the current camera/map view responsive.
     }
 }
 
