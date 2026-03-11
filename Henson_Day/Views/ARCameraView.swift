@@ -66,6 +66,8 @@ struct ARCameraView: UIViewRepresentable {
 }
 
 final class CameraPermissionManager: ObservableObject {
+    var objectWillChange: ObservableObjectPublisher
+    
     @Published private(set) var authorizationStatus: AVAuthorizationStatus
 
     init() {
