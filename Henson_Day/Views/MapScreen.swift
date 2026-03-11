@@ -366,33 +366,30 @@ struct MapScreen: View {
     }
 
     private func teleportToUncollectedCollectiblePin() {
-        let collectedNames = Set(modelController.collectionItemsForCurrentUser().map(\.collectibleName))
+        // Testing flow: always teleport to the Stadium Stomper pin and then
+        // open the collectible experience after a short delay.
+        let targetPin = modelController.pins.first { pin in
+            if pin.collectibleName == "Stadium Stomper" { return true }
 
-        let targetPin = modelController.pins
-            .filter { $0.hasARCollectible }
-            .first { pin in
-                let pinCollectibleIDs = Database.pins.first(where: { $0.title == pin.title })?.collectibleIDs ?? []
-                let pinCollectibles = Database.collectibleCatalog.filter { pinCollectibleIDs.contains($0.id) }
+            let pinCollectibleIDs = Database.pins.first(where: { $0.title == pin.title })?.collectibleIDs ?? []
+            return pinCollectibleIDs.contains("c1")
+        }
 
-                if !pinCollectibles.isEmpty {
-                    return pinCollectibles.contains(where: { !collectedNames.contains($0.name) })
-                }
+        guard let targetPin else {
+            return
+        }
 
-                if let legacyName = pin.collectibleName {
-                    return !collectedNames.contains(legacyName)
-                }
-
-                return false
-            }
-
-        guard let targetPin else { return }
-
-        let targetCoordinate = CLLocationCoordinate2D(latitude: targetPin.latitude, longitude: targetPin.longitude)
+        let targetCoordinate = CLLocationCoordinate2D(
+            latitude: targetPin.latitude,
+            longitude: targetPin.longitude
+        )
         locationManager.setTestingCoordinate(targetCoordinate)
         region.center = targetCoordinate
 
-        // Teleport opens the AR collectible screen so users immediately see the spawned collectible flow.
-        arPin = targetPin
+        // Give camera/map state a moment to settle before launching AR to avoid session contention.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            arPin = targetPin
+        }
     }
 }
 
