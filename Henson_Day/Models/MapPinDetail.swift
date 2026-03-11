@@ -46,6 +46,17 @@ enum PinType: String, Codable, CaseIterable {
     var mapMarkerColor: Color {
         headerColor
     }
+
+    var icon: String {
+        switch self {
+        case .site:        return "building.2.fill"
+        case .event:       return "star.fill"
+        case .collectible: return "cube.fill"
+        case .battle:      return "bolt.fill"
+        case .homebase:    return "house.fill"
+        case .concert:     return "music.note"
+        }
+    }
 }
 
 struct MapPinDetail: Identifiable, Equatable {
