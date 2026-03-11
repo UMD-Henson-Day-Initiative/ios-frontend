@@ -34,6 +34,11 @@ struct MapScreen: View {
     @StateObject private var worldAnchorManager = WorldAnchorManager()
     @StateObject private var locationManager = LocationPermissionManager()
 
+    private var collectedCatalogItems: [DatabaseCollectible] {
+        let collectedNames = Set(modelController.collectionItemsForCurrentUser().map(\.collectibleName))
+        return modelController.collectibleCatalog.filter { collectedNames.contains($0.name) }
+    }
+
     private var selectedPin: PinEntity? {
         modelController.pins.first(where: { $0.id == selectedPinID })
     }
@@ -114,7 +119,12 @@ struct MapScreen: View {
             if cameraPermission.isDeniedOrRestricted {
                 CameraPermissionPlaceholderView()
             } else {
-                ARCameraView(isCameraAuthorized: cameraPermission.isAuthorized, worldAnchorManager: worldAnchorManager, isPaused: arPin != nil)
+                ARCameraView(
+                    isCameraAuthorized: cameraPermission.isAuthorized,
+                    worldAnchorManager: worldAnchorManager,
+                    availableCollectibles: collectedCatalogItems,
+                    isPaused: arPin != nil
+                )
             }
         } else {
             mapView
@@ -231,7 +241,12 @@ struct MapScreen: View {
                             if cameraPermission.isDeniedOrRestricted {
                                 CameraPermissionPlaceholderView()
                             } else {
-                                ARCameraView(isCameraAuthorized: cameraPermission.isAuthorized, worldAnchorManager: worldAnchorManager, isPaused: arPin != nil)
+                                ARCameraView(
+                                    isCameraAuthorized: cameraPermission.isAuthorized,
+                                    worldAnchorManager: worldAnchorManager,
+                                    availableCollectibles: collectedCatalogItems,
+                                    isPaused: arPin != nil
+                                )
                             }
                         }
                     }
