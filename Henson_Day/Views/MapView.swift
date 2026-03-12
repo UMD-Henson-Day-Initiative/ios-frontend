@@ -45,6 +45,7 @@ struct MapView: View {
         )
     )
     @State private var isFollowingUser = true
+    @State private var isFollowingCompass = false
     @State private var playerHeading: Double = 0
     @State private var cameraHeading: Double = 0
     @State private var selectedPinID: UUID?
@@ -83,12 +84,15 @@ struct MapView: View {
             .ignoresSafeArea()
             .onChange(of: locationManager.location) { _, newLocation in
                 guard let location = newLocation, isFollowingUser else { return }
-                updateCamera(for: location)
+                updateCamera(for: location, heading: isFollowingCompass ? playerHeading : 0)
             }
             .onChange(of: locationManager.heading) { _, newHeading in
                 guard let heading = newHeading else { return }
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                     playerHeading = heading.trueHeading
+                }
+                if isFollowingCompass, isFollowingUser, let location = locationManager.location {
+                    updateCamera(for: location, heading: heading.trueHeading)
                 }
             }
             .onMapCameraChange { context in
@@ -107,87 +111,109 @@ struct MapView: View {
                 }
             }
 
-            // Map controls
-            HStack {
-                Spacer()
-                VStack(spacing: 12) {
-                    // North-up compass button
-                    if abs(cameraHeading) > 1 {
-                        Button {
-                            let center: CLLocationCoordinate2D
-                            if isFollowingUser, let loc = locationManager.location {
-                                center = loc.coordinate
-                            } else {
-                                center = cameraPosition.camera?.centerCoordinate ?? MapView.umdCenter
-                            }
-                            let camera = MapCamera(
-                                centerCoordinate: center,
-                                distance: cameraDistance,
-                                heading: 0,
-                                pitch: cameraPosition.camera?.pitch ?? 55
-                            )
-                            withAnimation(.easeOut(duration: 0.3)) {
-                                cameraPosition = .camera(camera)
-                            }
-                        } label: {
-                            Image(systemName: "location.north.fill")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(.red)
-                                .rotationEffect(.degrees(-cameraHeading))
-                                .frame(width: 36, height: 36)
-                                .background(Rectangle().fill(.ultraThinMaterial))
-                                .clipShape(Circle())
-                                .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
-                        }
-                        .transition(.scale.combined(with: .opacity))
+            // Map controls — top left, below the avatar strip
+            VStack(alignment: .leading, spacing: 10) {
+                // Compass follow toggle
+                Button {
+                    isFollowingCompass.toggle()
+                    if isFollowingCompass, isFollowingUser, let location = locationManager.location {
+                        updateCamera(for: location, heading: playerHeading)
                     }
-
-                    // Recenter button
-                    Button {
-                        cameraDistance = 350
-                        isFollowingUser = true
-                        if let location = locationManager.location {
-                            let camera = MapCamera(
-                                centerCoordinate: location.coordinate,
-                                distance: 350,
-                                heading: 0,
-                                pitch: 55
-                            )
-                            withAnimation(.easeOut(duration: 0.4)) {
-                                cameraPosition = .camera(camera)
+                } label: {
+                    Image(systemName: isFollowingCompass ? "safari.fill" : "safari")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(isFollowingCompass ? .white : .primary)
+                        .frame(width: 40, height: 40)
+                        .background {
+                            if isFollowingCompass {
+                                Color.orange
+                            } else {
+                                Rectangle().fill(.ultraThinMaterial)
                             }
+                        }
+                        .clipShape(Circle())
+                        .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
+                }
+
+                // North-up button — only shown when camera is rotated
+                if abs(cameraHeading) > 1 {
+                    Button {
+                        let center: CLLocationCoordinate2D
+                        if isFollowingUser, let loc = locationManager.location {
+                            center = loc.coordinate
+                        } else {
+                            center = cameraPosition.camera?.centerCoordinate ?? MapView.umdCenter
+                        }
+                        let camera = MapCamera(
+                            centerCoordinate: center,
+                            distance: cameraDistance,
+                            heading: 0,
+                            pitch: cameraPosition.camera?.pitch ?? 55
+                        )
+                        withAnimation(.easeOut(duration: 0.3)) {
+                            cameraPosition = .camera(camera)
                         }
                     } label: {
-                        Image(systemName: isFollowingUser ? "location.fill" : "location")
-                            .font(.title3)
-                            .fontWeight(.medium)
-                            .foregroundStyle(isFollowingUser ? .white : .secondary)
-                            .frame(width: 44, height: 44)
-                            .background {
-                                if isFollowingUser {
-                                    Color.blue
-                                } else {
-                                    Rectangle().fill(.ultraThinMaterial)
-                                }
-                            }
+                        Image(systemName: "location.north.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.red)
+                            .rotationEffect(.degrees(-cameraHeading))
+                            .frame(width: 40, height: 40)
+                            .background(Rectangle().fill(.ultraThinMaterial))
                             .clipShape(Circle())
                             .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
                     }
+                    .transition(.scale.combined(with: .opacity))
                 }
-                .padding(.trailing, 16)
-                .padding(.bottom, 100)
+
+                // Recenter button
+                Button {
+                    cameraDistance = 350
+                    isFollowingUser = true
+                    if let location = locationManager.location {
+                        let heading = isFollowingCompass ? playerHeading : 0.0
+                        let camera = MapCamera(
+                            centerCoordinate: location.coordinate,
+                            distance: 350,
+                            heading: heading,
+                            pitch: 55
+                        )
+                        withAnimation(.easeOut(duration: 0.4)) {
+                            cameraPosition = .camera(camera)
+                        }
+                    }
+                } label: {
+                    Image(systemName: isFollowingUser ? "location.fill" : "location")
+                        .font(.title3)
+                        .fontWeight(.medium)
+                        .foregroundStyle(isFollowingUser ? .white : .secondary)
+                        .frame(width: 40, height: 40)
+                        .background {
+                            if isFollowingUser {
+                                Color.blue
+                            } else {
+                                Rectangle().fill(.ultraThinMaterial)
+                            }
+                        }
+                        .clipShape(Circle())
+                        .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
+                }
             }
+            .padding(.leading, 14)
+            // top padding clears MapScreen's status strip (day label + avatar + points + camera toggle)
+            .padding(.top, 220)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .onAppear {
             locationManager.requestAuthorization()
         }
     }
 
-    private func updateCamera(for location: CLLocation) {
+    private func updateCamera(for location: CLLocation, heading: Double = 0) {
         let camera = MapCamera(
             centerCoordinate: location.coordinate,
             distance: cameraDistance,
-            heading: 0,
+            heading: heading,
             pitch: 55
         )
         withAnimation(.easeInOut(duration: 0.3)) {
