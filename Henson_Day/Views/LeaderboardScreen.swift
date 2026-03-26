@@ -143,7 +143,7 @@ struct PodiumSlot: View {
                 .font(place == 1 ? .system(size: 30) : .system(size: 24))
                 .foregroundStyle(.white)
                 .frame(width: 64, height: 64)
-                .background(Color(hex: user.avatarColorHex))
+                .background(Color(user.avatarColorHex))
                 .clipShape(RoundedRectangle(cornerRadius: 20))
                 .shadow(radius: 4)
 
@@ -193,7 +193,7 @@ struct LeaderboardRow: View {
                 .frame(width: 40, height: 40)
                 .background(
                     RoundedRectangle(cornerRadius: 14)
-                        .fill(Color(hex: user.avatarColorHex))
+                        .fill(Color(user.avatarColorHex))
                 )
 
             // Info
