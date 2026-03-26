@@ -408,8 +408,8 @@ struct MapScreen: View {
         region.center = targetCoordinate
 
         // Temporarily suspend mini camera feed to avoid camera-session contention during AR launch.
-        suppressMiniCameraFeed = true
-        isPreparingTeleportLaunch = true
+//        suppressMiniCameraFeed = true
+//        isPreparingTeleportLaunch = true
 
         let modelAssetName = modelAssetNameForPin(targetPin) ?? "robot"
 
