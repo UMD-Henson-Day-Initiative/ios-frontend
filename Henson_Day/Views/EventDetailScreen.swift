@@ -9,6 +9,7 @@
 // EventDetailScreen.swift
 
 import SwiftUI
+import MapKit
 
 struct EventDetailScreen: View {
     @EnvironmentObject private var modelController: ModelController
@@ -42,6 +43,13 @@ struct EventDetailScreen: View {
 
     private func descriptionForCollectible(_ collectible: DatabaseCollectible) -> String {
         "Find this collectible near \(collectible.location) to earn \(collectible.points) points."
+    }
+
+    private func openMapsForEvent(_ event: DatabaseEvent) {
+        let query = event.locationName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? event.locationName
+        if let mapsURL = URL(string: "maps://maps.apple.com/?q=\(query)") ?? URL(string: "https://maps.apple.com/?q=\(query)") {
+            UIApplication.shared.open(mapsURL)
+        }
     }
 
     var body: some View {
@@ -210,7 +218,7 @@ struct EventDetailScreen: View {
                         // Action buttons
                         HStack(spacing: 12) {
                             Button {
-                                // TODO: open Maps / navigation
+                                openMapsForEvent(event)
                             } label: {
                                 Label("Get Directions", systemImage: "location.north.line")
                             }

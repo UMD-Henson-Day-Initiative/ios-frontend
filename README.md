@@ -15,6 +15,7 @@ Henson Day is a SwiftUI + SwiftData + RealityKit app for a campus AR scavenger h
 ## State Management
 
 ModelController is the single source of truth for:
+
 - current user
 - map pins
 - leaderboard
@@ -37,12 +38,14 @@ ModelController publishes userFacingError for non-startup failures (fetch/save/r
 ## Constants and Configuration
 
 Centralized constants live in Models/AppConstants.swift:
+
 - map region defaults
 - AR timing values
 - AR placement sizing and limits
 - SceneKit portal defaults
 
 Campus config abstraction lives in Models/CampusConfigProvider.swift:
+
 - CampusConfigProvider.active can be swapped for a backend implementation later
 - Database.campusCenterFallback remains the local fallback value
 
@@ -64,20 +67,20 @@ Use this checklist after major changes:
 
 1. Launch and verify startup gate behavior.
 2. Permissions flow:
-- camera permission prompt/denied behavior
-- location permission prompt/denied behavior
+   - camera permission prompt/denied behavior
+   - location permission prompt/denied behavior
 3. Map to AR flow:
-- open pin details
-- open event details
-- launch AR collectible experience
+   - open pin details
+   - open event details
+   - launch AR collectible experience
 4. Capture flow:
-- collectible capture increments points/collection
-- collection tab reflects new item
+   - collectible capture increments points/collection
+   - collection tab reflects new item
 5. Leaderboard flow:
-- leaderboard renders and sorts correctly
+   - leaderboard renders and sorts correctly
 6. Error surfaces:
-- startup failure shows retry UI
-- runtime failures show alert banner/dialog
+   - startup failure shows retry UI
+   - runtime failures show alert banner/dialog
 
 ## Future Backend Integration
 

@@ -516,6 +516,7 @@ struct ARPlacementView: UIViewRepresentable {
             currentModelAssetName = modelAssetName
 
             loadCancellable = Entity.loadModelAsync(named: modelAssetName)
+                // Thread-safety measure: ensure model completion handlers mutate @State on MainThread
                 .receive(on: DispatchQueue.main)
                 .sink(receiveCompletion: { [weak self] completion in
                     guard let self else { return }

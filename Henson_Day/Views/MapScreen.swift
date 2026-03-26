@@ -427,6 +427,7 @@ struct MapScreen: View {
 
         // Preload before launching AR so model decode doesn't block initial collectible screen.
         teleportPreloadCancellable = Entity.loadModelAsync(named: modelAssetName)
+            // Thread-safety measure: ensure model completion handlers dispatch to MainThread
             .receive(on: DispatchQueue.main)
             .sink(receiveCompletion: { _ in
                 teleportPreloadCancellable = nil
