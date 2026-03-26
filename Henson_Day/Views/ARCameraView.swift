@@ -170,8 +170,8 @@ private struct ARCameraRepresentable: UIViewRepresentable {
         }
 
         private var placedAnchors: [PlacedAnchor] = []
-        private let maxPlacements = 3
-        private let walkAwayDistanceMeters: Float = 12
+        private let maxPlacements = AppConstants.AR.maxPlacements
+        private let walkAwayDistanceMeters: Float = AppConstants.AR.walkAwayDistanceMeters
         private var lastHandledClearAllRequestCount = 0
 
         init(worldAnchorManager: WorldAnchorManager, placementState: PlacementState) {
@@ -283,18 +283,18 @@ private struct ARCameraRepresentable: UIViewRepresentable {
             let extents = bounds.extents
             let maxDimension = max(extents.x, max(extents.y, extents.z))
             guard maxDimension.isFinite, maxDimension > 0 else {
-                return SIMD3<Float>(repeating: 0.12)
+                return SIMD3<Float>(repeating: AppConstants.AR.fallbackUniformScale)
             }
 
             let uniformScale = targetMaxDimension / maxDimension
-            let clampedScale = min(max(uniformScale, 0.03), 0.35)
+            let clampedScale = min(max(uniformScale, AppConstants.AR.minScale), AppConstants.AR.maxScale)
             return SIMD3<Float>(repeating: clampedScale)
         }
 
         private func targetMaxDimension(for modelAssetName: String) -> Float {
-            if modelAssetName.contains("toy_") { return 0.14 }
-            if modelAssetName.contains("robot") || modelAssetName.contains("biplane") { return 0.25 }
-            return 0.20
+            if modelAssetName.contains("toy_") { return AppConstants.AR.ModelSizing.cameraPlacementToyDimension }
+            if modelAssetName.contains("robot") || modelAssetName.contains("biplane") { return AppConstants.AR.ModelSizing.cameraPlacementLargeDimension }
+            return AppConstants.AR.ModelSizing.cameraPlacementDefaultDimension
         }
     }
 }
@@ -314,7 +314,7 @@ extension ARCameraRepresentable.Coordinator: ARSessionDelegate {
 
         guard !toRemove.isEmpty else { return }
 
-        DispatchQueue.main.async { [weak self] in
+        Task { @MainActor [weak self] in
             guard let self else { return }
 
             for entry in toRemove {
@@ -435,7 +435,7 @@ final class CameraPermissionManager: ObservableObject {
         guard current == .notDetermined else { return }
 
         AVCaptureDevice.requestAccess(for: .video) { [weak self] _ in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 self?.authorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
             }
         }

@@ -157,7 +157,7 @@ final class LaunchPermissionState: NSObject, ObservableObject, CLLocationManager
 
         if cameraStatus == .notDetermined {
             AVCaptureDevice.requestAccess(for: .video) { [weak self] _ in
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     self?.cameraStatus = AVCaptureDevice.authorizationStatus(for: .video)
                 }
             }

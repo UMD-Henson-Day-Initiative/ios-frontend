@@ -23,6 +23,7 @@ enum AppConstants {
         static let maxPlacements = 3
         static let walkAwayDistanceMeters: Float = 12
 
+        // AR flow timing values.
         static let teleportFallbackDelaySeconds: TimeInterval = 2.0
         static let teleportLaunchDelaySeconds: TimeInterval = 0.2
         static let captureDismissDelaySeconds: TimeInterval = 2.0
@@ -42,7 +43,7 @@ enum AppConstants {
             static let smallTargetMaxDimension: Float = 0.07
             static let largeTargetMaxDimension: Float = 0.125
 
-            static let targetDimensionByModelAsset: [String: Float] = [
+            static let targetDimensionByModelAsset: [String: Float] = [ // They start huuuuuge
                 "toy_car": 0.07,
                 "hummingbird_anim": 0.07,
                 "robot": 0.125,
@@ -56,7 +57,7 @@ enum AppConstants {
         }
     }
 
-    enum SceneKitPortal {
+    enum SceneKitPortal { // playing around from tutorials that were sent to GroupChat
         static let boxWidth: CGFloat = 0.2
         static let boxHeight: CGFloat = 1.0
         static let boxLength: CGFloat = 1.0

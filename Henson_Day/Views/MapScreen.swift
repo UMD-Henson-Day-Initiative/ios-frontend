@@ -16,14 +16,14 @@ import Combine
 
 struct MapScreen: View {
     // Toggle this to hide all location-teleport testing controls in camera mode.
-    private let isInTestingMode = true
+    private let isInTestingMode = AppConstants.Debug.isMapTeleportTestingEnabled
 
     @EnvironmentObject private var modelController: ModelController
     @EnvironmentObject private var tabRouter: TabRouter
 
     @State private var region = MKCoordinateRegion(
-        center: CLLocationCoordinate2D(latitude: 38.9869, longitude: -76.9426),
-        span: .init(latitudeDelta: 0.012, longitudeDelta: 0.012)
+        center: CampusConfigProvider.campusCenter,
+        span: AppConstants.Map.mapRegionSpan
     )
     @State private var selectedPinID: UUID?
     @State private var isDetailPresented = false
@@ -34,6 +34,8 @@ struct MapScreen: View {
     @State private var suppressMiniCameraFeed = false
     @State private var isPreparingTeleportLaunch = false
     @State private var teleportPreloadCancellable: AnyCancellable?
+    @State private var teleportLaunchTask: Task<Void, Never>?
+    @State private var teleportResetTask: Task<Void, Never>?
 
     @StateObject private var cameraPermission = CameraPermissionManager()
     @StateObject private var worldAnchorManager = WorldAnchorManager()
@@ -115,6 +117,12 @@ struct MapScreen: View {
             modelController.refreshPublishedData()
             cameraPermission.requestIfNeeded()
             locationManager.requestWhenInUseAuthorizationIfNeeded()
+            region.center = modelController.campusCenter
+        }
+        .onDisappear {
+            teleportLaunchTask?.cancel()
+            teleportResetTask?.cancel()
+            teleportPreloadCancellable?.cancel()
         }
     }
 
@@ -203,7 +211,7 @@ struct MapScreen: View {
             HStack {
                 Spacer()
                 Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    withAnimation(.easeInOut(duration: AppConstants.Map.primarySwapAnimationSeconds)) {
                         isCameraPrimary.toggle()
                     }
                 } label: {
@@ -270,7 +278,7 @@ struct MapScreen: View {
                             .fill(Color.clear)
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                withAnimation(.easeInOut(duration: 0.2)) {
+                                withAnimation(.easeInOut(duration: AppConstants.Map.primarySwapAnimationSeconds)) {
                                     isCameraPrimary.toggle()
                                 }
                             }
@@ -408,10 +416,14 @@ struct MapScreen: View {
         region.center = targetCoordinate
 
         // Temporarily suspend mini camera feed to avoid camera-session contention during AR launch.
-//        suppressMiniCameraFeed = true
-//        isPreparingTeleportLaunch = true
+        suppressMiniCameraFeed = true
+        isPreparingTeleportLaunch = true
 
         let modelAssetName = modelAssetNameForPin(targetPin) ?? "robot"
+
+        teleportLaunchTask?.cancel()
+        teleportResetTask?.cancel()
+        teleportPreloadCancellable?.cancel()
 
         // Preload before launching AR so model decode doesn't block initial collectible screen.
         teleportPreloadCancellable = Entity.loadModelAsync(named: modelAssetName)
@@ -419,12 +431,14 @@ struct MapScreen: View {
             .sink(receiveCompletion: { _ in
                 teleportPreloadCancellable = nil
 
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                teleportLaunchTask = Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: UInt64(AppConstants.AR.teleportLaunchDelaySeconds * 1_000_000_000))
                     arPin = targetPin
                 }
             }, receiveValue: { _ in })
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+        teleportResetTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(AppConstants.AR.teleportFallbackDelaySeconds * 1_000_000_000))
             suppressMiniCameraFeed = false
             isPreparingTeleportLaunch = false
         }

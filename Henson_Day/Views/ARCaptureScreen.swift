@@ -17,6 +17,7 @@ struct ARCaptureScreen: View {
     let collectibleId: String
 
     @State private var captured = false
+    @State private var dismissTask: Task<Void, Never>?
 
     var body: some View {
         ZStack {
@@ -55,7 +56,9 @@ struct ARCaptureScreen: View {
                             )
                         }
 
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                        dismissTask?.cancel()
+                        dismissTask = Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: UInt64(AppConstants.AR.captureDismissDelaySeconds * 1_000_000_000))
                             dismiss()
                         }
                     } label: {
@@ -77,6 +80,9 @@ struct ARCaptureScreen: View {
                     .font(.title)
                     .foregroundStyle(.black)
             }
+        }
+        .onDisappear {
+            dismissTask?.cancel()
         }
     }
 }

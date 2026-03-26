@@ -87,7 +87,7 @@ struct ARMapContainerView: View {
         )
         .shadow(color: .black.opacity(0.25), radius: 8, x: 0, y: 4)
         .onTapGesture {
-            withAnimation(.easeInOut(duration: 0.2)) {
+            withAnimation(.easeInOut(duration: AppConstants.Map.primarySwapAnimationSeconds)) {
                 isARPrimary.toggle()
             }
         }
