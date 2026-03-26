@@ -2,6 +2,7 @@ import Foundation
 import CoreLocation
 import MapKit
 
+/// Shared app-wide constants for map defaults, AR tuning, and scene settings.
 enum AppConstants {
     enum Debug {
         #if DEBUG
