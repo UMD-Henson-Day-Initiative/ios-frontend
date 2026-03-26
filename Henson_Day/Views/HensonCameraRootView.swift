@@ -13,5 +13,4 @@ struct HensonCameraRootView: View {
 
 #Preview {
     HensonCameraRootView()
-        .environmentObject(AppState())
 }

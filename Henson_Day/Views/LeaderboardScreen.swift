@@ -4,16 +4,16 @@
 import SwiftUI
 
 struct LeaderboardScreen: View {
-    @EnvironmentObject var appState: AppState
+    @EnvironmentObject private var modelController: ModelController
     @State private var filter: Filter = .all
 
     enum Filter {
         case all, friends, club
     }
 
-    var displayedUsers: [LeaderboardUser] {
+    var displayedUsers: [PlayerEntity] {
         // For now, ignore filter and just sort by score
-        appState.leaderboardUsers.sorted { $0.score > $1.score }
+        modelController.leaderboardUsers.sorted { $0.totalPoints > $1.totalPoints }
     }
 
     var body: some View {
@@ -87,7 +87,7 @@ struct LeaderboardFilterChip: View {
 }
 
 struct TopThreePodium: View {
-    let users: [LeaderboardUser]
+    let users: [PlayerEntity]
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 12) {
@@ -108,7 +108,7 @@ struct TopThreePodium: View {
 
 struct PodiumSlot: View {
     let place: Int
-    let user: LeaderboardUser
+    let user: PlayerEntity
 
     private var columnHeight: CGFloat {
         switch place {
@@ -139,18 +139,19 @@ struct PodiumSlot: View {
 
     var body: some View {
         VStack(spacing: 4) {
-            Text(user.avatarEmoji)
-                .font(place == 1 ? .system(size: 40) : .system(size: 34))
+            Image(systemName: user.avatarType.symbolName)
+                .font(place == 1 ? .system(size: 30) : .system(size: 24))
+                .foregroundStyle(.white)
                 .frame(width: 64, height: 64)
-                .background(Color(.systemBackground))
+                .background(Color(hex: user.avatarColorHex))
                 .clipShape(RoundedRectangle(cornerRadius: 20))
                 .shadow(radius: 4)
 
-            Text(user.name.split(separator: " ").first.map(String.init) ?? user.name)
+            Text(user.displayName.split(separator: " ").first.map(String.init) ?? user.displayName)
                 .font(.caption)
                 .lineLimit(1)
 
-            Text("\(user.score) pts")
+            Text("\(user.totalPoints) pts")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
 
@@ -169,7 +170,7 @@ struct PodiumSlot: View {
 
 struct LeaderboardRow: View {
     let rank: Int
-    let user: LeaderboardUser
+    let user: PlayerEntity
 
     var body: some View {
         HStack(spacing: 12) {
@@ -186,33 +187,27 @@ struct LeaderboardRow: View {
             }
 
             // Avatar
-            Text(user.avatarEmoji)
-                .font(.title2)
+            Image(systemName: user.avatarType.symbolName)
+                .font(.title3)
+                .foregroundStyle(.white)
                 .frame(width: 40, height: 40)
                 .background(
                     RoundedRectangle(cornerRadius: 14)
-                        .fill(
-                            LinearGradient(
-                                colors: [Color("UMDRed").opacity(0.2),
-                                         Color("UMDGold").opacity(0.2)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                        .fill(Color(hex: user.avatarColorHex))
                 )
 
             // Info
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
-                    Text(user.name)
+                    Text(user.displayName)
                         .font(.subheadline.weight(.medium))
-                    if user.isCurrentUser {
+                    if user.isLocalUser {
                         Text("(You)")
                             .font(.caption2)
                             .foregroundStyle(Color("UMDRed"))
                     }
                 }
-                Text("\(user.eventsVisited) events • \(user.score) pts")
+                Text("\(user.collectedCount) collectibles • \(user.totalPoints) pts")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -228,5 +223,5 @@ struct LeaderboardRow: View {
 
 #Preview {
     LeaderboardScreen()
-        .environmentObject(AppState())
+    .environmentObject(ModelController())
 }

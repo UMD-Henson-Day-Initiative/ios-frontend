@@ -12,7 +12,7 @@ import SwiftUI
 
 struct ARCaptureScreen: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject var appState: AppState
+    @EnvironmentObject private var modelController: ModelController
 
     let collectibleId: String
 
@@ -45,7 +45,16 @@ struct ARCaptureScreen: View {
                 if !captured {
                     Button {
                         captured = true
-                        appState.markCollectibleObtained(id: collectibleId)
+
+                        if let collectible = modelController.collectibleCatalog.first(where: { $0.id == collectibleId }) {
+                            modelController.captureCollectible(
+                                collectibleName: collectible.name,
+                                rarity: collectible.rarity,
+                                foundAtTitle: collectible.location,
+                                points: collectible.points
+                            )
+                        }
+
                         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                             dismiss()
                         }

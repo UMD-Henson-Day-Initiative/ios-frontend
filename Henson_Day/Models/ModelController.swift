@@ -11,11 +11,28 @@ final class ModelController: ObservableObject {
     @Published private(set) var scheduleEvents: [DatabaseEvent] = []
     @Published private(set) var collectibleCatalog: [DatabaseCollectible] = []
     @Published private(set) var isSeedLoading = true
+    @Published private(set) var startupErrorMessage: String?
 
-    let modelContainer: ModelContainer
-    private let context: ModelContext
+    private(set) var modelContainer: ModelContainer?
+    private var context: ModelContext?
 
     init() {
+        initializeStore()
+    }
+
+    func retryInitialization() {
+        initializeStore()
+    }
+
+    private func initializeStore() {
+        isSeedLoading = true
+        startupErrorMessage = nil
+        currentUser = nil
+        pins = []
+        leaderboardUsers = []
+        scheduleEvents = []
+        collectibleCatalog = []
+
         let schema = Schema([
             PlayerEntity.self,
             PinEntity.self,
@@ -25,12 +42,16 @@ final class ModelController: ObservableObject {
 
         let config = ModelConfiguration("HensonDayOffline", schema: schema, isStoredInMemoryOnly: false)
         do {
-            modelContainer = try ModelContainer(for: schema, configurations: [config])
+            let container = try ModelContainer(for: schema, configurations: [config])
+            modelContainer = container
+            context = ModelContext(container)
         } catch {
-            fatalError("Failed to initialize SwiftData container: \(error)")
+            modelContainer = nil
+            context = nil
+            isSeedLoading = false
+            startupErrorMessage = "Couldn't load offline data. Check device storage and try again."
+            return
         }
-
-        context = ModelContext(modelContainer)
 
         Task {
             await loadAndSeedIfNeeded()
@@ -38,6 +59,14 @@ final class ModelController: ObservableObject {
     }
 
     func loadAndSeedIfNeeded() async {
+        guard let context else {
+            isSeedLoading = false
+            if startupErrorMessage == nil {
+                startupErrorMessage = "Offline data is unavailable right now."
+            }
+            return
+        }
+
         isSeedLoading = true
 
         do {
@@ -57,11 +86,17 @@ final class ModelController: ObservableObject {
             isSeedLoading = false
         } catch {
             isSeedLoading = false
+            startupErrorMessage = "Couldn't prepare offline data. Please retry."
             print("SwiftData load/seed error: \(error)")
         }
     }
 
     func refreshPublishedData() {
+        guard let context else {
+            startupErrorMessage = "Offline data is unavailable right now."
+            return
+        }
+
         do {
             let players = try context.fetch(FetchDescriptor<PlayerEntity>())
             let pins = try context.fetch(FetchDescriptor<PinEntity>())
@@ -70,6 +105,7 @@ final class ModelController: ObservableObject {
             self.pins = pins
             self.leaderboardUsers = players.sorted { $0.totalPoints > $1.totalPoints }
         } catch {
+            startupErrorMessage = "Couldn't refresh local data."
             print("SwiftData refresh error: \(error)")
         }
     }
@@ -86,6 +122,10 @@ final class ModelController: ObservableObject {
 
     func captureCollectible(collectibleName: String, rarity: String, foundAtTitle: String, points: Int) {
         guard let user = currentUser else { return }
+        guard let context else {
+            startupErrorMessage = "Offline data is unavailable right now."
+            return
+        }
         let userID = user.id
 
         do {
@@ -112,12 +152,17 @@ final class ModelController: ObservableObject {
             try context.save()
             refreshPublishedData()
         } catch {
+            startupErrorMessage = "Couldn't save collectible progress."
             print("Capture update error: \(error)")
         }
     }
 
     func collectionItemsForCurrentUser() -> [CollectedItemEntity] {
         guard let user = currentUser else { return [] }
+        guard let context else {
+            startupErrorMessage = "Offline data is unavailable right now."
+            return []
+        }
         let userID = user.id
 
         do {
@@ -129,12 +174,17 @@ final class ModelController: ObservableObject {
             )
             return try context.fetch(descriptor)
         } catch {
+            startupErrorMessage = "Couldn't load collected items."
             return []
         }
     }
 
     func hasCollectedCollectible(named collectibleName: String) -> Bool {
         guard let user = currentUser else { return false }
+        guard let context else {
+            startupErrorMessage = "Offline data is unavailable right now."
+            return false
+        }
         let userID = user.id
 
         do {
@@ -145,12 +195,17 @@ final class ModelController: ObservableObject {
             )
             return try !context.fetch(descriptor).isEmpty
         } catch {
+            startupErrorMessage = "Couldn't verify collectible progress."
             return false
         }
     }
 
     func updateCurrentUserAvatar(type: AvatarType, colorHex: String) {
         guard let user = currentUser else { return }
+        guard let context else {
+            startupErrorMessage = "Offline data is unavailable right now."
+            return
+        }
         user.avatarType = type
         user.avatarColorHex = colorHex
 
@@ -158,6 +213,7 @@ final class ModelController: ObservableObject {
             try context.save()
             refreshPublishedData()
         } catch {
+            startupErrorMessage = "Couldn't save avatar changes."
             print("Avatar update error: \(error)")
         }
     }
@@ -202,6 +258,7 @@ final class ModelController: ObservableObject {
     }
 
     private func seedPlayers() {
+        guard let context else { return }
         Database.players.forEach { row in
             let user = PlayerEntity(
                 displayName: row.displayName,
@@ -216,6 +273,7 @@ final class ModelController: ObservableObject {
     }
 
     private func seedPins() {
+        guard let context else { return }
         Database.pins.forEach { pin in
             context.insert(
                 PinEntity(
@@ -234,6 +292,7 @@ final class ModelController: ObservableObject {
     }
 
     private func seedBadges() {
+        guard let context else { return }
         let badges = [
             BadgeEntity(name: "Rally Starter", badgeDescription: "Attend your first event", iconName: "flag.fill"),
             BadgeEntity(name: "Collector", badgeDescription: "Collect 3 AR items", iconName: "cube.box.fill"),
