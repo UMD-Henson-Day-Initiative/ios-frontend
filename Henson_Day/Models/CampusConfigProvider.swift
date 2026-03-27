@@ -6,13 +6,14 @@ protocol CampusConfigProviding {
     var campusCenter: CLLocationCoordinate2D { get }
 }
 
-/// Default local provider that uses bundled fallback data.
+/// The default local provider that uses bundled fallback data.
 struct LocalFallbackCampusConfigProvider: CampusConfigProviding {
     var campusCenter: CLLocationCoordinate2D {
         Database.campusCenterFallback
     }
 }
 
+/// I dont see a backend anywhere so ->
 /// Active provider can be replaced at startup when backend config is available.
 enum CampusConfigProvider {
     static var active: CampusConfigProviding = LocalFallbackCampusConfigProvider()

@@ -5,7 +5,7 @@ import MapKit
 /// Shared app-wide constants for map defaults, AR tuning, and scene settings.
 enum AppConstants {
     enum Debug {
-        #if DEBUG
+        #if DEBUG /// Is this official looking enough?
         static let isMapTeleportTestingEnabled = true
         #else
         static let isMapTeleportTestingEnabled = false
