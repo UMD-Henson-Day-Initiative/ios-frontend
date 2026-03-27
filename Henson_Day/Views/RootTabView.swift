@@ -11,6 +11,7 @@
 import SwiftUI
 
 struct RootTabView: View {
+    @EnvironmentObject private var modelController: ModelController
     @EnvironmentObject private var tabRouter: TabRouter
 
     var body: some View {
@@ -50,6 +51,23 @@ struct RootTabView: View {
                     Image(systemName: "person.crop.circle")
                     Text("Profile")
                 }
+        }
+        .alert(
+            modelController.userFacingError?.title ?? "Error",
+            isPresented: Binding(
+                get: { modelController.userFacingError != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        modelController.clearUserFacingError()
+                    }
+                }
+            )
+        ) {
+            Button("Dismiss", role: .cancel) {
+                modelController.clearUserFacingError()
+            }
+        } message: {
+            Text(modelController.userFacingError?.message ?? "")
         }
     }
 }

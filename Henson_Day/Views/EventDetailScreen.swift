@@ -9,24 +9,47 @@
 // EventDetailScreen.swift
 
 import SwiftUI
+import MapKit
 
 struct EventDetailScreen: View {
-    @EnvironmentObject var appState: AppState
+    @EnvironmentObject private var modelController: ModelController
     @Environment(\.dismiss) private var dismiss
 
     let eventId: String
 
-    var event: Event? {
-        appState.events.first { $0.id == eventId }
+    private var event: DatabaseEvent? {
+        modelController.scheduleEvents.first { $0.id == eventId }
     }
 
-    var collectible: Collectible? {
-        guard let event, let id = event.collectibleId else { return nil }
-        return appState.collectibles.first { $0.id == id }
+    private var collectible: DatabaseCollectible? {
+        guard let collectibleName = event?.collectibleName else { return nil }
+        return modelController.collectibleCatalog.first { $0.name == collectibleName }
     }
 
-    var similarEvents: [Event] {
-        appState.events.filter { $0.id != eventId }.prefix(2).map { $0 }
+    private var similarEvents: [DatabaseEvent] {
+        Array(modelController.scheduleEvents.filter { $0.id != eventId }.prefix(2))
+    }
+
+    private func collectibleEmoji(for collectibleName: String) -> String {
+        switch collectibleName {
+        case "Stadium Stomper": return "🤖"
+        case "Mall Muppet": return "🧸"
+        case "Soundwave Snare": return "🐦"
+        case "Quantum Smth": return "✈️"
+        case "Finale Flare": return "🔥"
+        default: return "✨"
+        }
+    }
+
+    private func descriptionForCollectible(_ collectible: DatabaseCollectible) -> String {
+        "Find this collectible near \(collectible.location) to earn \(collectible.points) points."
+    }
+
+    private func openMapsForEvent(_ event: DatabaseEvent) {
+        let query = event.locationName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? event.locationName
+        if let mapsURL = URL(string: "maps://maps.apple.com/?q=\(query)") ?? URL(string: "https://maps.apple.com/?q=\(query)") {
+            UIApplication.shared.open(mapsURL)
+        }
     }
 
     var body: some View {
@@ -49,7 +72,7 @@ struct EventDetailScreen: View {
                         if let c = collectible {
                             VStack {
                                 Spacer()
-                                Text(c.emoji)
+                                Text(collectibleEmoji(for: c.name))
                                     .font(.system(size: 72))
                                     .padding(24)
                                     .background(Color(.systemBackground))
@@ -77,12 +100,12 @@ struct EventDetailScreen: View {
                         // Title + type badges
                         HStack(alignment: .top) {
                             VStack(alignment: .leading, spacing: 8) {
-                                Text(event.name)
+                                Text(event.title)
                                     .font(.title2.weight(.semibold))
 
                                 HStack(spacing: 6) {
-                                    EventTypeChip(type: event.type)
-                                    Label("Day \(event.day)", systemImage: "calendar")
+                                    EventTypeChip(pinType: event.pinType)
+                                    Label("Day \(event.dayNumber)", systemImage: "calendar")
                                         .font(.caption)
                                         .padding(.horizontal, 8)
                                         .padding(.vertical, 4)
@@ -98,11 +121,11 @@ struct EventDetailScreen: View {
                         VStack(alignment: .leading, spacing: 8) {
                             HStack(spacing: 8) {
                                 Image(systemName: "clock")
-                                Text(event.time)
+                                Text(event.timeRange)
                             }
                             HStack(spacing: 8) {
                                 Image(systemName: "mappin.and.ellipse")
-                                Text(event.location)
+                                Text(event.locationName)
                             }
                         }
                         .font(.caption)
@@ -124,7 +147,7 @@ struct EventDetailScreen: View {
                                     .font(.headline)
 
                                 HStack(spacing: 12) {
-                                    Text(c.emoji)
+                                    Text(collectibleEmoji(for: c.name))
                                         .font(.largeTitle)
                                         .frame(width: 64, height: 64)
                                         .background(
@@ -136,13 +159,13 @@ struct EventDetailScreen: View {
                                         HStack(spacing: 6) {
                                             Text(c.name)
                                                 .font(.subheadline.weight(.medium))
-                                            if c.rarity == .legendary {
+                                            if c.rarity == "Legendary" {
                                                 Image(systemName: "star.fill")
                                                     .foregroundStyle(Color.purple)
                                                     .font(.caption)
                                             }
                                         }
-                                        Text(c.flavorText)
+                                        Text(descriptionForCollectible(c))
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
 
@@ -173,9 +196,9 @@ struct EventDetailScreen: View {
                                                 Text("🎪")
                                                     .font(.title3)
                                                 VStack(alignment: .leading, spacing: 4) {
-                                                    Text(e.name)
+                                                    Text(e.title)
                                                         .font(.subheadline.weight(.medium))
-                                                    Text("\(e.time) • \(e.location)")
+                                                    Text("\(e.timeRange) • \(e.locationName)")
                                                         .font(.caption)
                                                         .foregroundStyle(.secondary)
                                                 }
@@ -195,7 +218,7 @@ struct EventDetailScreen: View {
                         // Action buttons
                         HStack(spacing: 12) {
                             Button {
-                                // TODO: open Maps / navigation
+                                openMapsForEvent(event)
                             } label: {
                                 Label("Get Directions", systemImage: "location.north.line")
                             }
@@ -227,15 +250,11 @@ struct EventDetailScreen: View {
 }
 
 struct EventTypeChip: View {
-    let type: EventType
+    let pinType: PinType
 
     var body: some View {
         let (text, color): (String, Color) = {
-            switch type {
-            case .homebase: return ("Homebase", Color("UMDRed"))
-            case .rare: return ("Rare", Color("UMDGold"))
-            case .common: return ("Event", .gray)
-            }
+            (pinType.displayLabel, pinType.headerColor)
         }()
 
         return Text(text)

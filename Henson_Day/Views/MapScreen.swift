@@ -11,17 +11,19 @@
 import SwiftUI
 import MapKit
 import CoreLocation
+import RealityKit
+import Combine
 
 struct MapScreen: View {
     // Toggle this to hide all location-teleport testing controls in camera mode.
-    private let isInTestingMode = true
+    private let isInTestingMode = AppConstants.Debug.isMapTeleportTestingEnabled
 
     @EnvironmentObject private var modelController: ModelController
     @EnvironmentObject private var tabRouter: TabRouter
 
     @State private var region = MKCoordinateRegion(
-        center: CLLocationCoordinate2D(latitude: 38.9869, longitude: -76.9426),
-        span: .init(latitudeDelta: 0.012, longitudeDelta: 0.012)
+        center: CampusConfigProvider.campusCenter,
+        span: AppConstants.Map.mapRegionSpan
     )
     @State private var selectedPinID: UUID?
     @State private var isDetailPresented = false
@@ -29,10 +31,20 @@ struct MapScreen: View {
     @State private var showLeaderboard = false
     @State private var showCollection = false
     @State private var isCameraPrimary = false
+    @State private var suppressMiniCameraFeed = false
+    @State private var isPreparingTeleportLaunch = false
+    @State private var teleportPreloadCancellable: AnyCancellable?
+    @State private var teleportLaunchTask: Task<Void, Never>?
+    @State private var teleportResetTask: Task<Void, Never>?
 
     @StateObject private var cameraPermission = CameraPermissionManager()
     @StateObject private var worldAnchorManager = WorldAnchorManager()
     @StateObject private var locationManager = LocationPermissionManager()
+
+    private var collectedCatalogItems: [DatabaseCollectible] {
+        let collectedNames = Set(modelController.collectionItemsForCurrentUser().map(\.collectibleName))
+        return modelController.collectibleCatalog.filter { collectedNames.contains($0.name) }
+    }
 
     private var selectedPin: PinEntity? {
         modelController.pins.first(where: { $0.id == selectedPinID })
@@ -105,6 +117,12 @@ struct MapScreen: View {
             modelController.refreshPublishedData()
             cameraPermission.requestIfNeeded()
             locationManager.requestWhenInUseAuthorizationIfNeeded()
+            region.center = modelController.campusCenter
+        }
+        .onDisappear {
+            teleportLaunchTask?.cancel()
+            teleportResetTask?.cancel()
+            teleportPreloadCancellable?.cancel()
         }
     }
 
@@ -114,7 +132,13 @@ struct MapScreen: View {
             if cameraPermission.isDeniedOrRestricted {
                 CameraPermissionPlaceholderView()
             } else {
-                ARCameraView(isCameraAuthorized: cameraPermission.isAuthorized, worldAnchorManager: worldAnchorManager, isPaused: arPin != nil)
+                ARCameraView(
+                    isCameraAuthorized: cameraPermission.isAuthorized,
+                    worldAnchorManager: worldAnchorManager,
+                    availableCollectibles: collectedCatalogItems,
+                    isPaused: arPin != nil || isPreparingTeleportLaunch,
+                    showPlacementControls: true
+                )
             }
         } else {
             mapView
@@ -187,7 +211,7 @@ struct MapScreen: View {
             HStack {
                 Spacer()
                 Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
+                    withAnimation(.easeInOut(duration: AppConstants.Map.primarySwapAnimationSeconds)) {
                         isCameraPrimary.toggle()
                     }
                 } label: {
@@ -228,10 +252,18 @@ struct MapScreen: View {
                         if isCameraPrimary {
                             mapView
                         } else {
-                            if cameraPermission.isDeniedOrRestricted {
+                            if suppressMiniCameraFeed {
+                                miniCameraPlaceholder
+                            } else if cameraPermission.isDeniedOrRestricted {
                                 CameraPermissionPlaceholderView()
                             } else {
-                                ARCameraView(isCameraAuthorized: cameraPermission.isAuthorized, worldAnchorManager: worldAnchorManager, isPaused: arPin != nil)
+                                ARCameraView(
+                                    isCameraAuthorized: cameraPermission.isAuthorized,
+                                    worldAnchorManager: worldAnchorManager,
+                                    availableCollectibles: collectedCatalogItems,
+                                    isPaused: arPin != nil || isPreparingTeleportLaunch,
+                                    showPlacementControls: false
+                                )
                             }
                         }
                     }
@@ -241,12 +273,17 @@ struct MapScreen: View {
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
                             .stroke(.white.opacity(0.85), lineWidth: 1)
                     )
-                    .shadow(radius: 6)
-                    .onTapGesture {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            isCameraPrimary.toggle()
-                        }
+                    .overlay {
+                        Rectangle()
+                            .fill(Color.clear)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                withAnimation(.easeInOut(duration: AppConstants.Map.primarySwapAnimationSeconds)) {
+                                    isCameraPrimary.toggle()
+                                }
+                            }
                     }
+                    .shadow(radius: 6)
                 }
                 .padding(.top, 30)
                 .padding(.horizontal, 12)
@@ -255,6 +292,20 @@ struct MapScreen: View {
             }
         }
         .allowsHitTesting(true)
+    }
+
+    private var miniCameraPlaceholder: some View {
+        ZStack {
+            Color.black.opacity(0.75)
+            VStack(spacing: 6) {
+                Image(systemName: "camera")
+                    .font(.title3)
+                    .foregroundStyle(.white)
+                Text("Camera")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.9))
+            }
+        }
     }
 
     private var floatingActions: some View {
@@ -344,33 +395,69 @@ struct MapScreen: View {
     }
 
     private func teleportToUncollectedCollectiblePin() {
-        let collectedNames = Set(modelController.collectionItemsForCurrentUser().map(\.collectibleName))
+        // Testing flow: always teleport to the Stadium Stomper pin and then
+        // open the collectible experience after a short delay.
+        let targetPin = modelController.pins.first { pin in
+            if pin.collectibleName == "Stadium Stomper" { return true }
 
-        let targetPin = modelController.pins
-            .filter { $0.hasARCollectible }
-            .first { pin in
-                let pinCollectibleIDs = Database.pins.first(where: { $0.title == pin.title })?.collectibleIDs ?? []
-                let pinCollectibles = Database.collectibleCatalog.filter { pinCollectibleIDs.contains($0.id) }
+            let pinCollectibleIDs = Database.pins.first(where: { $0.title == pin.title })?.collectibleIDs ?? []
+            return pinCollectibleIDs.contains("c1")
+        }
 
-                if !pinCollectibles.isEmpty {
-                    return pinCollectibles.contains(where: { !collectedNames.contains($0.name) })
-                }
+        guard let targetPin else {
+            return
+        }
 
-                if let legacyName = pin.collectibleName {
-                    return !collectedNames.contains(legacyName)
-                }
-
-                return false
-            }
-
-        guard let targetPin else { return }
-
-        let targetCoordinate = CLLocationCoordinate2D(latitude: targetPin.latitude, longitude: targetPin.longitude)
+        let targetCoordinate = CLLocationCoordinate2D(
+            latitude: targetPin.latitude,
+            longitude: targetPin.longitude
+        )
         locationManager.setTestingCoordinate(targetCoordinate)
         region.center = targetCoordinate
 
-        // Teleport opens the AR collectible screen so users immediately see the spawned collectible flow.
-        arPin = targetPin
+        // Temporarily suspend mini camera feed to avoid camera-session contention during AR launch.
+        suppressMiniCameraFeed = true
+        isPreparingTeleportLaunch = true
+
+        let modelAssetName = modelAssetNameForPin(targetPin) ?? "robot"
+
+        teleportLaunchTask?.cancel()
+        teleportResetTask?.cancel()
+        teleportPreloadCancellable?.cancel()
+
+        // Preload before launching AR so model decode doesn't block initial collectible screen.
+        teleportPreloadCancellable = Entity.loadModelAsync(named: modelAssetName)
+            // Thread-safety measure: ensure model completion handlers dispatch to MainThread
+            .receive(on: DispatchQueue.main)
+            .sink(receiveCompletion: { _ in
+                teleportPreloadCancellable = nil
+
+                teleportLaunchTask = Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: UInt64(AppConstants.AR.teleportLaunchDelaySeconds * 1_000_000_000))
+                    arPin = targetPin
+                }
+            }, receiveValue: { _ in })
+
+        teleportResetTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(AppConstants.AR.teleportFallbackDelaySeconds * 1_000_000_000))
+            suppressMiniCameraFeed = false
+            isPreparingTeleportLaunch = false
+        }
+    }
+
+    private func modelAssetNameForPin(_ pin: PinEntity) -> String? {
+        let pinCollectibleIDs = Database.pins.first(where: { $0.title == pin.title })?.collectibleIDs ?? []
+
+        if let byID = Database.collectibleCatalog.first(where: { pinCollectibleIDs.contains($0.id) }) {
+            return byID.modelFileName
+        }
+
+        if let collectibleName = pin.collectibleName,
+           let byName = Database.collectibleCatalog.first(where: { $0.name == collectibleName }) {
+            return byName.modelFileName
+        }
+
+        return nil
     }
 }
 

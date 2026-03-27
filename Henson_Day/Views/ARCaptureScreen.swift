@@ -12,11 +12,12 @@ import SwiftUI
 
 struct ARCaptureScreen: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject var appState: AppState
+    @EnvironmentObject private var modelController: ModelController
 
     let collectibleId: String
 
     @State private var captured = false
+    @State private var dismissTask: Task<Void, Never>?
 
     var body: some View {
         ZStack {
@@ -45,8 +46,19 @@ struct ARCaptureScreen: View {
                 if !captured {
                     Button {
                         captured = true
-                        appState.markCollectibleObtained(id: collectibleId)
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+
+                        if let collectible = modelController.collectibleCatalog.first(where: { $0.id == collectibleId }) {
+                            modelController.captureCollectible(
+                                collectibleName: collectible.name,
+                                rarity: collectible.rarity,
+                                foundAtTitle: collectible.location,
+                                points: collectible.points
+                            )
+                        }
+
+                        dismissTask?.cancel()
+                        dismissTask = Task { @MainActor in
+                            try? await Task.sleep(nanoseconds: UInt64(AppConstants.AR.captureDismissDelaySeconds * 1_000_000_000))
                             dismiss()
                         }
                     } label: {
@@ -68,6 +80,9 @@ struct ARCaptureScreen: View {
                     .font(.title)
                     .foregroundStyle(.black)
             }
+        }
+        .onDisappear {
+            dismissTask?.cancel()
         }
     }
 }

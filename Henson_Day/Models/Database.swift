@@ -51,7 +51,8 @@ struct DatabaseCollectible: Identifiable {
 }
 
 enum Database {
-    static let campusCenter = CLLocationCoordinate2D(latitude: 38.9869, longitude: -76.9426)
+    // Local fallback only. CampusConfigProvider can be swapped for backend-driven config.
+    static let campusCenterFallback = AppConstants.Map.fallbackCampusCenter
 
     static let players: [DatabasePlayerSeed] = [
         .init(displayName: "You", avatarColorHex: "#D7263D", avatarType: .turtle, totalPoints: 240, collectedCount: 0, isLocalUser: true),
