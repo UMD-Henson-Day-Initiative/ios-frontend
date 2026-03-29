@@ -24,7 +24,7 @@ enum AppConstants {
         static let maxPlacements = 3
         static let walkAwayDistanceMeters: Float = 12
 
-        // AR flow timing values.
+        // AR flow timing values
         static let teleportFallbackDelaySeconds: TimeInterval = 2.0
         static let teleportLaunchDelaySeconds: TimeInterval = 0.2
         static let captureDismissDelaySeconds: TimeInterval = 2.0

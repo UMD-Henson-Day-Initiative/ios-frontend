@@ -28,6 +28,7 @@
 		DBB3AA5F2F52A0FD00F99705 /* Henson_Day.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Henson_Day.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DBB3AA6C2F52A0FE00F99705 /* Henson_DayTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = Henson_DayTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DBB3AA762F52A0FE00F99705 /* Henson_DayUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = Henson_DayUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		DBEDE3E02F7DB472007BB55E /* Henson_Day.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Henson_Day.xcodeproj; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -95,6 +96,11 @@
 				DBB3AA6C2F52A0FE00F99705 /* Henson_DayTests.xctest */,
 				DBB3AA762F52A0FE00F99705 /* Henson_DayUITests.xctest */,
 			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		DBEDE3E22F7DB472007BB55E /* Products */ = {
+			isa = PBXGroup;
 			name = Products;
 			sourceTree = "<group>";
 		};
@@ -208,6 +214,10 @@
 				{
 					ProductGroup = 788F72742F622FFE004EE753 /* Products */;
 					ProjectRef = 788F72702F622FFE004EE753 /* Henson_Day.xcodeproj */;
+				},
+				{
+					ProductGroup = DBEDE3E22F7DB472007BB55E /* Products */;
+					ProjectRef = DBEDE3E02F7DB472007BB55E /* Henson_Day.xcodeproj */;
 				},
 			);
 			projectRoot = "";
@@ -409,7 +419,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = JGPU6R3TTU;
+				DEVELOPMENT_TEAM = M2ZV7F454Z;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = CAMERA_USAGE_DESCRIPTION;
@@ -445,7 +455,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = JGPU6R3TTU;
+				DEVELOPMENT_TEAM = M2ZV7F454Z;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = CAMERA_USAGE_DESCRIPTION;
