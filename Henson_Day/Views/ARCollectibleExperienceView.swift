@@ -31,9 +31,11 @@ struct ARCollectibleExperienceView: View {
     @State private var activeCollectible: DatabaseCollectible?
     @State private var secondHorizontalSurfaceDetected = false
     @State private var teleportFallbackReady = false
+    @State private var teleportFallbackTask: Task<Void, Never>?
+    @State private var collectFlowTask: Task<Void, Never>?
 
-    // Global AR spawn radius in meters. Keep this low while testing close-range interactions.
-    private let spawnRadiusMeters: CLLocationDistance = 5
+    // Show nearby collectible state within 30m.
+    private let spawnRadiusMeters: CLLocationDistance = AppConstants.AR.spawnRadiusMeters
 
     private var collectibleName: String {
         activeCollectible?.name ?? (pin.collectibleName ?? pin.title)
@@ -67,7 +69,7 @@ struct ARCollectibleExperienceView: View {
     private var debugSpawnPath: String {
         guard isTeleportFlow else { return "via: proximity" }
         if secondHorizontalSurfaceDetected { return "via: 2nd surface" }
-        if teleportFallbackReady { return "via: 10s fallback" }
+        if teleportFallbackReady { return "via: 2s fallback" }
         return "via: waiting…"
     }
 
@@ -177,14 +179,20 @@ struct ARCollectibleExperienceView: View {
             chooseCollectibleForCurrentPin()
             recalculateProximityAndFlow()
 
-            // Teleport support: if only one surface is found, allow spawn after 10 seconds.
+            // Teleport support: if only one surface is found, allow spawn after a short delay.
             if isTeleportFlow {
                 teleportFallbackReady = false
-                DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+                teleportFallbackTask?.cancel()
+                teleportFallbackTask = Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: UInt64(AppConstants.AR.teleportFallbackDelaySeconds * 1_000_000_000))
                     teleportFallbackReady = true
                     recalculateProximityAndFlow()
                 }
             }
+        }
+        .onDisappear {
+            teleportFallbackTask?.cancel()
+            collectFlowTask?.cancel()
         }
         .onReceive(locationManager.$currentCoordinate.combineLatest(locationManager.$testingOverrideCoordinate)) { _ in
             recalculateProximityAndFlow()
@@ -224,7 +232,7 @@ struct ARCollectibleExperienceView: View {
         case .waitingForSecondSurface:
             promptCard(
                 title: "Collectible nearby",
-                subtitle: "Teleport mode active. It appears on the second horizontal surface, or automatically after 10 seconds."
+                subtitle: "Teleport mode active. It appears on the second horizontal surface, or automatically after ~2 seconds."
             ) {
                 EmptyView()
             }
@@ -351,13 +359,13 @@ struct ARCollectibleExperienceView: View {
             points: collectiblePoints
         )
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+        collectFlowTask?.cancel()
+        collectFlowTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(AppConstants.AR.collectRevealDelaySeconds * 1_000_000_000))
             flowState = .captured
             tabRouter.selectedTab = .collection
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
-                dismiss()
-            }
+            try? await Task.sleep(nanoseconds: UInt64(AppConstants.AR.collectDismissDelaySeconds * 1_000_000_000))
+            dismiss()
         }
     }
 
@@ -422,18 +430,6 @@ struct ARPlacementView: UIViewRepresentable {
         var didTapCollectible: (() -> Void)?
 
         private let collectibleEntityName = "ar.collectible.entity"
-        private let defaultTargetMaxDimension: Float = 0.20
-        private let smallCollectibleTargetMaxDimension: Float = 0.14
-        private let largeCollectibleTargetMaxDimension: Float = 0.25
-
-        // Long-term sizing control by asset: mix smaller/larger target footprints.
-        private let targetDimensionByModelAsset: [String: Float] = [
-            "toy_car": 0.14,
-            "hummingbird_anim": 0.14,
-            "robot": 0.25,
-            "toy_biplane_realistic": 0.25,
-            "slide": 0.20
-        ]
 
         func configure(_ arView: ARView) {
             self.arView = arView
@@ -520,6 +516,7 @@ struct ARPlacementView: UIViewRepresentable {
             currentModelAssetName = modelAssetName
 
             loadCancellable = Entity.loadModelAsync(named: modelAssetName)
+                // Thread-safety measure: ensure model completion handlers mutate @State on MainThread
                 .receive(on: DispatchQueue.main)
                 .sink(receiveCompletion: { [weak self] completion in
                     guard let self else { return }
@@ -545,7 +542,7 @@ struct ARPlacementView: UIViewRepresentable {
             let cameraTransform = arView.cameraTransform.matrix
             let forward = SIMD3<Float>(-cameraTransform.columns.2.x, -cameraTransform.columns.2.y, -cameraTransform.columns.2.z)
             let cameraPosition = SIMD3<Float>(cameraTransform.columns.3.x, cameraTransform.columns.3.y, cameraTransform.columns.3.z)
-            let fallbackPosition = cameraPosition + normalize(forward) * 0.9
+            let fallbackPosition = cameraPosition + normalize(forward) * AppConstants.AR.forcedSpawnDistanceMeters
 
             var fallbackTransform = matrix_identity_float4x4
             fallbackTransform.columns.3 = SIMD4<Float>(fallbackPosition.x, fallbackPosition.y, fallbackPosition.z, 1)
@@ -553,7 +550,7 @@ struct ARPlacementView: UIViewRepresentable {
         }
 
         private func installFallbackEntity() {
-            let fallbackMesh = MeshResource.generateSphere(radius: 0.12)
+            let fallbackMesh = MeshResource.generateSphere(radius: AppConstants.AR.fallbackSphereRadius)
             let fallbackMaterial = SimpleMaterial(color: .gray, roughness: 0.3, isMetallic: false)
             let fallbackEntity = ModelEntity(mesh: fallbackMesh, materials: [fallbackMaterial])
             fallbackEntity.name = collectibleEntityName
@@ -569,28 +566,28 @@ struct ARPlacementView: UIViewRepresentable {
             let extents = bounds.extents
             let maxDimension = max(extents.x, max(extents.y, extents.z))
             guard maxDimension.isFinite, maxDimension > 0 else {
-                return SIMD3<Float>(repeating: 0.12)
+                return SIMD3<Float>(repeating: AppConstants.AR.fallbackUniformScale)
             }
 
             let uniformScale = targetMaxDimension / maxDimension
-            let clampedScale = min(max(uniformScale, 0.03), 0.35)
+            let clampedScale = min(max(uniformScale, AppConstants.AR.minScale), AppConstants.AR.maxScale)
             return SIMD3<Float>(repeating: clampedScale)
         }
 
         private func targetMaxDimension(for modelAssetName: String) -> Float {
-            if let mapped = targetDimensionByModelAsset[modelAssetName] {
+            if let mapped = AppConstants.AR.ModelSizing.targetDimensionByModelAsset[modelAssetName] {
                 return mapped
             }
 
             if modelAssetName.contains("toy_") {
-                return smallCollectibleTargetMaxDimension
+                return AppConstants.AR.ModelSizing.smallTargetMaxDimension
             }
 
             if modelAssetName.contains("robot") || modelAssetName.contains("biplane") {
-                return largeCollectibleTargetMaxDimension
+                return AppConstants.AR.ModelSizing.largeTargetMaxDimension
             }
 
-            return defaultTargetMaxDimension
+            return AppConstants.AR.ModelSizing.defaultTargetMaxDimension
         }
 
         private func removeCollectibleIfNeeded() {
@@ -660,7 +657,8 @@ struct ARPlacementView: UIViewRepresentable {
                 timingFunction: .easeInOut
             )
 
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.48) { [weak self] in
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(AppConstants.AR.collectibleAnimationCompletionDelaySeconds * 1_000_000_000))
                 guard let self else { return }
                 collectibleEntity.removeFromParent()
                 self.collectibleEntity = nil

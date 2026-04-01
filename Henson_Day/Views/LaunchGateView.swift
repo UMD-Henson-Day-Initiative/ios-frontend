@@ -36,6 +36,25 @@ struct LaunchGateView: View {
                 if modelController.isSeedLoading {
                     ProgressView("Preparing offline data")
                         .padding(.top, 8)
+                } else if let startupErrorMessage = modelController.startupErrorMessage {
+                    VStack(spacing: 10) {
+                        Label("Offline data failed to load", systemImage: "exclamationmark.triangle.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.red)
+
+                        Text(startupErrorMessage)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+
+                        Button("Retry") {
+                            modelController.retryInitialization()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Color("UMDRed"))
+                        .padding(.top, 4)
+                    }
+                    .padding(.top, 6)
                 } else {
                     VStack(spacing: 10) {
                         permissionRow(
@@ -138,7 +157,7 @@ final class LaunchPermissionState: NSObject, ObservableObject, CLLocationManager
 
         if cameraStatus == .notDetermined {
             AVCaptureDevice.requestAccess(for: .video) { [weak self] _ in
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     self?.cameraStatus = AVCaptureDevice.authorizationStatus(for: .video)
                 }
             }

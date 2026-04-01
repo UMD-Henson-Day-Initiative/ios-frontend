@@ -2,20 +2,69 @@ import Foundation
 import SwiftData
 import CoreLocation
 import Combine
+import os
+
+struct UserFacingErrorState: Identifiable, Equatable {
+    let id = UUID()
+    let title: String
+    let message: String
+}
 
 @MainActor
 final class ModelController: ObservableObject {
+    /// Current local user profile loaded from SwiftData.
     @Published private(set) var currentUser: PlayerEntity?
+    /// Campus pins used by map and AR entry points.
     @Published private(set) var pins: [PinEntity] = []
+    /// Leaderboard data sorted by points.
     @Published private(set) var leaderboardUsers: [PlayerEntity] = []
+    /// Event schedule source for schedule and event detail surfaces.
     @Published private(set) var scheduleEvents: [DatabaseEvent] = []
+    /// All collectible definitions available to AR and collection flows.
     @Published private(set) var collectibleCatalog: [DatabaseCollectible] = []
+    /// Primary map center resolved from config provider (backend-ready abstraction).
+    @Published private(set) var campusCenter: CLLocationCoordinate2D
+
     @Published private(set) var isSeedLoading = true
+    @Published private(set) var startupErrorMessage: String?
+    @Published private(set) var userFacingError: UserFacingErrorState?
 
-    let modelContainer: ModelContainer
-    private let context: ModelContext
+    private(set) var modelContainer: ModelContainer?
+    private var context: ModelContext?
+    private let logger = Logger(subsystem: "HensonDay", category: "ModelController")
+    private let campusConfigProvider: CampusConfigProviding
 
-    init() {
+    convenience init() {
+        self.init(campusConfigProvider: CampusConfigProvider.active)
+    }
+
+    init(campusConfigProvider: CampusConfigProviding) {
+        self.campusConfigProvider = campusConfigProvider
+        self.campusCenter = campusConfigProvider.campusCenter
+        initializeStore()
+    }
+
+    func clearUserFacingError() {
+        userFacingError = nil
+    }
+
+    func retryInitialization() {
+        initializeStore()
+    }
+
+    /// Resets in-memory state and attempts to re-open the local SwiftData store.
+    /// This powers both first-launch setup and user-triggered retry from LaunchGateView.
+    private func initializeStore() {
+        isSeedLoading = true
+        startupErrorMessage = nil
+        userFacingError = nil
+        currentUser = nil
+        pins = []
+        leaderboardUsers = []
+        scheduleEvents = []
+        collectibleCatalog = []
+        campusCenter = campusConfigProvider.campusCenter
+
         let schema = Schema([
             PlayerEntity.self,
             PinEntity.self,
@@ -25,12 +74,20 @@ final class ModelController: ObservableObject {
 
         let config = ModelConfiguration("HensonDayOffline", schema: schema, isStoredInMemoryOnly: false)
         do {
-            modelContainer = try ModelContainer(for: schema, configurations: [config])
+            let container = try ModelContainer(for: schema, configurations: [config])
+            modelContainer = container
+            context = ModelContext(container)
         } catch {
-            fatalError("Failed to initialize SwiftData container: \(error)")
+            modelContainer = nil
+            context = nil
+            isSeedLoading = false
+            publishStartupError(
+                message: "Couldn't load offline data. Check device storage and try again.",
+                context: "SwiftData container initialization",
+                error: error
+            )
+            return
         }
-
-        context = ModelContext(modelContainer)
 
         Task {
             await loadAndSeedIfNeeded()
@@ -38,6 +95,17 @@ final class ModelController: ObservableObject {
     }
 
     func loadAndSeedIfNeeded() async {
+        guard let context else {
+            isSeedLoading = false
+            if startupErrorMessage == nil {
+                publishStartupError(
+                    message: "Offline data is unavailable right now.",
+                    context: "Load and seed guard"
+                )
+            }
+            return
+        }
+
         isSeedLoading = true
 
         do {
@@ -55,13 +123,27 @@ final class ModelController: ObservableObject {
             }
             collectibleCatalog = Database.collectibleCatalog
             isSeedLoading = false
+            startupErrorMessage = nil
         } catch {
             isSeedLoading = false
-            print("SwiftData load/seed error: \(error)")
+            publishStartupError(
+                message: "Couldn't prepare offline data. Please retry.",
+                context: "SwiftData load and seed",
+                error: error
+            )
         }
     }
 
     func refreshPublishedData() {
+        guard let context else {
+            publishRuntimeError(
+                title: "Data unavailable",
+                message: "Offline data is unavailable right now.",
+                context: "Refresh published data without context"
+            )
+            return
+        }
+
         do {
             let players = try context.fetch(FetchDescriptor<PlayerEntity>())
             let pins = try context.fetch(FetchDescriptor<PinEntity>())
@@ -70,7 +152,12 @@ final class ModelController: ObservableObject {
             self.pins = pins
             self.leaderboardUsers = players.sorted { $0.totalPoints > $1.totalPoints }
         } catch {
-            print("SwiftData refresh error: \(error)")
+            publishRuntimeError(
+                title: "Couldn't refresh data",
+                message: "Local data couldn't be refreshed. Some views may show stale values.",
+                context: "SwiftData refresh",
+                error: error
+            )
         }
     }
 
@@ -86,6 +173,14 @@ final class ModelController: ObservableObject {
 
     func captureCollectible(collectibleName: String, rarity: String, foundAtTitle: String, points: Int) {
         guard let user = currentUser else { return }
+        guard let context else {
+            publishRuntimeError(
+                title: "Capture unavailable",
+                message: "Offline data is unavailable right now.",
+                context: "Capture collectible without context"
+            )
+            return
+        }
         let userID = user.id
 
         do {
@@ -112,12 +207,25 @@ final class ModelController: ObservableObject {
             try context.save()
             refreshPublishedData()
         } catch {
-            print("Capture update error: \(error)")
+            publishRuntimeError(
+                title: "Capture failed",
+                message: "Couldn't save collectible progress.",
+                context: "Capture collectible save",
+                error: error
+            )
         }
     }
 
     func collectionItemsForCurrentUser() -> [CollectedItemEntity] {
         guard let user = currentUser else { return [] }
+        guard let context else {
+            publishRuntimeError(
+                title: "Collection unavailable",
+                message: "Offline data is unavailable right now.",
+                context: "Load collection without context"
+            )
+            return []
+        }
         let userID = user.id
 
         do {
@@ -129,12 +237,26 @@ final class ModelController: ObservableObject {
             )
             return try context.fetch(descriptor)
         } catch {
+            publishRuntimeError(
+                title: "Collection unavailable",
+                message: "Couldn't load collected items.",
+                context: "Fetch collected items",
+                error: error
+            )
             return []
         }
     }
 
     func hasCollectedCollectible(named collectibleName: String) -> Bool {
         guard let user = currentUser else { return false }
+        guard let context else {
+            publishRuntimeError(
+                title: "Collection check unavailable",
+                message: "Offline data is unavailable right now.",
+                context: "Check collected item without context"
+            )
+            return false
+        }
         let userID = user.id
 
         do {
@@ -145,12 +267,26 @@ final class ModelController: ObservableObject {
             )
             return try !context.fetch(descriptor).isEmpty
         } catch {
+            publishRuntimeError(
+                title: "Collection check failed",
+                message: "Couldn't verify collectible progress.",
+                context: "Verify collected item",
+                error: error
+            )
             return false
         }
     }
 
     func updateCurrentUserAvatar(type: AvatarType, colorHex: String) {
         guard let user = currentUser else { return }
+        guard let context else {
+            publishRuntimeError(
+                title: "Profile unavailable",
+                message: "Offline data is unavailable right now.",
+                context: "Avatar update without context"
+            )
+            return
+        }
         user.avatarType = type
         user.avatarColorHex = colorHex
 
@@ -158,10 +294,17 @@ final class ModelController: ObservableObject {
             try context.save()
             refreshPublishedData()
         } catch {
-            print("Avatar update error: \(error)")
+            publishRuntimeError(
+                title: "Avatar update failed",
+                message: "Couldn't save avatar changes.",
+                context: "Save avatar update",
+                error: error
+            )
         }
     }
 
+    /// Heuristic matcher that maps map pin titles to schedule event IDs.
+    /// It checks exact normalized matches, then containment, then token overlap scoring.
     func scheduleEventID(matchingPinTitle title: String) -> String? {
         let normalizedPinTitle = normalizeForMatching(title)
 
@@ -191,6 +334,7 @@ final class ModelController: ObservableObject {
         return scored.first?.id
     }
 
+    /// Normalizes text for resilient matching by lowercasing and stripping punctuation.
     private func normalizeForMatching(_ text: String) -> String {
         let lowered = text.lowercased()
         let cleaned = lowered.unicodeScalars.map { scalar -> Character in
@@ -202,6 +346,7 @@ final class ModelController: ObservableObject {
     }
 
     private func seedPlayers() {
+        guard let context else { return }
         Database.players.forEach { row in
             let user = PlayerEntity(
                 displayName: row.displayName,
@@ -216,6 +361,7 @@ final class ModelController: ObservableObject {
     }
 
     private func seedPins() {
+        guard let context else { return }
         Database.pins.forEach { pin in
             context.insert(
                 PinEntity(
@@ -234,11 +380,30 @@ final class ModelController: ObservableObject {
     }
 
     private func seedBadges() {
+        guard let context else { return }
         let badges = [
             BadgeEntity(name: "Rally Starter", badgeDescription: "Attend your first event", iconName: "flag.fill"),
             BadgeEntity(name: "Collector", badgeDescription: "Collect 3 AR items", iconName: "cube.box.fill"),
             BadgeEntity(name: "Campus Explorer", badgeDescription: "Visit 5 unique pins", iconName: "map.fill")
         ]
         badges.forEach { context.insert($0) }
+    }
+
+    private func publishStartupError(message: String, context: String, error: Error? = nil) {
+        startupErrorMessage = message
+        if let error {
+            logger.error("\(context, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        } else {
+            logger.error("\(context, privacy: .public): \(message, privacy: .public)")
+        }
+    }
+
+    private func publishRuntimeError(title: String, message: String, context: String, error: Error? = nil) {
+        userFacingError = UserFacingErrorState(title: title, message: message)
+        if let error {
+            logger.error("\(context, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        } else {
+            logger.error("\(context, privacy: .public): \(message, privacy: .public)")
+        }
     }
 }

@@ -59,8 +59,8 @@ final class LocationPermissionManager: NSObject, ObservableObject, CLLocationMan
     override init() {
         authorizationStatus = manager.authorizationStatus
         region = MKCoordinateRegion(
-            center: CLLocationCoordinate2D(latitude: 38.9869, longitude: -76.9426),
-            span: MKCoordinateSpan(latitudeDelta: 0.007, longitudeDelta: 0.007)
+            center: CampusConfigProvider.campusCenter,
+            span: AppConstants.Map.locationFollowSpan
         )
         super.init()
 
@@ -84,7 +84,7 @@ final class LocationPermissionManager: NSObject, ObservableObject, CLLocationMan
         guard let coordinate else { return }
         region = MKCoordinateRegion(
             center: coordinate,
-            span: MKCoordinateSpan(latitudeDelta: 0.007, longitudeDelta: 0.007)
+            span: AppConstants.Map.locationFollowSpan
         )
     }
 
@@ -112,11 +112,11 @@ final class LocationPermissionManager: NSObject, ObservableObject, CLLocationMan
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
 
-        DispatchQueue.main.async {
+        Task { @MainActor in
             self.currentCoordinate = location.coordinate
             self.region = MKCoordinateRegion(
                 center: location.coordinate,
-                span: MKCoordinateSpan(latitudeDelta: 0.007, longitudeDelta: 0.007)
+                span: AppConstants.Map.locationFollowSpan
             )
         }
     }
