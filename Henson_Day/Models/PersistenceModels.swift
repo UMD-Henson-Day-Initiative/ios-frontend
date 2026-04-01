@@ -105,7 +105,8 @@ final class PinEntity {
         pinDescription: String,
         hasARCollectible: Bool = false,
         collectibleName: String? = nil,
-        collectibleRarity: String? = nil
+        collectibleRarity: String? = nil,
+        
     ) {
         self.id = id
         self.pinTypeRaw = pinType.rawValue

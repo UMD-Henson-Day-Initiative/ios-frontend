@@ -29,7 +29,8 @@ struct MapScreen: View {
     @State private var showLeaderboard = false
     @State private var showCollection = false
     @State private var isCameraPrimary = false
-
+    @State private var photoBoothPin: PinEntity?
+    
     @StateObject private var cameraPermission = CameraPermissionManager()
     @StateObject private var worldAnchorManager = WorldAnchorManager()
     @StateObject private var locationManager = LocationPermissionManager()
@@ -78,6 +79,10 @@ struct MapScreen: View {
                         onPrimaryAction: {
                             handlePrimaryAction(for: selectedPin)
                         },
+                        onPhotoAction: {
+                            isDetailPresented = false
+                            photoBoothPin = selectedPin
+                        },
                         onDetails: hasEventDetails ? {
                             openEventDetails(for: selectedPin)
                         } : nil
@@ -99,6 +104,11 @@ struct MapScreen: View {
             ARCollectibleExperienceView(pin: pin)
                 .environmentObject(modelController)
                 .environmentObject(tabRouter)
+                .environmentObject(locationManager)
+        }
+        .fullScreenCover(item: $photoBoothPin) { pin in
+            ARPhotoBoothView(pin: pin)
+                .environmentObject(modelController)
                 .environmentObject(locationManager)
         }
         .onAppear {
@@ -297,8 +307,7 @@ struct MapScreen: View {
             description: pin.pinDescription,
             collectibleName: pin.collectibleName,
             collectibleRarity: pin.collectibleRarity,
-            hasARCollectible: pin.hasARCollectible
-        )
+            hasARCollectible: pin.hasARCollectible        )
     }
 
     private func parseSubtitle(_ subtitle: String?) -> (day: String?, time: String?, location: String?) {

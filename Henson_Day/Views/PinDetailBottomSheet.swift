@@ -5,6 +5,7 @@ struct PinDetailBottomSheet: View {
     @Binding var isPresented: Bool
     var onNavigate: () -> Void = {}
     var onPrimaryAction: () -> Void = {}
+    var onPhotoAction: () -> Void = {}
     var onDetails: (() -> Void)? = nil
 
     @GestureState private var dragOffset: CGFloat = 0
@@ -88,7 +89,7 @@ struct PinDetailBottomSheet: View {
                 if detail.hasARCollectible {
                     collectibleCard
                 }
-
+                
                 Spacer(minLength: 8)
 
                 HStack(spacing: 12) {
@@ -103,7 +104,16 @@ struct PinDetailBottomSheet: View {
                         }
                     }
                 }
-
+                
+                if detail.hasARCollectible {
+                    actionButton(
+                        title: "📸 Photo with \(detail.collectibleName ?? "Collectible")",
+                        fill: .pink,
+                        foreground: .white,
+                        action: onPhotoAction
+                    )
+                }
+                
                 if let onDetails {
                     Button("Details") {
                         onDetails()
@@ -155,7 +165,7 @@ struct PinDetailBottomSheet: View {
         .background(Color.primary.opacity(0.06))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
-
+    
     private var dismissDragGesture: some Gesture {
         DragGesture(minimumDistance: 8)
             .updating($dragOffset) { value, state, _ in

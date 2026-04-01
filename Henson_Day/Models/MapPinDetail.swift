@@ -59,7 +59,7 @@ struct MapPinDetail: Identifiable, Equatable {
     let collectibleName: String?
     let collectibleRarity: String?
     let hasARCollectible: Bool
-
+    
     var metadataLine: String {
         var values: [String] = []
 
