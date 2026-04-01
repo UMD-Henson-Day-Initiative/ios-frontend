@@ -75,6 +75,10 @@ struct RootTabView: View {
 
 #Preview {
     RootTabView()
-    .environmentObject(ModelController())
-    .environmentObject(TabRouter())
+        .environmentObject(ModelController())
+        .environmentObject(TabRouter())
+        .environmentObject(CameraPermissionManager())
+        .environmentObject(WorldAnchorManager())
+        .environmentObject(LocationPermissionManager())
 }
+

@@ -21,6 +21,10 @@ struct MapScreen: View {
     @EnvironmentObject private var modelController: ModelController
     @EnvironmentObject private var tabRouter: TabRouter
 
+    @EnvironmentObject private var cameraPermission: CameraPermissionManager
+    @EnvironmentObject private var worldAnchorManager: WorldAnchorManager
+    @EnvironmentObject private var locationManager: LocationPermissionManager
+
     @State private var region = MKCoordinateRegion(
         center: CampusConfigProvider.campusCenter,
         span: AppConstants.Map.mapRegionSpan
@@ -36,10 +40,6 @@ struct MapScreen: View {
     @State private var teleportPreloadCancellable: AnyCancellable?
     @State private var teleportLaunchTask: Task<Void, Never>?
     @State private var teleportResetTask: Task<Void, Never>?
-
-    @StateObject private var cameraPermission = CameraPermissionManager()
-    @StateObject private var worldAnchorManager = WorldAnchorManager()
-    @StateObject private var locationManager = LocationPermissionManager()
 
     private var collectedCatalogItems: [DatabaseCollectible] {
         let collectedNames = Set(modelController.collectionItemsForCurrentUser().map(\.collectibleName))
@@ -448,6 +448,9 @@ struct MapScreen: View {
     MapScreen()
         .environmentObject(ModelController())
         .environmentObject(TabRouter())
+        .environmentObject(CameraPermissionManager())
+        .environmentObject(WorldAnchorManager())
+        .environmentObject(LocationPermissionManager())
 }
 
 private extension Color {
@@ -464,3 +467,4 @@ private extension Color {
         )
     }
 }
+
