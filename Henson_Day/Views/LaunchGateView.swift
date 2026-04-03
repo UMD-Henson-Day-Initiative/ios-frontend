@@ -3,6 +3,9 @@ import AVFoundation
 import CoreLocation
 import Combine
 
+/// App startup gate that checks camera and location permissions before allowing
+/// entry to the main app. Shows permission status, handles retry/settings flow,
+/// and waits for ModelController to finish seeding before transitioning to RootTabView.
 struct LaunchGateView: View {
     @EnvironmentObject private var modelController: ModelController
     @StateObject private var permissionState = LaunchPermissionState()

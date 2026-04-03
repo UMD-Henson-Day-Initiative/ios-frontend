@@ -1,5 +1,8 @@
 import SwiftUI
 
+/// Event schedule view with day-based filtering. Users pick a day tab to see
+/// that day's events, tap an event for details, and can navigate to the map
+/// or open the university website. Supports deep-linking via `TabRouter.focusedScheduleEventID`.
 struct ScheduleScreen: View {
     @EnvironmentObject private var modelController: ModelController
     @EnvironmentObject private var tabRouter: TabRouter
@@ -77,7 +80,7 @@ struct ScheduleScreen: View {
                     },
                     onOpenWebsite: {
                         selectedEvent = nil
-                        openURL(URL(string: "https://umd.edu/")!)
+                        openURL(URL(string: AppConstants.URLs.universityHome)!)
                     },
                     onOpenCollection: {
                         selectedEvent = nil

@@ -16,7 +16,7 @@ final class ProximityMonitor: ObservableObject {
     private var dismissedPinIDs = Set<UUID>()
     private var previousNearbyPinID: UUID?
 
-    private let proximityRadius: CLLocationDistance = 10
+    private let proximityRadius: CLLocationDistance = AppConstants.AR.proximityRadiusMeters
 
     func startMonitoring(locationManager: LocationPermissionManager, modelController: ModelController) {
         self.locationManager = locationManager
@@ -24,7 +24,7 @@ final class ProximityMonitor: ObservableObject {
 
         locationManager.$currentCoordinate
             .combineLatest(locationManager.$testingOverrideCoordinate)
-            .debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)
+            .debounce(for: .milliseconds(AppConstants.AR.proximityDebounceMilliseconds), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.evaluate()
             }

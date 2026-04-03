@@ -10,6 +10,11 @@ struct UserFacingErrorState: Identifiable, Equatable {
     let message: String
 }
 
+// NOTE: @MainActor is intentional. SwiftData's ModelContext is not thread-safe
+// and must be accessed from the actor it was created on. For the current dataset
+// size (~90 pins, ~10 players), main-thread SwiftData ops have no measurable
+// UI impact. If the dataset grows significantly, consider creating a background
+// ModelContext via ModelContext(container) on a detached task.
 @MainActor
 final class ModelController: ObservableObject {
     /// Current local user profile loaded from SwiftData.

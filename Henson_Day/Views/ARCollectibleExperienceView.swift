@@ -4,7 +4,21 @@ import ARKit
 import CoreLocation
 import Combine
 
+/// Full-screen AR experience for finding and collecting a muppet at a map pin.
+///
+/// **State machine flow:**
+/// 1. `tooFar` — User is outside spawn radius; shows distance and direction.
+/// 2. `detectSurface` / `waitingForSecondSurface` — User is close enough; AR session
+///    searches for a horizontal surface to place the collectible.
+/// 3. `placed` — Model is placed in the scene; user taps it to collect.
+/// 4. `collecting` → `captured` — Capture animation plays, points are awarded via
+///    `ModelController.captureCollectible(...)`, and the user is returned to the map.
+/// 5. `alreadyCollected` — User already owns this collectible; shown a message.
+/// 6. `noCollectiblesConfigured` — Pin has no collectible data; error state.
+///
+/// Teleport mode (DEBUG only) bypasses GPS proximity checks for testing.
 struct ARCollectibleExperienceView: View {
+    /// Tracks the user's progression through the AR collectible flow.
     enum FlowState {
         case tooFar
         case waitingForSecondSurface
@@ -50,7 +64,7 @@ struct ARCollectibleExperienceView: View {
     }
 
     private var collectiblePoints: Int {
-        activeCollectible?.points ?? 50
+        activeCollectible?.points ?? AppConstants.AR.defaultCollectiblePoints
     }
 
     private var formattedDistance: String {
@@ -294,6 +308,10 @@ struct ARCollectibleExperienceView: View {
         }
     }
 
+    /// Selects which collectible to display for this pin. Prefers uncollected items
+    /// so the user always sees something new. Falls back to any matching item if all
+    /// have been collected. Uses `collectibleIDs` on the pin if available, otherwise
+    /// falls back to the legacy `collectibleName` field.
     private func chooseCollectibleForCurrentPin() {
         let collectedNames = Set(modelController.collectionItemsForCurrentUser().map(\.collectibleName))
 
@@ -309,6 +327,10 @@ struct ARCollectibleExperienceView: View {
         activeCollectible = (notCollected.isEmpty ? candidates : notCollected).randomElement()
     }
 
+    /// Recalculates the current flow state based on GPS proximity, surface detection,
+    /// and collection status. Called on every location update and AR state change.
+    /// The state machine guards are evaluated in priority order: no collectible →
+    /// already collected → too far → teleport gate → surface detected → placed.
     private func recalculateProximityAndFlow() {
         guard activeCollectible != nil else {
             flowState = .noCollectiblesConfigured
@@ -349,6 +371,8 @@ struct ARCollectibleExperienceView: View {
         }
     }
 
+    /// Saves the captured collectible to SwiftData, plays the capture animation,
+    /// switches to the collection tab, and dismisses after a short delay.
     private func handleCollectTapped() {
         flowState = .collecting
 

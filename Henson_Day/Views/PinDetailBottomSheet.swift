@@ -1,5 +1,8 @@
 import SwiftUI
 
+/// Bottom sheet shown when a map pin is tapped. Displays pin info (type, title,
+/// time, location, description) and offers contextual actions: navigate in Apple Maps,
+/// open AR collectible, view event details, etc. Supports drag-to-dismiss gesture.
 struct PinDetailBottomSheet: View {
     let detail: MapPinDetail
     @Binding var isPresented: Bool

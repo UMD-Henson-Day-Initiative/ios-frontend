@@ -3,9 +3,9 @@ import SwiftUI
 struct ARMapContainerView: View {
     @Binding var isARPrimary: Bool
 
-    @StateObject private var cameraPermission = CameraPermissionManager()
-    @StateObject private var locationManager = LocationPermissionManager()
-    @StateObject private var worldAnchorManager = WorldAnchorManager()
+    @EnvironmentObject private var cameraPermission: CameraPermissionManager
+    @EnvironmentObject private var locationManager: LocationPermissionManager
+    @EnvironmentObject private var worldAnchorManager: WorldAnchorManager
 
     var body: some View {
         GeometryReader { geometry in

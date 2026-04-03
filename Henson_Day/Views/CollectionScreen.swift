@@ -1,5 +1,8 @@
 import SwiftUI
 
+/// Displays the user's collected items and the full collectible catalog.
+/// Tabs switch between "Collected" (items the user has found) and "Catalog"
+/// (all available collectibles with collected/uncollected status).
 struct CollectionScreen: View {
     @EnvironmentObject private var modelController: ModelController
     @State private var selectedTab = 0  // 0 = collected, 1 = catalog

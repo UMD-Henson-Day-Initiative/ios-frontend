@@ -1,6 +1,8 @@
 import Foundation
 import SwiftUI
 
+/// The six categories of map pins, each with a distinct color and SF Symbol.
+/// Used by both the map annotations and the pin detail bottom sheet.
 enum PinType: String, Codable, CaseIterable {
     case site
     case event
@@ -59,6 +61,8 @@ enum PinType: String, Codable, CaseIterable {
     }
 }
 
+/// View-model that bridges a `PinEntity` (SwiftData) to `PinDetailBottomSheet`.
+/// Created on-the-fly by `MapScreen.detailForPin(_:)` — not persisted.
 struct MapPinDetail: Identifiable, Equatable {
     let id: String
     let pinType: PinType
