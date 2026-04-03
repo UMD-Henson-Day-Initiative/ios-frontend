@@ -1,12 +1,13 @@
-//
 //  MapScreen.swift
 //  Henson_Day
 //
-//  Created by Jake Frischmann on 2/27/26.
+//  File Description: This file defines the MapScreen, the main map and camera hub of the Henson
+//  Day app. It displays an interactive campus map with pin annotations, supports toggling between
+//  a full-screen map and AR camera view with a swappable mini panel, handles pin selection and
+//  detail sheets, manages AR collectible experiences, and includes a testing teleport flow for
+//  jumping to collectible pin locations. It also defines a private Color extension for hex
+//  color initialization.
 //
-
-
-// MapScreen.swift
 
 import SwiftUI
 import MapKit

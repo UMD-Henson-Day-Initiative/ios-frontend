@@ -1,3 +1,12 @@
+//  LeaderboardScreen.swift
+//  Henson_Day
+//
+//  File Description: This file defines the LeaderboardScreen, which displays a ranked list of
+//  players sorted by total points. It includes a filter chip row for switching between All Campus,
+//  Friends, and Club views, a top three podium display, and a full scrollable ranked list. It also
+//  defines LeaderboardFilterChip, TopThreePodium, PodiumSlot, and LeaderboardRow as supporting
+//  views for the leaderboard layout.
+
 import SwiftUI
 import AVFoundation
 import CoreLocation

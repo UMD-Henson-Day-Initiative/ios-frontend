@@ -1,3 +1,13 @@
+//  ARCameraView.swift
+//  Henson_Day
+//
+//  File Description: This file manages the augmented reality camera experience for the Henson Day
+//  app. It handles AR session configuration, collectible placement in the real world via tap gestures,
+//  camera permission management, and world anchor management. It includes the main ARCameraView,
+//  a UIViewRepresentable bridge to RealityKit's ARView, a collectible picker sheet, and supporting
+//  managers for camera permissions and world anchors.
+//
+
 import SwiftUI
 import RealityKit
 import ARKit

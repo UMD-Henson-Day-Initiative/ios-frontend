@@ -1,3 +1,14 @@
+//  CollectibleScreen.swift
+//  Henson_Day
+//
+//  File Description: This file defines the CollectionScreen, which displays the user's collected
+//  collectibles and the full collectible catalog. It includes a stat summary header, a segmented
+//  picker to switch between collected and catalog views, a scrollable list of collected items with
+//  navigation to detail cards, and a grid showing all catalog collectibles with lock overlays for
+//  uncollected ones. It also defines CollectedItemCardView for list rows and
+//  CollectibleDetailCardScreen for the full detail view of a collected item.
+//
+
 import SwiftUI
 
 struct CollectionScreen: View {

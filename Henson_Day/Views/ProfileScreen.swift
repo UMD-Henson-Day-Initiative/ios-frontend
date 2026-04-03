@@ -1,4 +1,13 @@
-// ProfileScreen.swift
+//  ProfileScreen.swift
+//  Henson_Day
+//
+//  File Description: This file defines the ProfileScreen view for the Henson Day app.
+//  It displays the current user's profile information, including avatar, points, rank,
+//  collectibles, badges, week progress, and quick navigation actions.
+//  Users can customize their avatar type and color, view their stats in a header card,
+//  and access additional settings or log out.
+//  The file also includes reusable components for the profile header card,
+//  progress tiles, stat pills, and settings rows.
 
 import SwiftUI
 

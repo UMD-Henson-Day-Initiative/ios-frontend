@@ -1,12 +1,11 @@
-//
 //  EventDetailScreen.swift
 //  Henson_Day
 //
-//  Created by Jake Frischmann on 2/27/26.
-//
-
-
-// EventDetailScreen.swift
+//  File Description: This file defines the EventDetailScreen view, which displays detailed
+//  information about a specific Henson Day event. It shows the event's title, time, location,
+//  description, available collectible, similar events, and action buttons for getting directions
+//  or capturing a collectible via AR. It also defines the EventTypeChip helper view for
+//  displaying event type badges.
 
 import SwiftUI
 import MapKit

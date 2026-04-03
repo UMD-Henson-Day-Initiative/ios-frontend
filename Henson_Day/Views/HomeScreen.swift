@@ -1,10 +1,11 @@
-//
 //  HomeScreen.swift
 //  Henson_Day
 //
-//  Created by Jake Frischmann on 2/27/26.
+//  File Description: This file defines the HomeScreen, the main landing screen of the Henson Day
+//  app. It displays a hero banner, a description of the scavenger hunt, navigation CTAs to the
+//  map, schedule, and collection tabs, a top three collectors leaderboard preview, and summary
+//  stat chips. It also defines a private Color extension for initializing colors from hex strings.
 //
-
 
 // HomeScreen.swift
 

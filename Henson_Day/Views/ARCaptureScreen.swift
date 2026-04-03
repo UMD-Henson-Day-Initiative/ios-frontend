@@ -1,12 +1,12 @@
-//
-//  ARCaptureScreen.swift
+//  ARCollectibleExperienceView.swift
 //  Henson_Day
 //
-//  Created by Jake Frischmann on 2/27/26.
+//  File Description: This file defines the ARCollectibleExperienceView, which manages the full
+//  AR collectible experience for a given pin. It handles proximity detection, surface scanning,
+//  collectible spawning, tap-to-collect interactions, and capture animations. It also defines
+//  ARPlacementView, a UIViewRepresentable that bridges RealityKit's ARView for placing and
+//  animating 3D collectible models in the real world.
 //
-
-
-// ARCaptureScreen.swift (skeleton that uses your AR canvas)
 
 import SwiftUI
 

@@ -1,3 +1,22 @@
+//  ARMapContainerView.swift
+//  Henson_Day
+//
+//  File Description: This file defines the ARMapContainerView, which manages the dual-view
+//  layout that allows users to toggle between a full-screen AR camera view and a map view.
+//  It handles camera and location permission requests on appear, renders a floating overlay
+//  of whichever view is secondary, and provides a profile navigation button. It also defines
+//  CameraPermissionPlaceholderView, shown when camera access has been denied or restricted.
+//
+//  ARCameraView.swift
+//  Henson_Day
+//
+//  File Description: This file manages the augmented reality camera experience for the Henson Day
+//  app. It handles AR session configuration, collectible placement in the real world via tap gestures,
+//  camera permission management, and world anchor management. It includes the main ARCameraView,
+//  a UIViewRepresentable bridge to RealityKit's ARView, a collectible picker sheet, and supporting
+//  managers for camera permissions and world anchors.
+//
+
 import SwiftUI
 
 struct ARMapContainerView: View {

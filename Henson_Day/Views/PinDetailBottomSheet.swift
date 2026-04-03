@@ -1,3 +1,14 @@
+//  PinDetailBottomSheet.swift
+//  Henson_Day
+//
+//  File Description: This file defines a SwiftUI bottom sheet view for displaying detailed
+//  information about a map pin within the app. The sheet includes the pin's
+//  title, description, metadata, and any associated AR collectibles. It
+//  supports primary actions (e.g., view in AR, start battle), navigation,
+//  and an optional "Details" button. The sheet can be dismissed via a
+//  drag gesture or programmatically.
+//
+
 import SwiftUI
 
 struct PinDetailBottomSheet: View {

@@ -25,6 +25,7 @@
 
 /* Begin PBXFileReference section */
 		788F72702F622FFE004EE753 /* Henson_Day.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Henson_Day.xcodeproj; sourceTree = "<group>"; };
+		BF5E44812F805B7F00C720FD /* Henson_Day.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Henson_Day.xcodeproj; sourceTree = "<group>"; };
 		DBB3AA5F2F52A0FD00F99705 /* Henson_Day.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Henson_Day.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DBB3AA6C2F52A0FE00F99705 /* Henson_DayTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = Henson_DayTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DBB3AA762F52A0FE00F99705 /* Henson_DayUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = Henson_DayUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -75,6 +76,11 @@
 
 /* Begin PBXGroup section */
 		788F72742F622FFE004EE753 /* Products */ = {
+			isa = PBXGroup;
+			name = Products;
+			sourceTree = "<group>";
+		};
+		BF5E44832F805B7F00C720FD /* Products */ = {
 			isa = PBXGroup;
 			name = Products;
 			sourceTree = "<group>";
@@ -214,6 +220,10 @@
 				{
 					ProductGroup = 788F72742F622FFE004EE753 /* Products */;
 					ProjectRef = 788F72702F622FFE004EE753 /* Henson_Day.xcodeproj */;
+				},
+				{
+					ProductGroup = BF5E44832F805B7F00C720FD /* Products */;
+					ProjectRef = BF5E44812F805B7F00C720FD /* Henson_Day.xcodeproj */;
 				},
 				{
 					ProductGroup = DBEDE3E22F7DB472007BB55E /* Products */;
