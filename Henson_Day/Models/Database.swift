@@ -1,6 +1,19 @@
 import Foundation
 import CoreLocation
 
+/// Static seed data for the Henson Day app.
+///
+/// `Database` is the single source of truth for offline / first-launch content.
+/// `ModelController` reads these values during initial seeding to populate SwiftData
+/// entities (`PlayerEntity`, `PinEntity`, etc.). Nothing here is persisted directly —
+/// treat it as a compile-time fixture file analogous to a JSON bundle asset.
+///
+/// The intermediate "Seed" / value types (`DatabasePlayerSeed`, `DatabasePinSeed`,
+/// `DatabaseEvent`, `DatabaseCollectible`) are plain structs used only for seeding
+/// and in-memory catalog lookups; they are not SwiftData models.
+
+/// Plain-struct representation of a player used during first-launch seeding.
+/// Converted to `PlayerEntity` by `ModelController.seedIfNeeded()`.
 struct DatabasePlayerSeed {
     let displayName: String
     let avatarColorHex: String
