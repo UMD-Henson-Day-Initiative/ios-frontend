@@ -15,7 +15,12 @@ class RouteManager: ObservableObject {
     @Published var currentStepIndex: Int = 0
     @Published var distanceToNextStep: CLLocationDistance = 0
     @Published var isNavigating: Bool = false
-    
+    @Published var routeError: UserFacingErrorState?
+
+    func clearRouteError() {
+        routeError = nil
+    }
+
     var currentInstruction: String {
         guard let route, currentStepIndex < route.steps.count else {
             return ""
@@ -50,7 +55,10 @@ class RouteManager: ObservableObject {
             self.currentStepIndex = 0
             self.isNavigating = true
         } catch {
-            print("Route calculation failed: \(error)")
+            routeError = UserFacingErrorState(
+                title: "Directions unavailable",
+                message: "Couldn't calculate walking directions. Check your connection and try again."
+            )
         }
     }
     
