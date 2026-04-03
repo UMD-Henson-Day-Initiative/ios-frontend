@@ -9,6 +9,9 @@ import Foundation
 import MapKit
 import Combine
 
+// NOTE: @MainActor is acceptable here. MKDirections.calculate() is async and
+// properly suspends without blocking the main thread. All @Published properties
+// drive UI, so main-actor isolation simplifies state updates.
 @MainActor
 class RouteManager: ObservableObject {
     @Published var route: MKRoute?
