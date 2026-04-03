@@ -17,6 +17,16 @@ enum AppConstants {
         static let mapRegionSpan = MKCoordinateSpan(latitudeDelta: 0.012, longitudeDelta: 0.012)
         static let locationFollowSpan = MKCoordinateSpan(latitudeDelta: 0.007, longitudeDelta: 0.007)
         static let primarySwapAnimationSeconds: TimeInterval = 0.2
+
+        static let campusBoundsMinLat = 38.981086
+        static let campusBoundsMaxLat = 38.994498
+        static let campusBoundsMinLon = -76.954429
+        static let campusBoundsMaxLon = -76.934774
+        static let cameraMinDistance: Double = 50
+        static let cameraMaxDistance: Double = 3000
+        static let defaultCameraDistance: Double = 350
+        static let defaultCameraPitch: Double = 55
+        static let followLossThreshold: Double = 0.0005
     }
 
     enum AR {
@@ -31,6 +41,10 @@ enum AppConstants {
         static let collectRevealDelaySeconds: TimeInterval = 0.9
         static let collectDismissDelaySeconds: TimeInterval = 0.55
         static let collectibleAnimationCompletionDelaySeconds: TimeInterval = 0.48
+
+        static let proximityRadiusMeters: CLLocationDistance = 10
+        static let proximityDebounceMilliseconds: Int = 500
+        static let defaultCollectiblePoints: Int = 50
 
         static let forcedSpawnDistanceMeters: Float = 0.9
         static let fallbackSphereRadius: Float = 0.12
@@ -56,6 +70,15 @@ enum AppConstants {
             static let cameraPlacementLargeDimension: Float = 0.25
             static let cameraPlacementDefaultDimension: Float = 0.20
         }
+    }
+
+    enum Route {
+        static let stepAdvanceDistanceMeters: CLLocationDistance = 15
+        static let arrivalDistanceMeters: CLLocationDistance = 20
+    }
+
+    enum URLs {
+        static let universityHome = "https://umd.edu/"
     }
 
     enum SceneKitPortal { // playing around from tutorials that were sent to GroupChat

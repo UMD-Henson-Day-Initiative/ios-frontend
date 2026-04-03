@@ -77,7 +77,7 @@ struct ScheduleScreen: View {
                     },
                     onOpenWebsite: {
                         selectedEvent = nil
-                        openURL(URL(string: "https://umd.edu/")!)
+                        openURL(URL(string: AppConstants.URLs.universityHome)!)
                     },
                     onOpenCollection: {
                         selectedEvent = nil

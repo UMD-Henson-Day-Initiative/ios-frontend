@@ -80,13 +80,13 @@ class RouteManager: ObservableObject {
         
         distanceToNextStep = userLocation.distance(from: stepEndLocation)
         
-        // Advance to next step when within 15 meters
-        if distanceToNextStep < 15 && currentStepIndex < steps.count - 1 {
+        // Advance to next step when within stepAdvanceDistanceMeters
+        if distanceToNextStep < AppConstants.Route.stepAdvanceDistanceMeters && currentStepIndex < steps.count - 1 {
             currentStepIndex += 1
         }
-        
+
         // Check if arrived at destination
-        if currentStepIndex == steps.count - 1 && distanceToNextStep < 20 {
+        if currentStepIndex == steps.count - 1 && distanceToNextStep < AppConstants.Route.arrivalDistanceMeters {
             isNavigating = false
         }
     }

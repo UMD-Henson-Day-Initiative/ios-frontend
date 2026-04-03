@@ -11,10 +11,10 @@ struct MapView: View {
     let pins: [PinEntity]
     var onPinTapped: (PinEntity) -> Void = { _ in }
 
-    static let minLat = 38.981086
-    static let maxLat = 38.994498
-    static let minLon = -76.954429
-    static let maxLon = -76.934774
+    static let minLat = AppConstants.Map.campusBoundsMinLat
+    static let maxLat = AppConstants.Map.campusBoundsMaxLat
+    static let minLon = AppConstants.Map.campusBoundsMinLon
+    static let maxLon = AppConstants.Map.campusBoundsMaxLon
 
     static let umdCenter = CLLocationCoordinate2D(
         latitude: (minLat + maxLat) / 2,
@@ -29,19 +29,19 @@ struct MapView: View {
                 longitudeDelta: maxLon - minLon
             )
         ),
-        minimumDistance: 50,
-        maximumDistance: 3000
+        minimumDistance: AppConstants.Map.cameraMinDistance,
+        maximumDistance: AppConstants.Map.cameraMaxDistance
     )
 
     @StateObject private var locationManager = LocationManager()
 
-    @State private var cameraDistance: Double = 350
+    @State private var cameraDistance: Double = AppConstants.Map.defaultCameraDistance
     @State private var cameraPosition: MapCameraPosition = .camera(
         MapCamera(
             centerCoordinate: umdCenter,
-            distance: 350,
+            distance: AppConstants.Map.defaultCameraDistance,
             heading: 0,
-            pitch: 55
+            pitch: AppConstants.Map.defaultCameraPitch
         )
     )
     @State private var isFollowingUser = true
@@ -104,7 +104,7 @@ struct MapView: View {
                         let camLon = context.camera.centerCoordinate.longitude
                         let latDiff = abs(camLat - location.coordinate.latitude)
                         let lonDiff = abs(camLon - location.coordinate.longitude)
-                        if latDiff > 0.0005 || lonDiff > 0.0005 {
+                        if latDiff > AppConstants.Map.followLossThreshold || lonDiff > AppConstants.Map.followLossThreshold {
                             isFollowingUser = false
                         }
                     }
@@ -148,7 +148,7 @@ struct MapView: View {
                             centerCoordinate: center,
                             distance: cameraDistance,
                             heading: 0,
-                            pitch: cameraPosition.camera?.pitch ?? 55
+                            pitch: cameraPosition.camera?.pitch ?? AppConstants.Map.defaultCameraPitch
                         )
                         withAnimation(.easeOut(duration: 0.3)) {
                             cameraPosition = .camera(camera)
@@ -168,15 +168,15 @@ struct MapView: View {
 
                 // Recenter button
                 Button {
-                    cameraDistance = 350
+                    cameraDistance = AppConstants.Map.defaultCameraDistance
                     isFollowingUser = true
                     if let location = locationManager.location {
                         let heading = isFollowingCompass ? playerHeading : 0.0
                         let camera = MapCamera(
                             centerCoordinate: location.coordinate,
-                            distance: 350,
+                            distance: AppConstants.Map.defaultCameraDistance,
                             heading: heading,
-                            pitch: 55
+                            pitch: AppConstants.Map.defaultCameraPitch
                         )
                         withAnimation(.easeOut(duration: 0.4)) {
                             cameraPosition = .camera(camera)
@@ -214,7 +214,7 @@ struct MapView: View {
             centerCoordinate: location.coordinate,
             distance: cameraDistance,
             heading: heading,
-            pitch: 55
+            pitch: AppConstants.Map.defaultCameraPitch
         )
         withAnimation(.easeInOut(duration: 0.3)) {
             cameraPosition = .camera(camera)

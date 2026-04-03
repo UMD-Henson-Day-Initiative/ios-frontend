@@ -50,7 +50,7 @@ struct ARCollectibleExperienceView: View {
     }
 
     private var collectiblePoints: Int {
-        activeCollectible?.points ?? 50
+        activeCollectible?.points ?? AppConstants.AR.defaultCollectiblePoints
     }
 
     private var formattedDistance: String {
