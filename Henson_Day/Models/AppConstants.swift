@@ -31,9 +31,6 @@ enum AppConstants {
 
     enum AR {
         static let spawnRadiusMeters: CLLocationDistance = 30
-        static let maxPlacements = 3
-        static let walkAwayDistanceMeters: Float = 12
-
         // AR flow timing values
         static let teleportFallbackDelaySeconds: TimeInterval = 2.0
         static let teleportLaunchDelaySeconds: TimeInterval = 0.2
@@ -65,10 +62,6 @@ enum AppConstants {
                 "toy_biplane_realistic": 0.125,
                 "slide": 0.10
             ]
-
-            static let cameraPlacementToyDimension: Float = 0.14
-            static let cameraPlacementLargeDimension: Float = 0.25
-            static let cameraPlacementDefaultDimension: Float = 0.20
         }
     }
 

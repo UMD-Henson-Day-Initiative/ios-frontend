@@ -32,19 +32,12 @@ struct MapScreen: View {
     @State private var selectedPinID: UUID?
     @State private var isDetailPresented = false
     @State private var arPin: PinEntity?
-    @State private var showLeaderboard = false
-    @State private var showCollection = false
     @State private var isCameraPrimary = false
     @State private var suppressMiniCameraFeed = false
     @State private var isPreparingTeleportLaunch = false
     @State private var teleportPreloadCancellable: AnyCancellable?
     @State private var teleportLaunchTask: Task<Void, Never>?
     @State private var teleportResetTask: Task<Void, Never>?
-
-    private var collectedCatalogItems: [DatabaseCollectible] {
-        let collectedNames = Set(modelController.collectionItemsForCurrentUser().map(\.collectibleName))
-        return modelController.collectibleCatalog.filter { collectedNames.contains($0.name) }
-    }
 
     private var selectedPin: PinEntity? {
         modelController.pins.first(where: { $0.id == selectedPinID })
@@ -65,7 +58,6 @@ struct MapScreen: View {
                 VStack(spacing: 0) {
                     topStatusStrip
                     Spacer()
-                    floatingActions
                 }
 
                 miniSwapPanel
@@ -98,15 +90,6 @@ struct MapScreen: View {
             }
             .toolbar(.hidden, for: .navigationBar)
         }
-        .sheet(isPresented: $showLeaderboard) {
-            MinimalLeaderboardSheet(
-                players: modelController.leaderboardUsers,
-                localUserID: modelController.currentUser?.id
-            )
-        }
-        .sheet(isPresented: $showCollection) {
-            MyCollectionSheet(items: modelController.collectionItemsForCurrentUser())
-        }
         .fullScreenCover(item: $arPin) { pin in
             ARCollectibleExperienceView(pin: pin)
                 .environmentObject(modelController)
@@ -135,9 +118,7 @@ struct MapScreen: View {
                 ARCameraView(
                     isCameraAuthorized: cameraPermission.isAuthorized,
                     worldAnchorManager: worldAnchorManager,
-                    availableCollectibles: collectedCatalogItems,
-                    isPaused: arPin != nil || isPreparingTeleportLaunch,
-                    showPlacementControls: true
+                    isPaused: arPin != nil || isPreparingTeleportLaunch
                 )
             }
         } else {
@@ -181,31 +162,6 @@ struct MapScreen: View {
                 Spacer()
             }
 
-            HStack {
-                Spacer()
-                Text("\(modelController.currentUser?.totalPoints ?? 0) pts • \(modelController.currentUser?.collectedCount ?? 0) collectibles")
-                    .font(.footnote.weight(.semibold))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(.thinMaterial)
-                    .clipShape(Capsule())
-            }
-
-            HStack {
-                Spacer()
-                Button {
-                    withAnimation(.easeInOut(duration: AppConstants.Map.primarySwapAnimationSeconds)) {
-                        isCameraPrimary.toggle()
-                    }
-                } label: {
-                    Label(isCameraPrimary ? "Map" : "Camera", systemImage: isCameraPrimary ? "map.fill" : "camera.fill")
-                        .font(.caption.weight(.semibold))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(.thinMaterial)
-                        .clipShape(Capsule())
-                }
-            }
 
             if isCameraPrimary && isInTestingMode {
                 HStack {
@@ -243,9 +199,7 @@ struct MapScreen: View {
                                 ARCameraView(
                                     isCameraAuthorized: cameraPermission.isAuthorized,
                                     worldAnchorManager: worldAnchorManager,
-                                    availableCollectibles: collectedCatalogItems,
-                                    isPaused: arPin != nil || isPreparingTeleportLaunch,
-                                    showPlacementControls: false
+                                    isPaused: arPin != nil || isPreparingTeleportLaunch
                                 )
                             }
                         }
@@ -291,32 +245,6 @@ struct MapScreen: View {
         }
     }
 
-    private var floatingActions: some View {
-        HStack(spacing: 12) {
-            Button {
-                showLeaderboard = true
-            } label: {
-                Label("Leaderboard", systemImage: "list.number")
-                    .font(.subheadline.weight(.semibold))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(.thinMaterial)
-                    .clipShape(Capsule())
-            }
-
-            Button {
-                showCollection = true
-            } label: {
-                Label("My Collection", systemImage: "cube.box")
-                    .font(.subheadline.weight(.semibold))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(.thinMaterial)
-                    .clipShape(Capsule())
-            }
-        }
-        .padding(.bottom, 18)
-    }
 
     private func detailForPin(_ pin: PinEntity) -> MapPinDetail {
         let parsed = parseSubtitle(pin.subtitle)
@@ -353,7 +281,7 @@ struct MapScreen: View {
         case .battle:
             arPin = pin
         case .homebase:
-            showCollection = true
+            tabRouter.selectedTab = .collection
         case .site, .concert:
             break
         }

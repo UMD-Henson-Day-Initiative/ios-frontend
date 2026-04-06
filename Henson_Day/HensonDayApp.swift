@@ -18,6 +18,7 @@ struct HensonDayApp: App {
                 .environmentObject(cameraPermission)
                 .environmentObject(worldAnchorManager)
                 .environmentObject(locationManager)
+                .preferredColorScheme(.light)
         }
     }
 }
