@@ -140,7 +140,7 @@ struct MapView: View {
                     .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
             }
             .padding(.leading, 14)
-            .padding(.top, 220)
+            .padding(.top, 170)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .onAppear {

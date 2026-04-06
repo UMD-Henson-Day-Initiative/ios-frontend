@@ -3,6 +3,7 @@ import RealityKit
 import ARKit
 import AVFoundation
 import CoreLocation
+import Combine
 
 struct ARCameraView: View {
     let isCameraAuthorized: Bool
