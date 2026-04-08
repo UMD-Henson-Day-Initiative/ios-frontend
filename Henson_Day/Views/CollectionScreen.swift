@@ -115,7 +115,7 @@ private struct DexHeader: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 0) {
-            Text("Pokédex")
+            Text("UMD Index")
                 .font(.system(size: 28, weight: .black))
                 .foregroundStyle(textHi)
             Text(" #")
