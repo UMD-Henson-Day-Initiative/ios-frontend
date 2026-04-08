@@ -7,6 +7,7 @@ enum AppTab: Hashable {
     case schedule
     case collection
     case profile
+    case leaderboard
 }
 
 @MainActor
