@@ -71,6 +71,11 @@ struct LeaderboardScreen: View {
             }
             .navigationTitle("Leaderboard")
             .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    ProfileToolbarButton()
+                }
+            }
         }
     }
 }

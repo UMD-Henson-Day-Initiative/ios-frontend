@@ -362,3 +362,38 @@ private extension Color {
         .environmentObject(ModelController())
         .environmentObject(TabRouter())
 }
+
+// MARK: - Profile toolbar button (shared across all screens)
+
+struct ProfileToolbarButton: View {
+    @EnvironmentObject private var modelController: ModelController
+    @EnvironmentObject private var tabRouter: TabRouter
+    @State private var showProfile = false
+
+    var body: some View {
+        Button {
+            showProfile = true
+        } label: {
+            if let user = modelController.currentUser {
+                Image(systemName: user.avatarType.symbolName)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 32, height: 32)
+                    .background(Color(hex: user.avatarColorHex))
+                    .clipShape(Circle())
+            } else {
+                Image(systemName: "person.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(DS.Color.primary)
+            }
+        }
+        .sheet(isPresented: $showProfile) {
+            ProfileScreen()
+                .environmentObject(modelController)
+                .environmentObject(tabRouter)
+        }
+    }
+}
+
+// Local Color(hex:) helper for ProfileToolbarButton is provided by the existing
+// extension defined later in this file.

@@ -20,9 +20,13 @@ struct ScheduleScreen: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                DS.Color.surface.ignoresSafeArea()
+                Color.white.ignoresSafeArea()
                 ScrollView {
                     VStack(spacing: DS.Spacing.section) {
+                        // Fun muppet-themed header banner
+                        ScheduleHeaderBanner()
+                            .padding(.horizontal, DS.Spacing.screenH)
+
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
                                 ForEach(days.isEmpty ? Array(1...7) : days, id: \.self) { day in
@@ -74,6 +78,11 @@ struct ScheduleScreen: View {
             }
             .navigationTitle("Schedule")
             .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    ProfileToolbarButton()
+                }
+            }
             .fullScreenCover(item: $selectedEvent) { event in
                 ScheduleEventDetailFullScreen(
                     event: event,
@@ -195,7 +204,7 @@ struct ScheduleEventCard: View {
             .padding(.vertical, 14)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DS.Color.surfaceElevated)
+        .background(collectible.map { $0.rarity.rarityTint() } ?? DS.Color.surfaceElevated)
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.card, style: .continuous))
         .shadow(color: DS.Shadow.cardColor, radius: DS.Shadow.cardRadius, x: DS.Shadow.cardX, y: DS.Shadow.cardY)
     }
@@ -235,7 +244,7 @@ private struct ScheduleEventDetailFullScreen: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                DS.Color.surface.ignoresSafeArea()
+                Color.white.ignoresSafeArea()
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: DS.Spacing.card) {
                         if let c = collectible {
@@ -323,6 +332,41 @@ private struct DetailActionButton: View {
                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.card, style: .continuous))
                 .shadow(color: DS.Shadow.cardColor, radius: 6, x: 0, y: 2)
         }
+    }
+}
+
+// MARK: - Header banner
+
+private struct ScheduleHeaderBanner: View {
+    var body: some View {
+        HStack(spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("This Week's Events")
+                    .font(DS.Typography.title1)
+                    .foregroundStyle(DS.Color.campusNight)
+                Text("Attend events, collect muppets, earn points!")
+                    .font(DS.Typography.body)
+                    .foregroundStyle(DS.Color.neutral)
+            }
+            Spacer()
+            ZStack {
+                Circle()
+                    .fill(DS.Color.primaryTint)
+                    .frame(width: 60, height: 60)
+                Text("🐸")
+                    .font(.system(size: 32))
+            }
+        }
+        .padding(DS.Spacing.cardPad)
+        .background(
+            LinearGradient(
+                colors: [DS.Color.primaryTint, DS.Color.Rarity.legendaryTint],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.card, style: .continuous))
+        .shadow(color: DS.Color.primary.opacity(0.08), radius: 10, x: 0, y: 4)
     }
 }
 

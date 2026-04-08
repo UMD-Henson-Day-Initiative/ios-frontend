@@ -41,10 +41,10 @@ struct RootTabView: View {
                     Label("Collection", systemImage: tabRouter.selectedTab == .collection ? "star.square.fill" : "star.square")
                 }
 
-            ProfileScreen()
-                .tag(AppTab.profile)
+            LeaderboardScreen()
+                .tag(AppTab.leaderboard)
                 .tabItem {
-                    Label("Profile", systemImage: tabRouter.selectedTab == .profile ? "person.circle.fill" : "person.circle")
+                    Label("Leaderboard", systemImage: tabRouter.selectedTab == .leaderboard ? "trophy.fill" : "trophy")
                 }
         }
         .tint(DS.Color.primary)
