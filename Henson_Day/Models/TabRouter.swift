@@ -8,6 +8,7 @@ enum AppTab: Hashable {
     case schedule
     case collection
     case profile
+    case leaderboard
 }
 
 /// Manages cross-tab navigation state. Views set `selectedTab` to switch tabs

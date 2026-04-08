@@ -45,6 +45,13 @@ struct RootTabView: View {
                     Text("Collection")
                 }
 
+            LeaderboardScreen()
+                .tag(AppTab.leaderboard)
+                .tabItem {
+                    Image(systemName: "trophy.fill")
+                    Text("Leaderboard")
+                }
+
             ProfileScreen()
                 .tag(AppTab.profile)
                 .tabItem {
