@@ -59,6 +59,15 @@ enum AppConstants {
         }
     }
 
+    enum Schedule {
+        /// Anchor date for Day 1 of the Henson Day event week.
+        static let weekStart: Date = {
+            var comps = DateComponents()
+            comps.year = 2026; comps.month = 4; comps.day = 14
+            return Calendar.current.startOfDay(for: Calendar.current.date(from: comps) ?? Date())
+        }()
+    }
+
     enum SceneKitPortal { // playing around from tutorials that were sent to GroupChat
         static let boxWidth: CGFloat = 0.2
         static let boxHeight: CGFloat = 1.0
