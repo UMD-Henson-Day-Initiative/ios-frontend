@@ -20,45 +20,34 @@ struct RootTabView: View {
             HomeScreen()
                 .tag(AppTab.home)
                 .tabItem {
-                    Image(systemName: "house.fill")
-                    Text("Home")
+                    Label("Home", systemImage: tabRouter.selectedTab == .home ? "house.fill" : "house")
                 }
 
             ScheduleScreen()
                 .tag(AppTab.schedule)
                 .tabItem {
-                    Image(systemName: "calendar")
-                    Text("Schedule")
+                    Label("Schedule", systemImage: "calendar")
                 }
-            
+
             MapScreen()
                 .tag(AppTab.map)
                 .tabItem {
-                    Image(systemName: "map.fill")
-                    Text("Map")
+                    Label("Map", systemImage: tabRouter.selectedTab == .map ? "map.fill" : "map")
                 }
 
             CollectionScreen()
                 .tag(AppTab.collection)
                 .tabItem {
-                    Image(systemName: "cube.box.fill")
-                    Text("Collection")
-                }
-
-            LeaderboardScreen()
-                .tag(AppTab.leaderboard)
-                .tabItem {
-                    Image(systemName: "trophy.fill")
-                    Text("Leaderboard")
+                    Label("Collection", systemImage: tabRouter.selectedTab == .collection ? "star.square.fill" : "star.square")
                 }
 
             ProfileScreen()
                 .tag(AppTab.profile)
                 .tabItem {
-                    Image(systemName: "person.crop.circle")
-                    Text("Profile")
+                    Label("Profile", systemImage: tabRouter.selectedTab == .profile ? "person.circle.fill" : "person.circle")
                 }
         }
+        .tint(DS.Color.primary)
         .alert(
             modelController.userFacingError?.title ?? "Error",
             isPresented: Binding(

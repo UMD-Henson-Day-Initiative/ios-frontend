@@ -1,353 +1,346 @@
 // ProfileScreen.swift
+// Henson_Day
 
 import SwiftUI
 
 struct ProfileScreen: View {
     @EnvironmentObject private var modelController: ModelController
     @EnvironmentObject private var tabRouter: TabRouter
+    @State private var progressAppeared = false
+    @State private var showSignOutAlert = false
 
     private var snapshot: UserProfileSnapshot {
         UserDatabase.profileSnapshot(from: modelController)
     }
 
-    private var unlockedBadges: Int { 3 }
-
     private let avatarColors = ["#D7263D", "#2D7FF9", "#22C55E", "#F59E0B", "#A855F7", "#14B8A6"]
+    private let unlockedBadges = 3
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 16) {
-                    // Title row
-                    HStack {
-                        Text("Profile")
-                            .font(.largeTitle.bold())
-                        Spacer()
-                        Button {
-                            tabRouter.selectedTab = .profile
-                        } label: {
-                            Image(systemName: "gearshape")
-                                .font(.title3)
-                        }
-                    }
-                    .padding(.horizontal)
+            ZStack {
+                DS.Color.surface.ignoresSafeArea()
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: DS.Spacing.section) {
+                        // Avatar section
+                        AvatarSection(
+                            snapshot: snapshot,
+                            modelController: modelController,
+                            avatarColors: avatarColors
+                        )
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Customize Avatar")
-                            .font(.headline)
+                        // Stats card
+                        StatsCard(
+                            snapshot: snapshot,
+                            collectiblesTotal: modelController.collectibleCatalog.count,
+                            badgesCount: unlockedBadges
+                        )
+                        .padding(.horizontal, DS.Spacing.screenH)
 
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 10) {
-                                ForEach(AvatarType.allCases, id: \.self) { avatar in
-                                    Button {
-                                        modelController.updateCurrentUserAvatar(
-                                            type: avatar,
-                                            colorHex: modelController.currentUser?.avatarColorHex ?? "#D7263D"
-                                        )
-                                    } label: {
-                                        Image(systemName: avatar.symbolName)
-                                            .font(.headline)
-                                            .foregroundStyle(.white)
-                                            .frame(width: 34, height: 34)
-                                            .background(Color(hex: modelController.currentUser?.avatarColorHex ?? "#D7263D"))
-                                            .clipShape(Circle())
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                        }
+                        // Week progress
+                        VStack(alignment: .leading, spacing: DS.Spacing.card) {
+                            Text("This Week")
+                                .font(DS.Typography.title2)
+                                .foregroundStyle(DS.Color.campusNight)
 
-                        HStack(spacing: 8) {
-                            ForEach(avatarColors, id: \.self) { colorHex in
-                                Button {
-                                    modelController.updateCurrentUserAvatar(
-                                        type: modelController.currentUser?.avatarType ?? .turtle,
-                                        colorHex: colorHex
-                                    )
-                                } label: {
-                                    Circle()
-                                        .fill(Color(hex: colorHex))
-                                        .frame(width: 24, height: 24)
-                                        .overlay(Circle().stroke(.white, lineWidth: 1))
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-                    .padding(.horizontal)
-
-                    // User header card
-                    ProfileHeaderCard(
-                        displayName: snapshot.displayName,
-                        totalPoints: snapshot.totalPoints,
-                        rank: snapshot.rank,
-                        collectiblesCount: snapshot.collectedCount,
-                        badgesCount: unlockedBadges,
-                        avatarColorHex: modelController.currentUser?.avatarColorHex ?? "#D7263D",
-                        avatarSymbol: modelController.currentUser?.avatarType.symbolName ?? "person.fill"
-                    )
-                    .padding(.horizontal)
-
-                    // Quick actions
-                    HStack(spacing: 12) {
-                        Button {
-                            tabRouter.selectedTab = .map
-                        } label: {
-                            HStack {
-                                Image(systemName: "map.fill")
-                                    .foregroundStyle(Color("UMDGold"))
-                                Text("Go to Map")
-                            }
-                            .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(.secondary)
-
-                        Button {
-                            tabRouter.selectedTab = .schedule
-                        } label: {
-                            HStack {
-                                Image(systemName: "calendar")
-                                    .foregroundStyle(Color("UMDRed"))
-                                Text("Go to Schedule")
-                            }
-                            .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(.secondary)
-                    }
-                    .padding(.horizontal)
-
-                    // Week progress
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Week Progress")
-                            .font(.headline)
-
-                        VStack(spacing: 10) {
-                            ProgressTile(
+                            AnimatedProgressRow(
                                 icon: "mappin.and.ellipse",
-                                iconColor: Color("UMDRed"),
+                                iconColor: DS.Color.primary,
                                 title: "Events Attended",
-                                valueLabel: "\(max(snapshot.collectedCount * 2, 1)) / 15 goal",
-                                progress: min(Double(max(snapshot.collectedCount * 2, 1)) / 15.0, 1)
+                                value: max(snapshot.collectedCount * 2, 1),
+                                total: 15,
+                                fillColor: DS.Color.primary,
+                                appeared: progressAppeared
                             )
-                            ProgressTile(
+                            AnimatedProgressRow(
                                 icon: "sparkles",
-                                iconColor: Color("UMDGold"),
-                                title: "Collection Progress",
-                                valueLabel: "\(snapshot.collectedCount) / \(modelController.collectibleCatalog.count)",
-                                progress: modelController.collectibleCatalog.isEmpty
-                                    ? 0
-                                    : Double(snapshot.collectedCount) / Double(modelController.collectibleCatalog.count)
+                                iconColor: DS.Color.gold,
+                                title: "Collectibles",
+                                value: snapshot.collectedCount,
+                                total: max(modelController.collectibleCatalog.count, 1),
+                                fillColor: DS.Color.gold,
+                                appeared: progressAppeared
                             )
-                            ProgressTile(
+                            AnimatedProgressRow(
                                 icon: "trophy.fill",
-                                iconColor: .orange,
+                                iconColor: DS.Color.statusCompleted,
                                 title: "Badges Unlocked",
-                                valueLabel: "\(unlockedBadges) / 3",
-                                progress: Double(unlockedBadges) / 3.0
+                                value: unlockedBadges,
+                                total: 3,
+                                fillColor: DS.Color.statusCompleted,
+                                appeared: progressAppeared
                             )
                         }
-                    }
-                    .padding(.horizontal)
+                        .padding(.horizontal, DS.Spacing.screenH)
 
-                    // Settings-ish rows
-                    VStack(spacing: 8) {
-                        SettingsRow(
-                            icon: "bell.fill",
-                            iconColor: .blue,
-                            title: "Notifications"
-                        )
-                        SettingsRow(
-                            icon: "gearshape.fill",
-                            iconColor: .gray,
-                            title: "Settings"
-                        )
-                        SettingsRow(
-                            icon: "rectangle.portrait.and.arrow.right",
-                            iconColor: .red,
-                            title: "Log Out",
-                            destructive: true
-                        )
+                        // Quick actions
+                        HStack(spacing: DS.Spacing.card) {
+                            SecondaryPillButton(title: "Go to Map", icon: "map.fill") {
+                                tabRouter.selectedTab = .map
+                            }
+                            SecondaryPillButton(title: "Schedule", icon: "calendar") {
+                                tabRouter.selectedTab = .schedule
+                            }
+                        }
+                        .padding(.horizontal, DS.Spacing.screenH)
+
+                        // Sign out
+                        Button {
+                            showSignOutAlert = true
+                        } label: {
+                            Text("Sign out")
+                                .font(DS.Typography.body)
+                                .foregroundStyle(DS.Color.neutral)
+                        }
+                        .padding(.bottom, DS.Spacing.section)
                     }
-                    .padding(.horizontal)
-                    .padding(.bottom, 24)
+                    .padding(.top, DS.Spacing.card)
                 }
-                .padding(.top, 12)
             }
-            .navigationBarHidden(true)
+            .navigationTitle("Profile")
+            .navigationBarTitleDisplayMode(.large)
+            .onAppear {
+                withAnimation(.spring(duration: 0.8).delay(0.2)) {
+                    progressAppeared = true
+                }
+            }
+            .alert("Sign out of HensonDay?", isPresented: $showSignOutAlert) {
+                Button("Cancel", role: .cancel) {}
+                Button("Sign Out", role: .destructive) {}
+            }
         }
     }
 }
 
-// MARK: - Header card
+// MARK: - Avatar section
 
-struct ProfileHeaderCard: View {
-    let displayName: String
-    let totalPoints: Int
-    let rank: Int
-    let collectiblesCount: Int
-    let badgesCount: Int
-    let avatarColorHex: String
-    let avatarSymbol: String
+private struct AvatarSection: View {
+    let snapshot: UserProfileSnapshot
+    let modelController: ModelController
+    let avatarColors: [String]
+
+    private var avatarColorHex: String {
+        modelController.currentUser?.avatarColorHex ?? "#D7263D"
+    }
 
     var body: some View {
         VStack(spacing: 12) {
-            HStack(spacing: 16) {
-                Image(systemName: avatarSymbol)
-                    .font(.system(size: 30, weight: .semibold))
-                    .frame(width: 72, height: 72)
-                    .background(Color(hex: avatarColorHex))
-                    .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 22))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 22)
-                            .stroke(.white, lineWidth: 3)
-                    )
-                    .shadow(radius: 6)
+            // Avatar tile
+            Image(systemName: modelController.currentUser?.avatarType.symbolName ?? "person.fill")
+                .font(.system(size: 38, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 96, height: 96)
+                .background(Color(hex: avatarColorHex))
+                .clipShape(RoundedRectangle(cornerRadius: 28))
+                .shadow(color: Color(hex: avatarColorHex).opacity(0.35), radius: 10, x: 0, y: 4)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(displayName)
-                        .font(.title3.weight(.semibold))
-                    Text("Henson Week Explorer")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            Text(snapshot.displayName)
+                .font(DS.Typography.title1)
+                .foregroundStyle(DS.Color.campusNight)
 
-                    HStack(spacing: 16) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("\(totalPoints)")
-                                .font(.headline)
-                                .foregroundStyle(Color("UMDRed"))
-                            Text("Total Points")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("#\(max(rank, 1))")
-                                .font(.headline)
-                                .foregroundStyle(Color("UMDGold"))
-                            Text("Rank")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
+            Text("Henson Week Explorer")
+                .font(DS.Typography.caption)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 5)
+                .background(DS.Color.primary)
+                .clipShape(Capsule())
+
+            // Character selector strips
+            VStack(spacing: 10) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(AvatarType.allCases, id: \.self) { avatar in
+                            Button {
+                                modelController.updateCurrentUserAvatar(
+                                    type: avatar,
+                                    colorHex: avatarColorHex
+                                )
+                            } label: {
+                                Image(systemName: avatar.symbolName)
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 36, height: 36)
+                                    .background(Color(hex: avatarColorHex))
+                                    .clipShape(Circle())
+                                    .overlay(
+                                        Circle().strokeBorder(
+                                            modelController.currentUser?.avatarType == avatar ? DS.Color.primary : .clear,
+                                            lineWidth: 2.5
+                                        )
+                                    )
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
 
+                HStack(spacing: 8) {
+                    ForEach(avatarColors, id: \.self) { hex in
+                        Button {
+                            modelController.updateCurrentUserAvatar(
+                                type: modelController.currentUser?.avatarType ?? .turtle,
+                                colorHex: hex
+                            )
+                        } label: {
+                            Circle()
+                                .fill(Color(hex: hex))
+                                .frame(width: 26, height: 26)
+                                .overlay(
+                                    Circle().strokeBorder(
+                                        avatarColorHex.lowercased() == hex.lowercased() ? DS.Color.campusNight : .clear,
+                                        lineWidth: 2
+                                    )
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .padding(.horizontal, DS.Spacing.screenH)
+        }
+    }
+}
+
+// MARK: - Stats card
+
+private struct StatsCard: View {
+    let snapshot: UserProfileSnapshot
+    let collectiblesTotal: Int
+    let badgesCount: Int
+
+    var body: some View {
+        VStack(spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(snapshot.totalPoints)")
+                        .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                        .foregroundStyle(DS.Color.gold)
+                    Text("Total Points")
+                        .font(DS.Typography.caption)
+                        .foregroundStyle(DS.Color.campusNight.opacity(0.6))
+                }
                 Spacer()
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("#\(max(snapshot.rank, 1))")
+                        .font(DS.Typography.title1)
+                        .foregroundStyle(DS.Color.campusNight)
+                    Text("Campus Rank")
+                        .font(DS.Typography.caption)
+                        .foregroundStyle(DS.Color.campusNight.opacity(0.6))
+                }
             }
 
-            HStack(spacing: 8) {
-                ProfileStatPill(title: "Events", value: "\(max(collectiblesCount * 2, 1))")
-                ProfileStatPill(title: "Creatures", value: "\(collectiblesCount)")
-                ProfileStatPill(title: "Badges", value: "\(badgesCount)")
+            Divider().overlay(Color.white.opacity(0.3))
+
+            HStack {
+                StatsCardPill(title: "Events",     value: "\(max(snapshot.collectedCount * 2, 1))")
+                StatsCardPill(title: "Collectibles", value: "\(snapshot.collectedCount)")
+                StatsCardPill(title: "Badges",     value: "\(badgesCount)")
             }
         }
-        .padding()
+        .padding(DS.Spacing.cardPad)
         .background(
             LinearGradient(
-                colors: [Color("UMDRed").opacity(0.12),
-                         Color("UMDGold").opacity(0.12)],
+                colors: [DS.Color.primaryTint, DS.Color.Rarity.legendaryTint],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: 24)
-                .stroke(Color("UMDRed").opacity(0.25), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 24))
-        .shadow(radius: 4)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.card, style: .continuous))
+        .shadow(color: DS.Color.primary.opacity(0.12), radius: 16, x: 0, y: 4)
     }
 }
 
-struct ProfileStatPill: View {
+private struct StatsCardPill: View {
     let title: String
     let value: String
 
     var body: some View {
         VStack(spacing: 2) {
             Text(value)
-                .font(.headline)
+                .font(DS.Typography.title2)
+                .foregroundStyle(DS.Color.campusNight)
             Text(title)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                .font(DS.Typography.caption)
+                .foregroundStyle(DS.Color.neutral)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 6)
-        .background(Color(.systemBackground).opacity(0.9))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .padding(.vertical, 8)
+        .background(DS.Color.surfaceElevated.opacity(0.7))
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.statTile))
     }
 }
 
-// MARK: - Progress & settings rows
+// MARK: - Animated progress row
 
-struct ProgressTile: View {
+private struct AnimatedProgressRow: View {
     let icon: String
     let iconColor: Color
     let title: String
-    let valueLabel: String
-    let progress: Double   // 0–1
+    let value: Int
+    let total: Int
+    let fillColor: Color
+    let appeared: Bool
+
+    private var progress: Double {
+        total > 0 ? min(Double(value) / Double(total), 1.0) : 0
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                HStack(spacing: 6) {
-                    Image(systemName: icon)
-                        .font(.caption)
-                        .foregroundStyle(iconColor)
-                    Text(title)
-                        .font(.subheadline)
+                Label(title, systemImage: icon)
+                    .font(DS.Typography.body)
+                    .foregroundStyle(DS.Color.campusNight)
+                    .labelStyle(.titleAndIcon)
+                Spacer()
+                Text("\(value) / \(total)")
+                    .font(DS.Typography.caption)
+                    .foregroundStyle(DS.Color.neutral)
+            }
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(Color(UIColor.systemGray5))
+                        .frame(height: 6)
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(fillColor)
+                        .frame(width: appeared ? geo.size.width * progress : 0, height: 6)
+                        .animation(.spring(duration: 0.8), value: appeared)
                 }
-                Spacer()
-                Text(valueLabel)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
-
-            ProgressView(value: progress)
-                .tint(iconColor)
+            .frame(height: 6)
         }
-        .padding()
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 20))
-        .shadow(radius: 2)
+        .padding(DS.Spacing.cardPad)
+        .background(DS.Color.surfaceElevated)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.statTile))
+        .shadow(color: DS.Shadow.cardColor, radius: DS.Shadow.cardRadius, x: DS.Shadow.cardX, y: DS.Shadow.cardY)
     }
 }
 
-struct SettingsRow: View {
-    let icon: String
-    let iconColor: Color
+// MARK: - Secondary pill button
+
+private struct SecondaryPillButton: View {
     let title: String
-    var destructive: Bool = false
-    
+    let icon: String
+    let action: () -> Void
+
     var body: some View {
-        Button {
-            _ = title
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .foregroundStyle(iconColor)
-                Text(title)
-                    .foregroundStyle(destructive ? .red : .primary)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .padding()
-            .background(Color(.systemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 18))
+        Button(action: action) {
+            Label(title, systemImage: icon)
+                .font(DS.Typography.label)
+                .foregroundStyle(DS.Color.campusNight)
+                .frame(maxWidth: .infinity)
+                .frame(height: 48)
+                .background(Color(UIColor.secondarySystemBackground))
+                .clipShape(Capsule())
         }
-        .buttonStyle(.plain)
     }
 }
 
-
-#Preview {
-    ProfileScreen()
-        .environmentObject(ModelController())
-        .environmentObject(TabRouter())
-}
+// MARK: - Color(hex:) helper
 
 private extension Color {
     init(hex: String) {
@@ -356,10 +349,16 @@ private extension Color {
         Scanner(string: hex).scanHexInt64(&int)
         self.init(
             .sRGB,
-            red: Double((int >> 16) & 0xFF) / 255,
-            green: Double((int >> 8) & 0xFF) / 255,
-            blue: Double(int & 0xFF) / 255,
+            red:   Double((int >> 16) & 0xFF) / 255,
+            green: Double((int >> 8)  & 0xFF) / 255,
+            blue:  Double(int         & 0xFF) / 255,
             opacity: 1
         )
     }
+}
+
+#Preview {
+    ProfileScreen()
+        .environmentObject(ModelController())
+        .environmentObject(TabRouter())
 }
