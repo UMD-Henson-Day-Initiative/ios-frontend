@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HensonDay — Collection v2</title>
+<link href="https://fonts.googleapis.com/css2?family=Exo+2:ital,wght@0,300;0,400;0,600;0,700;0,800;0,900;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --crimson: #E8192C;
+    --crimson-glow: rgba(232,25,44,0.3);
+    --gold: #FFD000;
+    --gold-glow: rgba(255,208,0,0.25);
+
+    /* BG layers */
+    --bg-deep: #0A0C14;
+    --bg-mid: #111422;
+    --bg-card: #181C2E;
+    --bg-card-hi: #1F2438;
+    --bg-surface: #252A3E;
+
+    /* Text */
+    --text-hi: #F0F2FF;
+    --text-mid: #8890B0;
+    --text-lo: #454B68;
+
+    /* Rarity */
+    --c-common: #48C87A;
+    --c-rare: #4899FF;
+    --c-epic: #B060FF;
+    --c-legendary: #FFD000;
+
+    --glow-common: rgba(72,200,122,0.25);
+    --glow-rare: rgba(72,153,255,0.25);
+    --glow-epic: rgba(176,96,255,0.25);
+    --glow-legendary: rgba(255,208,0,0.3);
+  }
+
+  body {
+    background: #060810;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Exo 2', sans-serif;
+    padding: 40px 16px;
+    gap: 32px;
+    flex-wrap: wrap;
+  }
+
+  .scene-label {
+    color: rgba(255,255,255,0.25);
+    font-family: 'DM Mono', monospace;
+    font-size: 10px; font-weight: 500;
+    text-align: center; margin-bottom: 10px;
+    letter-spacing: 0.14em; text-transform: uppercase;
+  }
+
+  /* PHONE */
+  .phone {
+    width: 393px; height: 852px;
+    background: var(--bg-deep);
+    border-radius: 52px;
+    overflow: hidden;
+    position: relative;
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.04),
+      0 0 80px rgba(72,153,255,0.05),
+      0 40px 80px rgba(0,0,0,0.9);
+    display: flex; flex-direction: column;
+    flex-shrink: 0;
+  }
+
+  /* STATUS BAR */
+  .status {
+    padding: 17px 28px 0;
+    display: flex; justify-content: space-between; align-items: center;
+    flex-shrink: 0;
+  }
+  .status-time {
+    font-family: 'DM Mono', monospace;
+    font-size: 14px; font-weight: 500; color: var(--text-hi);
+  }
+
+  /* HEADER */
+  .header {
+    padding: 10px 20px 14px;
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  /* Atmospheric top glow */
+  .header::before {
+    content: '';
+    position: absolute;
+    top: -60px; left: 50%; transform: translateX(-50%);
+    width: 300px; height: 120px;
+    background: radial-gradient(ellipse, rgba(72,153,255,0.12) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .header-row {
+    display: flex; justify-content: space-between; align-items: flex-end;
+    margin-bottom: 14px;
+  }
+
+  .screen-title {
+    font-size: 28px; font-weight: 900; color: var(--text-hi);
+    letter-spacing: -0.02em; line-height: 1;
+  }
+  .screen-title span {
+    color: var(--c-rare);
+  }
+
+  .header-dex-id {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px; font-weight: 500; color: var(--text-mid);
+    text-align: right;
+  }
+  .header-dex-id strong { color: var(--c-rare); }
+
+  /* STAT STRIP */
+  .stat-strip {
+    display: flex; gap: 8px;
+    margin-bottom: 14px;
+  }
+  .stat-chip {
+    flex: 1;
+    background: var(--bg-card);
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.05);
+    padding: 10px 8px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .stat-chip::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+  }
+  .stat-val {
+    font-size: 20px; font-weight: 900; color: var(--text-hi);
+    line-height: 1; font-feature-settings: 'tnum';
+  }
+  .stat-label {
+    font-size: 9px; font-weight: 600; color: var(--text-mid);
+    letter-spacing: 0.08em; text-transform: uppercase; margin-top: 3px;
+  }
+
+  /* FILTER TABS */
+  .filter-tabs {
+    display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none;
+  }
+  .filter-tabs::-webkit-scrollbar { display: none; }
+  .ftab {
+    flex-shrink: 0;
+    border-radius: 8px; padding: 7px 14px;
+    font-size: 12px; font-weight: 700;
+    cursor: pointer; border: 1px solid var(--text-lo);
+    background: transparent; color: var(--text-mid);
+    transition: all 0.18s;
+    letter-spacing: 0.02em;
+  }
+  .ftab.active {
+    background: var(--c-rare); border-color: var(--c-rare);
+    color: white;
+    box-shadow: 0 4px 16px var(--glow-rare);
+  }
+
+  /* GRID AREA */
+  .grid-area {
+    flex: 1; overflow-y: auto; padding: 8px 16px 12px;
+    scrollbar-width: none;
+  }
+  .grid-area::-webkit-scrollbar { display: none; }
+
+  /* Section label */
+  .grid-section-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px; font-weight: 500; color: var(--text-lo);
+    letter-spacing: 0.12em; text-transform: uppercase;
+    margin: 10px 0 8px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .grid-section-label::after {
+    content: '';
+    flex: 1; height: 1px; background: var(--bg-surface);
+  }
+
+  /* GRID */
+  .poke-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+
+  /* CELL */
+  .poke-cell {
+    border-radius: 14px;
+    overflow: hidden;
+    position: relative;
+    cursor: pointer;
+    aspect-ratio: 0.75;
+    display: flex; flex-direction: column;
+    transition: transform 0.15s;
+  }
+  .poke-cell:hover { transform: scale(1.03) translateY(-2px); }
+  .poke-cell:active { transform: scale(0.97); }
+
+  /* CELL BG */
+  .poke-cell-bg {
+    position: absolute; inset: 0;
+    background: var(--bg-card);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 14px;
+  }
+
+  /* Rarity border glow */
+  .poke-cell.rarity-common .poke-cell-bg { border-color: rgba(72,200,122,0.2); }
+  .poke-cell.rarity-rare .poke-cell-bg { border-color: rgba(72,153,255,0.25); }
+  .poke-cell.rarity-epic .poke-cell-bg { border-color: rgba(176,96,255,0.3); }
+  .poke-cell.rarity-legendary .poke-cell-bg {
+    border-color: rgba(255,208,0,0.4);
+    box-shadow: 0 0 16px var(--glow-legendary);
+  }
+
+  /* Locked cell bg */
+  .poke-cell.locked .poke-cell-bg {
+    background: var(--bg-mid);
+    border-color: rgba(255,255,255,0.03);
+  }
+
+  /* BG radial glow on collected */
+  .poke-cell-glow {
+    position: absolute; inset: 0;
+    border-radius: 14px;
+    pointer-events: none;
+  }
+  .rarity-common .poke-cell-glow { background: radial-gradient(ellipse at 50% 60%, var(--glow-common) 0%, transparent 70%); }
+  .rarity-rare .poke-cell-glow { background: radial-gradient(ellipse at 50% 60%, var(--glow-rare) 0%, transparent 70%); }
+  .rarity-epic .poke-cell-glow { background: radial-gradient(ellipse at 50% 60%, var(--glow-epic) 0%, transparent 70%); }
+  .rarity-legendary .poke-cell-glow {
+    background: radial-gradient(ellipse at 50% 60%, var(--glow-legendary) 0%, transparent 65%);
+    animation: legendGlow 2.5s ease-in-out infinite;
+  }
+  @keyframes legendGlow {
+    0%,100% { opacity: 0.8; }
+    50% { opacity: 1.3; }
+  }
+
+  /* Hexagon grid bg texture on cells */
+  .poke-cell-hex {
+    position: absolute; inset: 0; border-radius: 14px; overflow: hidden;
+    opacity: 0.06; pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='24'%3E%3Cpath d='M14 0 L28 7 L28 17 L14 24 L0 17 L0 7 Z' fill='none' stroke='white' stroke-width='0.5'/%3E%3C/svg%3E");
+    background-size: 28px 24px;
+  }
+
+  /* DEXNO */
+  .poke-dexno {
+    position: absolute; top: 6px; left: 8px;
+    font-family: 'DM Mono', monospace;
+    font-size: 8px; font-weight: 500; color: var(--text-lo);
+    z-index: 2;
+  }
+
+  /* Rarity indicator top-right */
+  .poke-rarity-pip {
+    position: absolute; top: 6px; right: 6px;
+    width: 6px; height: 6px; border-radius: 50%;
+    z-index: 2;
+  }
+  .rarity-common .poke-rarity-pip { background: var(--c-common); box-shadow: 0 0 6px var(--c-common); }
+  .rarity-rare .poke-rarity-pip { background: var(--c-rare); box-shadow: 0 0 6px var(--c-rare); }
+  .rarity-epic .poke-rarity-pip { background: var(--c-epic); box-shadow: 0 0 8px var(--c-epic); }
+  .rarity-legendary .poke-rarity-pip { background: var(--c-legendary); box-shadow: 0 0 10px var(--c-legendary); animation: pipPulse 1.8s ease-in-out infinite; }
+  @keyframes pipPulse { 0%,100%{box-shadow:0 0 10px var(--c-legendary)} 50%{box-shadow:0 0 20px var(--c-legendary)} }
+
+  /* CREATURE / ICON AREA */
+  .poke-creature-wrap {
+    flex: 1;
+    display: flex; align-items: center; justify-content: center;
+    position: relative; z-index: 1;
+    padding: 14px 8px 4px;
+  }
+
+  .poke-creature-icon {
+    font-size: 44px;
+    line-height: 1;
+    filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));
+    animation: creatureIdle 4s ease-in-out infinite;
+  }
+  .poke-cell:nth-child(2n) .poke-creature-icon { animation-delay: -1.3s; }
+  .poke-cell:nth-child(3n) .poke-creature-icon { animation-delay: -2.7s; }
+  @keyframes creatureIdle {
+    0%,100% { transform: translateY(0) scale(1); }
+    40% { transform: translateY(-3px) scale(1.02); }
+    60% { transform: translateY(-2px) scale(1.01); }
+  }
+
+  /* LOCKED creature treatment */
+  .locked .poke-creature-icon {
+    filter: brightness(0) opacity(0.12);
+    animation: none;
+  }
+
+  .lock-icon-overlay {
+    position: absolute;
+    font-size: 20px; opacity: 0.25;
+  }
+
+  /* CP BADGE */
+  .poke-cp {
+    position: absolute; top: 6px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.55);
+    backdrop-filter: blur(4px);
+    border-radius: 6px; padding: 2px 7px;
+    font-family: 'DM Mono', monospace;
+    font-size: 9px; font-weight: 500; color: rgba(255,255,255,0.8);
+    white-space: nowrap;
+    z-index: 3;
+  }
+  .locked .poke-cp { display: none; }
+
+  /* BOTTOM STRIP */
+  .poke-bottom {
+    background: rgba(0,0,0,0.35);
+    padding: 6px 8px;
+    position: relative; z-index: 2;
+    flex-shrink: 0;
+  }
+
+  .poke-name {
+    font-size: 11px; font-weight: 800; color: var(--text-hi);
+    line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    margin-bottom: 4px;
+  }
+  .locked .poke-name { color: var(--text-lo); }
+
+  .poke-type-row {
+    display: flex; gap: 4px;
+  }
+  .poke-type-badge {
+    border-radius: 4px; padding: 2px 5px;
+    font-size: 8px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase;
+  }
+
+  /* NEW badge */
+  .poke-new-badge {
+    position: absolute; top: 18px; left: 6px;
+    background: var(--crimson);
+    color: white;
+    font-size: 7px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+    border-radius: 4px; padding: 2px 5px;
+    z-index: 3;
+    box-shadow: 0 2px 8px var(--crimson-glow);
+  }
+
+  /* Legendary stars */
+  .legendary-stars {
+    position: absolute; inset: 0; border-radius: 14px; overflow: hidden; z-index: 1; pointer-events: none;
+  }
+  .star-particle {
+    position: absolute;
+    font-size: 8px;
+    animation: starFloat 3s ease-in-out infinite;
+    opacity: 0.6;
+  }
+  @keyframes starFloat {
+    0%,100% { transform: translateY(0) rotate(0deg); opacity: 0.4; }
+    50% { transform: translateY(-8px) rotate(180deg); opacity: 0.8; }
+  }
+
+  /* TAB BAR */
+  .tab-bar {
+    height: 84px;
+    background: var(--bg-mid);
+    border-top: 1px solid rgba(255,255,255,0.05);
+    display: flex; align-items: flex-start;
+    justify-content: space-around; padding: 10px 0 0; flex-shrink: 0;
+    position: relative;
+  }
+  .tab-bar::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(72,153,255,0.3), transparent);
+  }
+  .tab-item {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    cursor: pointer; padding: 0 8px; flex: 1;
+  }
+  .tab-icon { font-size: 21px; }
+  .tab-label { font-family: 'Exo 2', sans-serif; font-size: 10px; font-weight: 600; color: var(--text-lo); }
+  .tab-item.active .tab-label { color: var(--c-rare); }
+  .tab-active-pip {
+    width: 20px; height: 2px; border-radius: 1px;
+    background: var(--c-rare);
+    box-shadow: 0 0 8px var(--glow-rare);
+  }
+
+  /* ===== DETAIL MODAL ===== */
+  .detail-overlay {
+    position: absolute; inset: 0;
+    background: rgba(6,8,16,0.85);
+    backdrop-filter: blur(8px);
+    z-index: 50;
+    display: flex; align-items: flex-end;
+  }
+
+  .detail-sheet {
+    background: var(--bg-mid);
+    border-radius: 28px 28px 0 0;
+    width: 100%;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    overflow: hidden;
+  }
+
+  .detail-handle {
+    width: 36px; height: 3px; background: var(--text-lo);
+    border-radius: 1.5px; margin: 12px auto 0;
+  }
+
+  /* Creature stage */
+  .detail-stage {
+    position: relative;
+    padding: 28px 20px 20px;
+    display: flex; flex-direction: column; align-items: center;
+    overflow: hidden;
+  }
+
+  .detail-stage-bg {
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse at 50% 70%, var(--glow-legendary) 0%, transparent 65%);
+  }
+
+  .detail-stage-hex {
+    position: absolute; inset: 0;
+    opacity: 0.04;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='24'%3E%3Cpath d='M14 0 L28 7 L28 17 L14 24 L0 17 L0 7 Z' fill='none' stroke='white' stroke-width='0.5'/%3E%3C/svg%3E");
+    background-size: 28px 24px;
+  }
+
+  .detail-creature {
+    font-size: 80px; line-height: 1;
+    position: relative; z-index: 1;
+    filter: drop-shadow(0 8px 24px rgba(255,208,0,0.4));
+    animation: detailFloat 3s ease-in-out infinite;
+  }
+  @keyframes detailFloat {
+    0%,100% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(-6px) scale(1.03); }
+  }
+
+  .detail-rarity-badge {
+    margin-top: 12px;
+    border-radius: 8px; padding: 5px 14px;
+    font-size: 12px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase;
+    background: rgba(255,208,0,0.12);
+    border: 1px solid rgba(255,208,0,0.3);
+    color: var(--c-legendary);
+    position: relative; z-index: 1;
+  }
+
+  .detail-name {
+    font-size: 26px; font-weight: 900; color: var(--text-hi);
+    letter-spacing: -0.02em; margin-top: 8px;
+    position: relative; z-index: 1;
+  }
+
+  .detail-dexno {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px; color: var(--text-mid); font-weight: 400;
+    position: relative; z-index: 1;
+  }
+
+  .detail-type-row {
+    display: flex; gap: 6px; margin-top: 8px; position: relative; z-index: 1;
+  }
+  .detail-type-badge {
+    border-radius: 8px; padding: 4px 12px;
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  }
+
+  /* STATS BAR */
+  .detail-stats {
+    padding: 16px 20px;
+    background: var(--bg-card);
+    display: flex; gap: 0;
+    border-top: 1px solid rgba(255,255,255,0.04);
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .dstat {
+    flex: 1; text-align: center; padding: 0 8px;
+    border-right: 1px solid rgba(255,255,255,0.05);
+  }
+  .dstat:last-child { border-right: none; }
+  .dstat-val {
+    font-size: 20px; font-weight: 900; color: var(--text-hi);
+    line-height: 1; font-feature-settings: 'tnum';
+  }
+  .dstat-label {
+    font-size: 9px; font-weight: 600; color: var(--text-mid);
+    text-transform: uppercase; letter-spacing: 0.08em; margin-top: 3px;
+  }
+
+  /* CP ARC */
+  .cp-bar-wrap {
+    padding: 14px 20px 12px;
+  }
+  .cp-bar-label {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 6px;
+  }
+  .cp-bar-label-text {
+    font-size: 10px; font-weight: 700; color: var(--text-mid);
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .cp-bar-val {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px; font-weight: 500; color: var(--c-legendary);
+  }
+  .cp-bar-bg {
+    height: 6px; background: var(--bg-card); border-radius: 3px; overflow: hidden;
+  }
+  .cp-bar-fill {
+    height: 100%; border-radius: 3px;
+    background: linear-gradient(90deg, var(--c-rare), var(--c-legendary));
+    width: 68%;
+    position: relative;
+  }
+  .cp-bar-fill::after {
+    content: '';
+    position: absolute; right: 0; top: 1px; bottom: 1px;
+    width: 5px; border-radius: 2.5px;
+    background: rgba(255,255,255,0.5);
+  }
+
+  /* FLAVOR */
+  .detail-flavor {
+    padding: 0 20px 8px;
+    font-size: 13px; color: var(--text-mid); line-height: 1.6; font-style: italic;
+  }
+
+  /* Caught info */
+  .detail-caught {
+    padding: 0 20px 16px;
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; color: var(--text-mid); font-weight: 500;
+  }
+  .caught-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--c-common);
+    box-shadow: 0 0 8px var(--c-common);
+  }
+
+  .btn-close-detail {
+    margin: 0 20px 28px;
+    width: calc(100% - 40px);
+    background: var(--bg-surface);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 14px;
+    padding: 14px;
+    font-family: 'Exo 2', sans-serif; font-size: 15px; font-weight: 700;
+    color: var(--text-hi); cursor: pointer;
+    display: block;
+  }
+</style>
+</head>
+<body>
+
+<!-- SCREEN 1: COLLECTION GRID -->
+<div style="display:flex;flex-direction:column;align-items:center;">
+  <div class="scene-label">Collection — Pokédex Grid</div>
+  <div class="phone">
+
+    <div class="status">
+      <span class="status-time">4:21</span>
+      <div style="display:flex;gap:5px;align-items:center;">
+        <svg width="15" height="11" viewBox="0 0 15 11"><rect x="0" y="6.5" width="2" height="4.5" rx="1" fill="#8890B0"/><rect x="3.2" y="4.5" width="2" height="6.5" rx="1" fill="#8890B0"/><rect x="6.5" y="2.5" width="2" height="8.5" rx="1" fill="#F0F2FF"/><rect x="9.8" y="0.5" width="2" height="10.5" rx="1" fill="#F0F2FF"/></svg>
+        <svg width="15" height="11" viewBox="0 0 20 14"><path d="M1 5C3.67 2.5 6.67 1.25 10 1.25s6.33 1.25 9 3.75" stroke="#8890B0" stroke-width="1.6" stroke-linecap="round" fill="none"/><path d="M4 8.5C5.93 6.5 7.83 5.5 10 5.5S14.07 6.5 16 8.5" stroke="#F0F2FF" stroke-width="1.6" stroke-linecap="round" fill="none"/><circle cx="10" cy="13" r="1.2" fill="#F0F2FF"/></svg>
+        <svg width="25" height="12" viewBox="0 0 25 12"><rect x="0.5" y="0.5" width="21" height="11" rx="3.5" stroke="#8890B0" stroke-opacity="0.4"/><rect x="2" y="2" width="17" height="8" rx="2" fill="#F0F2FF"/></svg>
+      </div>
+    </div>
+
+    <!-- HEADER -->
+    <div class="header">
+      <div class="header-row">
+        <div class="screen-title">Pokédex <span>#</span></div>
+        <div class="header-dex-id">
+          <strong>3 / 9 caught</strong>
+          #001 – #009
+        </div>
+      </div>
+
+      <!-- STAT STRIP -->
+      <div class="stat-strip">
+        <div class="stat-chip">
+          <div class="stat-val" style="color:var(--c-common);">3</div>
+          <div class="stat-label">Caught</div>
+        </div>
+        <div class="stat-chip">
+          <div class="stat-val" style="color:var(--c-legendary);">335</div>
+          <div class="stat-label">Points</div>
+        </div>
+        <div class="stat-chip">
+          <div class="stat-val">CP 1,840</div>
+          <div class="stat-label">Total CP</div>
+        </div>
+        <div class="stat-chip">
+          <div class="stat-val" style="color:var(--c-rare);">#5</div>
+          <div class="stat-label">Rank</div>
+        </div>
+      </div>
+
+      <!-- FILTER TABS -->
+      <div class="filter-tabs">
+        <div class="ftab active">All</div>
+        <div class="ftab">✦ Common</div>
+        <div class="ftab">◆ Rare</div>
+        <div class="ftab">◈ Epic</div>
+        <div class="ftab">✦✦ Legendary</div>
+      </div>
+    </div>
+
+    <!-- GRID AREA -->
+    <div class="grid-area">
+
+      <div class="grid-section-label">Collected (3)</div>
+
+      <div class="poke-grid">
+
+        <!-- #001 Common — COLLECTED -->
+        <div class="poke-cell rarity-common">
+          <div class="poke-cell-bg"></div>
+          <div class="poke-cell-glow"></div>
+          <div class="poke-cell-hex"></div>
+          <div class="poke-dexno">#001</div>
+          <div class="poke-rarity-pip"></div>
+          <div class="poke-new-badge">NEW</div>
+          <div class="poke-cp">CP 540</div>
+          <div class="poke-creature-wrap">
+            <div class="poke-creature-icon">🐢</div>
+          </div>
+          <div class="poke-bottom">
+            <div class="poke-name">Mall Muppet</div>
+            <div class="poke-type-row">
+              <div class="poke-type-badge" style="background:rgba(72,200,122,0.18);color:var(--c-common);">Nature</div>
+              <div class="poke-type-badge" style="background:rgba(72,153,255,0.15);color:var(--c-rare);">Water</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- #002 Rare — COLLECTED -->
+        <div class="poke-cell rarity-rare">
+          <div class="poke-cell-bg"></div>
+          <div class="poke-cell-glow"></div>
+          <div class="poke-cell-hex"></div>
+          <div class="poke-dexno">#002</div>
+          <div class="poke-rarity-pip"></div>
+          <div class="poke-cp">CP 780</div>
+          <div class="poke-creature-wrap">
+            <div class="poke-creature-icon">🔥</div>
+          </div>
+          <div class="poke-bottom">
+            <div class="poke-name">Flame Jester</div>
+            <div class="poke-type-row">
+              <div class="poke-type-badge" style="background:rgba(232,25,44,0.18);color:#FF6B6B;">Fire</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- #003 Legendary — COLLECTED -->
+        <div class="poke-cell rarity-legendary">
+          <div class="poke-cell-bg"></div>
+          <div class="poke-cell-glow"></div>
+          <div class="poke-cell-hex"></div>
+          <div class="legendary-stars">
+            <div class="star-particle" style="top:15%;left:20%;animation-delay:0s;">✦</div>
+            <div class="star-particle" style="top:25%;right:18%;animation-delay:0.8s;font-size:6px;">★</div>
+            <div class="star-particle" style="bottom:40%;left:12%;animation-delay:1.5s;font-size:6px;">✦</div>
+          </div>
+          <div class="poke-dexno">#003</div>
+          <div class="poke-rarity-pip"></div>
+          <div class="poke-cp">CP 1,520</div>
+          <div class="poke-creature-wrap">
+            <div class="poke-creature-icon">⭐</div>
+          </div>
+          <div class="poke-bottom">
+            <div class="poke-name">The Maestro</div>
+            <div class="poke-type-row">
+              <div class="poke-type-badge" style="background:rgba(255,208,0,0.18);color:var(--c-legendary);">Mystic</div>
+              <div class="poke-type-badge" style="background:rgba(176,96,255,0.18);color:var(--c-epic);">Psychic</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="grid-section-label">Undiscovered (6)</div>
+
+      <div class="poke-grid">
+
+        <!-- Locked cells -->
+        <div class="poke-cell locked">
+          <div class="poke-cell-bg"></div>
+          <div class="poke-cell-hex"></div>
+          <div class="poke-dexno">#004</div>
+          <div class="poke-creature-wrap">
+            <div class="poke-creature-icon">🐾</div>
+            <div class="lock-icon-overlay">🔒</div>
+          </div>
+          <div class="poke-bottom">
+            <div class="poke-name">???</div>
+            <div class="poke-type-row">
+              <div class="poke-type-badge" style="background:rgba(255,255,255,0.05);color:var(--text-lo);">Unknown</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="poke-cell locked">
+          <div class="poke-cell-bg"></div>
+          <div class="poke-cell-hex"></div>
+          <div class="poke-dexno">#005</div>
+          <div class="poke-creature-wrap">
+            <div class="poke-creature-icon">🌙</div>
+            <div class="lock-icon-overlay">🔒</div>
+          </div>
+          <div class="poke-bottom">
+            <div class="poke-name">???</div>
+            <div class="poke-type-row">
+              <div class="poke-type-badge" style="background:rgba(176,96,255,0.08);color:var(--text-lo);">Epic</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="poke-cell locked">
+          <div class="poke-cell-bg"></div>
+          <div class="poke-cell-hex"></div>
+          <div class="poke-dexno">#006</div>
+          <div class="poke-creature-wrap">
+            <div class="poke-creature-icon">🐇</div>
+            <div class="lock-icon-overlay">🔒</div>
+          </div>
+          <div class="poke-bottom">
+            <div class="poke-name">???</div>
+            <div class="poke-type-row">
+              <div class="poke-type-badge" style="background:rgba(255,255,255,0.05);color:var(--text-lo);">Unknown</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="poke-cell locked">
+          <div class="poke-cell-bg"></div>
+          <div class="poke-cell-hex"></div>
+          <div class="poke-dexno">#007</div>
+          <div class="poke-creature-wrap">
+            <div class="poke-creature-icon">⚡</div>
+            <div class="lock-icon-overlay">🔒</div>
+          </div>
+          <div class="poke-bottom">
+            <div class="poke-name">???</div>
+            <div class="poke-type-row">
+              <div class="poke-type-badge" style="background:rgba(72,153,255,0.08);color:var(--text-lo);">Rare</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="poke-cell locked">
+          <div class="poke-cell-bg"></div>
+          <div class="poke-cell-hex"></div>
+          <div class="poke-dexno">#008</div>
+          <div class="poke-creature-wrap">
+            <div class="poke-creature-icon">✨</div>
+            <div class="lock-icon-overlay">🔒</div>
+          </div>
+          <div class="poke-bottom">
+            <div class="poke-name">???</div>
+            <div class="poke-type-row">
+              <div class="poke-type-badge" style="background:rgba(255,255,255,0.05);color:var(--text-lo);">Unknown</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="poke-cell locked">
+          <div class="poke-cell-bg"></div>
+          <div class="poke-cell-hex"></div>
+          <div class="poke-dexno">#009</div>
+          <div class="poke-creature-wrap">
+            <div class="poke-creature-icon">🐙</div>
+            <div class="lock-icon-overlay">🔒</div>
+          </div>
+          <div class="poke-bottom">
+            <div class="poke-name">???</div>
+            <div class="poke-type-row">
+              <div class="poke-type-badge" style="background:rgba(255,208,0,0.06);color:var(--text-lo);">Legendary</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div style="height:16px;"></div>
+    </div>
+
+    <!-- TAB BAR -->
+    <div class="tab-bar">
+      <div class="tab-item"><div class="tab-icon">🏠</div><div class="tab-label">Home</div></div>
+      <div class="tab-item"><div class="tab-icon">📅</div><div class="tab-label">Schedule</div></div>
+      <div class="tab-item"><div class="tab-icon">🗺️</div><div class="tab-label">Map</div></div>
+      <div class="tab-item active">
+        <div class="tab-active-pip"></div>
+        <div class="tab-icon">✨</div>
+        <div class="tab-label" style="color:var(--c-rare);">Collection</div>
+      </div>
+      <div class="tab-item"><div class="tab-icon">👤</div><div class="tab-label">Profile</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- SCREEN 2: DETAIL SHEET OPEN (Legendary) -->
+<div style="display:flex;flex-direction:column;align-items:center;">
+  <div class="scene-label">Collection — Creature Detail</div>
+  <div class="phone">
+
+    <div class="status">
+      <span class="status-time">4:21</span>
+      <div style="display:flex;gap:5px;align-items:center;">
+        <svg width="25" height="12" viewBox="0 0 25 12"><rect x="0.5" y="0.5" width="21" height="11" rx="3.5" stroke="#8890B0" stroke-opacity="0.4"/><rect x="2" y="2" width="17" height="8" rx="2" fill="#F0F2FF"/></svg>
+      </div>
+    </div>
+
+    <!-- dimmed grid behind -->
+    <div class="header" style="opacity:0.3;">
+      <div class="header-row">
+        <div class="screen-title">Pokédex <span>#</span></div>
+        <div class="header-dex-id"><strong>3 / 9 caught</strong></div>
+      </div>
+      <div class="stat-strip">
+        <div class="stat-chip"><div class="stat-val" style="color:var(--c-common);">3</div><div class="stat-label">Caught</div></div>
+        <div class="stat-chip"><div class="stat-val" style="color:var(--c-legendary);">335</div><div class="stat-label">Points</div></div>
+        <div class="stat-chip"><div class="stat-val">CP 1,840</div><div class="stat-label">Total CP</div></div>
+        <div class="stat-chip"><div class="stat-val" style="color:var(--c-rare);">#5</div><div class="stat-label">Rank</div></div>
+      </div>
+    </div>
+
+    <div class="grid-area" style="opacity:0.2;pointer-events:none;">
+      <div class="poke-grid">
+        <div class="poke-cell rarity-common"><div class="poke-cell-bg"></div><div class="poke-creature-wrap"><div class="poke-creature-icon">🐢</div></div><div class="poke-bottom"><div class="poke-name">Mall Muppet</div></div></div>
+        <div class="poke-cell rarity-rare"><div class="poke-cell-bg"></div><div class="poke-creature-wrap"><div class="poke-creature-icon">🔥</div></div><div class="poke-bottom"><div class="poke-name">Flame Jester</div></div></div>
+        <div class="poke-cell rarity-legendary"><div class="poke-cell-bg"></div><div class="poke-creature-wrap"><div class="poke-creature-icon">⭐</div></div><div class="poke-bottom"><div class="poke-name">The Maestro</div></div></div>
+        <div class="poke-cell locked"><div class="poke-cell-bg"></div><div class="poke-creature-wrap"><div class="poke-creature-icon" style="filter:brightness(0) opacity(0.12)">🐾</div></div><div class="poke-bottom"><div class="poke-name" style="color:var(--text-lo)">???</div></div></div>
+      </div>
+    </div>
+
+    <!-- DETAIL OVERLAY -->
+    <div class="detail-overlay">
+      <div class="detail-sheet">
+        <div class="detail-handle"></div>
+
+        <!-- Stage -->
+        <div class="detail-stage">
+          <div class="detail-stage-bg"></div>
+          <div class="detail-stage-hex"></div>
+          <div class="legendary-stars" style="border-radius:0;">
+            <div class="star-particle" style="top:10%;left:15%;animation-delay:0s;">✦</div>
+            <div class="star-particle" style="top:20%;right:12%;animation-delay:0.6s;">★</div>
+            <div class="star-particle" style="top:50%;left:8%;animation-delay:1.2s;font-size:10px;">✦</div>
+            <div class="star-particle" style="top:35%;right:8%;animation-delay:2s;font-size:8px;">✦</div>
+          </div>
+          <div class="detail-creature">⭐</div>
+          <div class="detail-rarity-badge">✦✦ Legendary</div>
+          <div class="detail-name">The Maestro</div>
+          <div class="detail-dexno">#003 · Collected Day 3</div>
+          <div class="detail-type-row">
+            <div class="detail-type-badge" style="background:rgba(255,208,0,0.15);color:var(--c-legendary);border-radius:8px;">Mystic</div>
+            <div class="detail-type-badge" style="background:rgba(176,96,255,0.15);color:var(--c-epic);border-radius:8px;">Psychic</div>
+          </div>
+        </div>
+
+        <!-- STATS ROW -->
+        <div class="detail-stats">
+          <div class="dstat">
+            <div class="dstat-val" style="color:var(--c-legendary);">1,520</div>
+            <div class="dstat-label">CP</div>
+          </div>
+          <div class="dstat">
+            <div class="dstat-val">150</div>
+            <div class="dstat-label">Points</div>
+          </div>
+          <div class="dstat">
+            <div class="dstat-val" style="color:var(--c-common);">1</div>
+            <div class="dstat-label">In Dex</div>
+          </div>
+          <div class="dstat">
+            <div class="dstat-val">🏅</div>
+            <div class="dstat-label">Badge</div>
+          </div>
+        </div>
+
+        <!-- CP BAR -->
+        <div class="cp-bar-wrap">
+          <div class="cp-bar-label">
+            <div class="cp-bar-label-text">Combat Power</div>
+            <div class="cp-bar-val">CP 1,520 / 2,200</div>
+          </div>
+          <div class="cp-bar-bg">
+            <div class="cp-bar-fill"></div>
+          </div>
+        </div>
+
+        <!-- FLAVOR -->
+        <div class="detail-flavor">
+          "A legendary conductor who appeared at the Stadium Spirit Rally, orchestrating cheers from across the entire campus."
+        </div>
+
+        <!-- CAUGHT AT -->
+        <div class="detail-caught">
+          <div class="caught-dot"></div>
+          Caught at Stadium Spirit Rally · Day 3, 5:42 PM
+        </div>
+
+        <button class="btn-close-detail">Done</button>
+      </div>
+    </div>
+
+    <div class="tab-bar">
+      <div class="tab-item"><div class="tab-icon">🏠</div><div class="tab-label">Home</div></div>
+      <div class="tab-item"><div class="tab-icon">📅</div><div class="tab-label">Schedule</div></div>
+      <div class="tab-item"><div class="tab-icon">🗺️</div><div class="tab-label">Map</div></div>
+      <div class="tab-item active"><div class="tab-active-pip"></div><div class="tab-icon">✨</div><div class="tab-label" style="color:var(--c-rare);">Collection</div></div>
+      <div class="tab-item"><div class="tab-icon">👤</div><div class="tab-label">Profile</div></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

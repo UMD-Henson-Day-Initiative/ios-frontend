@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HensonDay — Map + AR</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Nunito+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --crimson: #C8102E;
+    --gold: #F5C518;
+    --night: #1A1A2E;
+    --surface: #FAFAF8;
+    --surface-el: #FFFFFF;
+    --neutral: #8A8A8E;
+    --r-card: 20px;
+    --r-pill: 999px;
+    --shadow: 0 8px 24px rgba(0,0,0,0.12);
+  }
+
+  body {
+    background: #111;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Nunito Sans', sans-serif;
+    padding: 40px 20px;
+    gap: 40px;
+    flex-wrap: wrap;
+  }
+
+  .phone-wrap { display: flex; flex-direction: column; align-items: center; }
+
+  .frame-label {
+    color: rgba(255,255,255,0.4);
+    font-family: 'Nunito', sans-serif;
+    font-size: 12px; font-weight: 600;
+    text-align: center; margin-bottom: 12px;
+    letter-spacing: 0.1em; text-transform: uppercase;
+  }
+
+  .phone-frame {
+    width: 390px; height: 844px;
+    border-radius: 50px; overflow: hidden;
+    position: relative;
+    box-shadow: 0 40px 80px rgba(0,0,0,0.6);
+    display: flex; flex-direction: column;
+    background: #e8e8e8;
+  }
+
+  /* STATUS BAR */
+  .status-bar {
+    padding: 16px 28px 8px;
+    display: flex; justify-content: space-between; align-items: center;
+    flex-shrink: 0; position: absolute; top: 0; left: 0; right: 0; z-index: 10;
+  }
+  .sb-time { font-family: 'Nunito', sans-serif; font-size: 15px; font-weight: 700; }
+
+  /* ===== SCREEN 1: MAP ===== */
+  .map-bg {
+    flex: 1;
+    background: #E8F0EE;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Simulated map grid */
+  .map-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,0,0,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,0,0,0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  /* Roads */
+  .map-road-h {
+    position: absolute;
+    height: 14px;
+    left: 0; right: 0;
+    background: rgba(255,255,255,0.8);
+    border-top: 1px solid rgba(0,0,0,0.08);
+    border-bottom: 1px solid rgba(0,0,0,0.08);
+  }
+  .map-road-v {
+    position: absolute;
+    width: 14px;
+    top: 0; bottom: 0;
+    background: rgba(255,255,255,0.8);
+    border-left: 1px solid rgba(0,0,0,0.08);
+    border-right: 1px solid rgba(0,0,0,0.08);
+  }
+
+  /* Campus blocks */
+  .campus-block {
+    position: absolute;
+    border-radius: 8px;
+    background: rgba(180, 200, 180, 0.4);
+    border: 1px solid rgba(120, 160, 120, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    color: rgba(60, 100, 60, 0.6);
+    font-weight: 600;
+    text-align: center;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  /* Map pins */
+  .map-pin {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    transform: translate(-50%, -100%);
+  }
+  .pin-circle {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    border: 3px solid white;
+    position: relative;
+    transition: transform 0.2s;
+  }
+  .map-pin:hover .pin-circle { transform: scale(1.1) translateY(-2px); }
+  .pin-circle.selected {
+    transform: scale(1.15) translateY(-3px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+  }
+
+  .pin-tail {
+    width: 3px; height: 10px;
+    background: white;
+    border-radius: 0 0 2px 2px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+  }
+
+  .pin-special-ring {
+    position: absolute;
+    inset: -6px;
+    border-radius: 50%;
+    border: 2.5px solid var(--gold);
+    animation: ring-pulse 2s ease-in-out infinite;
+  }
+  @keyframes ring-pulse {
+    0%, 100% { opacity: 0.8; transform: scale(1); }
+    50% { opacity: 0.3; transform: scale(1.1); }
+  }
+
+  /* Floating search bar */
+  .map-search-bar {
+    position: absolute;
+    top: 70px; left: 16px; right: 16px;
+    background: var(--surface-el);
+    border-radius: 16px;
+    padding: 12px 16px;
+    display: flex; align-items: center; gap: 10px;
+    box-shadow: var(--shadow);
+    z-index: 10;
+  }
+  .search-placeholder {
+    flex: 1;
+    font-size: 14px;
+    color: var(--neutral);
+    font-weight: 500;
+  }
+  .search-filter-btn {
+    width: 32px; height: 32px;
+    background: #F0F0F0;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  /* My location button */
+  .map-location-btn {
+    position: absolute;
+    right: 16px;
+    bottom: 230px;
+    width: 44px; height: 44px;
+    background: var(--surface-el);
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    z-index: 10;
+  }
+
+  /* BOTTOM SHEET */
+  .bottom-sheet {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    background: var(--surface-el);
+    border-radius: 24px 24px 0 0;
+    box-shadow: 0 -4px 24px rgba(0,0,0,0.12);
+    z-index: 20;
+    padding: 12px 20px 24px;
+  }
+
+  .sheet-handle {
+    width: 36px; height: 4px;
+    background: #D0D0D0;
+    border-radius: 2px;
+    margin: 0 auto 16px;
+  }
+
+  .sheet-event-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .sheet-badge-row {
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  .sheet-rarity-badge {
+    display: flex; align-items: center; gap: 4px;
+    border-radius: var(--r-pill);
+    padding: 5px 12px;
+    font-family: 'Nunito', sans-serif;
+    font-size: 12px; font-weight: 800;
+  }
+
+  .sheet-collectible-name {
+    font-size: 12px; color: var(--neutral); font-weight: 600;
+  }
+
+  .sheet-event-name {
+    font-family: 'Nunito', sans-serif;
+    font-size: 20px; font-weight: 800; color: var(--night);
+  }
+
+  .sheet-meta {
+    display: flex; align-items: center; gap: 14px;
+  }
+  .sheet-meta-item {
+    display: flex; align-items: center; gap: 4px;
+    font-size: 13px; color: var(--neutral); font-weight: 500;
+  }
+
+  /* Action buttons */
+  .sheet-actions {
+    display: flex; gap: 8px;
+  }
+
+  .btn-ar {
+    flex: 5;
+    background: var(--crimson);
+    color: white;
+    border: none;
+    border-radius: var(--r-pill);
+    padding: 14px 20px;
+    font-family: 'Nunito', sans-serif;
+    font-size: 14px; font-weight: 800;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    box-shadow: 0 4px 16px rgba(200,16,46,0.3);
+  }
+
+  .btn-nav {
+    flex: 4;
+    background: transparent;
+    color: var(--night);
+    border: 1.5px solid #E0E0E0;
+    border-radius: var(--r-pill);
+    padding: 14px 16px;
+    font-family: 'Nunito', sans-serif;
+    font-size: 14px; font-weight: 700;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+
+  .btn-details {
+    flex: 3;
+    background: transparent;
+    color: var(--crimson);
+    border: none;
+    border-radius: var(--r-pill);
+    padding: 14px 12px;
+    font-family: 'Nunito', sans-serif;
+    font-size: 14px; font-weight: 700;
+    cursor: pointer;
+  }
+
+  /* TAB BAR */
+  .tab-bar {
+    height: 82px;
+    background: var(--surface-el);
+    border-top: 1px solid rgba(0,0,0,0.06);
+    display: flex; align-items: flex-start;
+    justify-content: space-around; padding: 10px 0 0;
+    flex-shrink: 0;
+  }
+  .tab-item {
+    display: flex; flex-direction: column;
+    align-items: center; gap: 4px;
+    cursor: pointer; padding: 0 8px; flex: 1;
+  }
+  .tab-icon { font-size: 22px; }
+  .tab-label { font-family: 'Nunito', sans-serif; font-size: 10px; font-weight: 700; color: var(--neutral); }
+  .tab-item.active .tab-label { color: var(--crimson); }
+  .tab-active-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--crimson); }
+
+  /* ===== SCREEN 2: AR ===== */
+  .ar-camera-bg {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(160deg, #2D5016 0%, #1A3A0A 30%, #0D1F06 60%, #050D02 100%);
+  }
+
+  .ar-scan-lines {
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(255,255,255,0.015) 2px,
+      rgba(255,255,255,0.015) 4px
+    );
+    pointer-events: none;
+  }
+
+  .ar-campus-silhouette {
+    position: absolute;
+    bottom: 200px; left: 0; right: 0;
+    height: 120px;
+    background: rgba(0,0,0,0.3);
+    clip-path: polygon(0 100%, 0 60%, 8% 60%, 8% 30%, 12% 30%, 12% 60%, 20% 60%, 20% 40%, 25% 40%, 25% 60%, 35% 60%, 35% 70%, 45% 70%, 45% 45%, 50% 35%, 55% 45%, 55% 70%, 65% 70%, 65% 55%, 72% 55%, 72% 70%, 80% 70%, 80% 50%, 86% 50%, 86% 70%, 92% 70%, 92% 60%, 100% 60%, 100% 100%);
+  }
+
+  .ar-ground {
+    position: absolute;
+    bottom: 0; left: 0; right: 0; height: 200px;
+    background: linear-gradient(180deg, transparent 0%, rgba(30,60,15,0.6) 40%, rgba(15,35,8,0.9) 100%);
+  }
+
+  /* Creature in AR */
+  .ar-creature-wrap {
+    position: absolute;
+    left: 50%; top: 38%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    animation: ar-float 2.5s ease-in-out infinite;
+  }
+  @keyframes ar-float {
+    0%, 100% { transform: translate(-50%, -50%) translateY(0); }
+    50% { transform: translate(-50%, -50%) translateY(-8px); }
+  }
+
+  .ar-reticle {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 140px; height: 140px;
+    border-radius: 50%;
+    border: 2.5px solid var(--crimson);
+    animation: reticle-pulse 1.5s ease-in-out infinite;
+    pointer-events: none;
+  }
+  .ar-reticle-inner {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(200,16,46,0.4);
+  }
+  @keyframes reticle-pulse {
+    0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.9; }
+    50% { transform: translate(-50%, -50%) scale(1.05); opacity: 0.5; }
+  }
+
+  .ar-creature-blob {
+    width: 100px; height: 100px;
+    position: relative;
+    z-index: 2;
+  }
+
+  .ar-glow {
+    position: absolute;
+    width: 120px; height: 60px;
+    bottom: -20px; left: 50%;
+    transform: translateX(-50%);
+    background: radial-gradient(ellipse, rgba(245,197,24,0.3) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .ar-tap-hint {
+    margin-top: 12px;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(8px);
+    border-radius: var(--r-pill);
+    padding: 8px 16px;
+    font-family: 'Nunito', sans-serif;
+    font-size: 13px; font-weight: 700;
+    color: white;
+    animation: hint-pulse 2s ease-in-out infinite;
+    z-index: 2;
+    position: relative;
+  }
+  @keyframes hint-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+
+  /* AR Top HUD */
+  .ar-top-hud {
+    position: absolute;
+    top: 72px; left: 16px; right: 16px;
+    background: rgba(26,26,46,0.75);
+    backdrop-filter: blur(12px);
+    border-radius: var(--r-pill);
+    padding: 12px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 10;
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+
+  .ar-event-info {
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .ar-event-name {
+    font-family: 'Nunito', sans-serif;
+    font-size: 14px; font-weight: 700; color: white;
+  }
+  .ar-event-dist {
+    font-size: 12px; color: rgba(255,255,255,0.6); font-weight: 500;
+  }
+
+  .ar-rarity-chip {
+    background: rgba(245,197,24,0.2);
+    border: 1px solid rgba(245,197,24,0.4);
+    border-radius: var(--r-pill);
+    padding: 5px 12px;
+    font-family: 'Nunito', sans-serif;
+    font-size: 12px; font-weight: 800; color: var(--gold);
+  }
+
+  /* AR Bottom Controls */
+  .ar-bottom-controls {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    padding: 20px 20px 36px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10;
+  }
+
+  .ar-exit-btn {
+    background: rgba(255,255,255,0.15);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: var(--r-pill);
+    padding: 14px 40px;
+    font-family: 'Nunito', sans-serif;
+    font-size: 15px; font-weight: 700; color: white;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  /* Corner brackets for AR reticle decoration */
+  .ar-bracket-tl, .ar-bracket-tr, .ar-bracket-bl, .ar-bracket-br {
+    position: absolute;
+    width: 20px; height: 20px;
+    pointer-events: none;
+  }
+  .ar-bracket-tl { top: 26%; left: calc(50% - 75px); border-top: 2px solid rgba(255,255,255,0.5); border-left: 2px solid rgba(255,255,255,0.5); border-radius: 4px 0 0 0; }
+  .ar-bracket-tr { top: 26%; right: calc(50% - 75px); border-top: 2px solid rgba(255,255,255,0.5); border-right: 2px solid rgba(255,255,255,0.5); border-radius: 0 4px 0 0; }
+  .ar-bracket-bl { bottom: 49%; left: calc(50% - 75px); border-bottom: 2px solid rgba(255,255,255,0.5); border-left: 2px solid rgba(255,255,255,0.5); border-radius: 0 0 0 4px; }
+  .ar-bracket-br { bottom: 49%; right: calc(50% - 75px); border-bottom: 2px solid rgba(255,255,255,0.5); border-right: 2px solid rgba(255,255,255,0.5); border-radius: 0 0 4px 0; }
+</style>
+</head>
+<body>
+
+<!-- SCREEN 1: MAP WITH BOTTOM SHEET -->
+<div class="phone-wrap">
+  <div class="frame-label">Map Screen — Pin Selected</div>
+  <div class="phone-frame">
+
+    <!-- STATUS BAR -->
+    <div class="status-bar" style="color:#1A1A2E;">
+      <span class="sb-time" style="color:#1A1A2E;">4:21</span>
+      <div style="display:flex;gap:5px;align-items:center;">
+        <svg width="16" height="12" viewBox="0 0 20 14" fill="none"><path d="M1 4.5C3.67 2.17 6.67 1 10 1s6.33 1.17 9 3.5" stroke="#1A1A2E" stroke-width="1.5" stroke-linecap="round"/><circle cx="10" cy="13" r="1" fill="#1A1A2E"/></svg>
+        <svg width="24" height="12" viewBox="0 0 24 12" fill="none"><rect x="0.5" y="0.5" width="20" height="11" rx="3.5" stroke="#1A1A2E" stroke-opacity="0.35"/><rect x="2" y="2" width="16" height="8" rx="2" fill="#1A1A2E"/></svg>
+      </div>
+    </div>
+
+    <!-- MAP -->
+    <div class="map-bg">
+      <div class="map-grid"></div>
+
+      <!-- Roads -->
+      <div class="map-road-h" style="top: 33%;"></div>
+      <div class="map-road-h" style="top: 58%;"></div>
+      <div class="map-road-h" style="top: 75%;"></div>
+      <div class="map-road-v" style="left: 30%;"></div>
+      <div class="map-road-v" style="left: 60%;"></div>
+      <div class="map-road-v" style="left: 80%;"></div>
+
+      <!-- Campus blocks -->
+      <div class="campus-block" style="top:8%;left:10%;width:130px;height:80px;">McKeldin<br>Library</div>
+      <div class="campus-block" style="top:8%;left:65%;width:100px;height:60px;">Stamp<br>Union</div>
+      <div class="campus-block" style="top:40%;left:10%;width:90px;height:70px;">Iribe<br>Center</div>
+      <div class="campus-block" style="top:62%;left:35%;width:140px;height:75px;">Maryland<br>Stadium</div>
+      <div class="campus-block" style="top:40%;left:65%;width:100px;height:60px;">Tawes<br>Hall</div>
+
+      <!-- Map pins -->
+      <div class="map-pin" style="left:35%;top:32%;">
+        <div class="pin-circle selected" style="background:#4CAF50;">
+          🎪
+          <div class="pin-special-ring"></div>
+        </div>
+        <div class="pin-tail"></div>
+      </div>
+
+      <div class="map-pin" style="left:72%;top:25%;">
+        <div class="pin-circle" style="background:#2196F3;">✦</div>
+        <div class="pin-tail"></div>
+      </div>
+
+      <div class="map-pin" style="left:55%;top:60%;">
+        <div class="pin-circle" style="background:#F5C518;">★</div>
+        <div class="pin-special-ring"></div>
+        <div class="pin-tail"></div>
+      </div>
+
+      <div class="map-pin" style="left:20%;top:50%;">
+        <div class="pin-circle" style="background:#9C27B0;">◈</div>
+        <div class="pin-tail"></div>
+      </div>
+
+      <!-- Floating search bar -->
+      <div class="map-search-bar">
+        <span style="font-size:16px;">🔍</span>
+        <span class="search-placeholder">Find events nearby…</span>
+        <div class="search-filter-btn">⚙</div>
+      </div>
+
+      <!-- My location -->
+      <div class="map-location-btn">📍</div>
+
+      <!-- BOTTOM SHEET -->
+      <div class="bottom-sheet">
+        <div class="sheet-handle"></div>
+        <div class="sheet-event-preview">
+          <div class="sheet-badge-row">
+            <div class="sheet-rarity-badge" style="background:#F0FFF4;color:#4CAF50;">✦ Common</div>
+            <span class="sheet-collectible-name">Mall Muppet</span>
+          </div>
+          <div class="sheet-event-name">McKeldin Time Capsule Hunt</div>
+          <div class="sheet-meta">
+            <div class="sheet-meta-item"><span>⏱</span> 2:30 – 4:00 PM</div>
+            <div class="sheet-meta-item"><span>📍</span> McKeldin Mall</div>
+          </div>
+        </div>
+        <div class="sheet-actions">
+          <button class="btn-ar">📱 View in AR</button>
+          <button class="btn-nav">→ Navigate</button>
+          <button class="btn-details">Details</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB BAR -->
+    <div class="tab-bar">
+      <div class="tab-item"><div class="tab-icon">🏠</div><div class="tab-label">Home</div></div>
+      <div class="tab-item"><div class="tab-icon">📅</div><div class="tab-label">Schedule</div></div>
+      <div class="tab-item active">
+        <div class="tab-icon">🗺️</div>
+        <div class="tab-label" style="color:var(--crimson);">Map</div>
+        <div class="tab-active-dot"></div>
+      </div>
+      <div class="tab-item"><div class="tab-icon">✨</div><div class="tab-label">Collection</div></div>
+      <div class="tab-item"><div class="tab-icon">👤</div><div class="tab-label">Profile</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- SCREEN 2: AR VIEW -->
+<div class="phone-wrap">
+  <div class="frame-label">AR View — Creature Found</div>
+  <div class="phone-frame">
+
+    <!-- STATUS BAR -->
+    <div class="status-bar">
+      <span class="sb-time" style="color:white;">4:21</span>
+      <div style="display:flex;gap:5px;align-items:center;">
+        <svg width="16" height="12" viewBox="0 0 20 14" fill="none"><path d="M1 4.5C3.67 2.17 6.67 1 10 1s6.33 1.17 9 3.5" stroke="white" stroke-width="1.5" stroke-linecap="round"/><circle cx="10" cy="13" r="1" fill="white"/></svg>
+        <svg width="24" height="12" viewBox="0 0 24 12" fill="none"><rect x="0.5" y="0.5" width="20" height="11" rx="3.5" stroke="white" stroke-opacity="0.5"/><rect x="2" y="2" width="16" height="8" rx="2" fill="white"/></svg>
+      </div>
+    </div>
+
+    <!-- CAMERA BG -->
+    <div class="ar-camera-bg">
+      <div class="ar-scan-lines"></div>
+      <div class="ar-campus-silhouette"></div>
+      <div class="ar-ground"></div>
+
+      <!-- Top HUD -->
+      <div class="ar-top-hud">
+        <div class="ar-event-info">
+          <div class="ar-event-name">McKeldin Time Capsule Hunt</div>
+          <div class="ar-event-dist">McKeldin Mall · 12m away</div>
+        </div>
+        <div class="ar-rarity-chip">✦ Common</div>
+      </div>
+
+      <!-- Corner brackets -->
+      <div class="ar-bracket-tl"></div>
+      <div class="ar-bracket-tr"></div>
+      <div class="ar-bracket-bl"></div>
+      <div class="ar-bracket-br"></div>
+
+      <!-- Reticle -->
+      <div class="ar-reticle"></div>
+      <div class="ar-reticle-inner"></div>
+
+      <!-- Creature -->
+      <div class="ar-creature-wrap">
+        <svg class="ar-creature-blob" viewBox="0 0 100 100" fill="none">
+          <circle cx="50" cy="55" r="30" fill="rgba(255,255,255,0.92)"/>
+          <circle cx="50" cy="38" r="24" fill="rgba(255,255,255,0.95)"/>
+          <circle cx="42" cy="34" r="8" fill="white"/>
+          <circle cx="58" cy="34" r="8" fill="white"/>
+          <circle cx="42" cy="34" r="5" fill="#1A1A2E"/>
+          <circle cx="58" cy="34" r="5" fill="#1A1A2E"/>
+          <circle cx="43" cy="32" r="2" fill="white"/>
+          <circle cx="59" cy="32" r="2" fill="white"/>
+          <path d="M43 44 Q50 51 57 44" stroke="#1A1A2E" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+          <ellipse cx="30" cy="28" rx="6" ry="9" fill="rgba(255,255,255,0.8)" transform="rotate(-20 30 28)"/>
+          <ellipse cx="70" cy="28" rx="6" ry="9" fill="rgba(255,255,255,0.8)" transform="rotate(20 70 28)"/>
+          <text x="45" y="30" font-size="8" fill="#F5C518">✦</text>
+          <!-- Glow aura -->
+          <circle cx="50" cy="50" r="42" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+        </svg>
+        <div class="ar-glow"></div>
+        <div class="ar-tap-hint">✦ Tap to collect</div>
+      </div>
+
+      <!-- Bottom controls -->
+      <div class="ar-bottom-controls">
+        <button class="ar-exit-btn">✕ Exit AR</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HensonDay — Schedule v2</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --crimson: #C8102E;
+    --crimson-soft: rgba(200,16,46,0.08);
+    --gold: #E8A800;
+    --night: #141418;
+    --surface: #F2F2F0;
+    --card: #FFFFFF;
+    --neutral-hi: #3D3D42;
+    --neutral-mid: #8A8A92;
+    --neutral-lo: #C8C8D0;
+    --divider: #EAEAEE;
+
+    --common: #2DB37A;
+    --common-bg: #EBF9F3;
+    --rare: #2979FF;
+    --rare-bg: #EBF1FF;
+    --epic: #8B44F7;
+    --epic-bg: #F3EDFF;
+    --legendary: #E8A800;
+    --legendary-bg: #FFF8E6;
+
+    --status-live: #FF6B00;
+    --status-done: #2DB37A;
+  }
+
+  body {
+    background: #0D0D0D;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'DM Sans', sans-serif;
+    padding: 40px 16px;
+    gap: 32px;
+    flex-wrap: wrap;
+  }
+
+  .scene-label {
+    color: rgba(255,255,255,0.35);
+    font-family: 'DM Mono', monospace;
+    font-size: 10px; font-weight: 500;
+    text-align: center; margin-bottom: 10px;
+    letter-spacing: 0.14em; text-transform: uppercase;
+  }
+
+  /* PHONE */
+  .phone {
+    width: 393px; height: 852px;
+    background: var(--surface);
+    border-radius: 52px;
+    overflow: hidden;
+    position: relative;
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.06),
+      0 40px 80px rgba(0,0,0,0.7),
+      0 8px 16px rgba(0,0,0,0.4);
+    display: flex; flex-direction: column;
+    flex-shrink: 0;
+  }
+
+  /* STATUS BAR */
+  .status {
+    padding: 17px 28px 0;
+    display: flex; justify-content: space-between; align-items: center;
+    flex-shrink: 0; background: var(--surface);
+  }
+  .status-time {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px; font-weight: 700; color: var(--night);
+  }
+  .status-icons { display: flex; gap: 5px; align-items: center; }
+
+  /* HEADER AREA */
+  .header {
+    background: var(--surface);
+    padding: 10px 20px 0;
+    flex-shrink: 0;
+  }
+
+  .header-top {
+    display: flex; justify-content: space-between; align-items: flex-end;
+    margin-bottom: 14px;
+  }
+
+  .screen-title {
+    font-size: 30px; font-weight: 800; color: var(--night);
+    letter-spacing: -0.03em; line-height: 1;
+  }
+
+  .header-meta {
+    font-size: 12px; color: var(--neutral-mid); font-weight: 500;
+    text-align: right; line-height: 1.4;
+  }
+  .header-meta strong {
+    display: block; font-size: 13px; font-weight: 700; color: var(--neutral-hi);
+  }
+
+  /* PROGRESS BAR (week progress) */
+  .week-bar-wrap {
+    margin-bottom: 14px;
+  }
+  .week-bar-labels {
+    display: flex; justify-content: space-between;
+    font-size: 10px; color: var(--neutral-mid); font-weight: 600;
+    letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 5px;
+  }
+  .week-bar-bg {
+    height: 4px; background: var(--divider); border-radius: 2px; overflow: visible;
+    position: relative;
+  }
+  .week-bar-fill {
+    height: 100%; border-radius: 2px;
+    background: linear-gradient(90deg, var(--crimson) 0%, #FF4060 100%);
+    width: 43%;
+    position: relative;
+  }
+  .week-bar-fill::after {
+    content: '';
+    position: absolute; right: -1px; top: -2px;
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--crimson);
+    box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px var(--crimson);
+  }
+
+  /* Day segments on bar */
+  .week-bar-ticks {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+  }
+  .week-tick {
+    flex: 1; height: 100%;
+    border-right: 1.5px solid var(--surface);
+  }
+  .week-tick:last-child { border-right: none; }
+
+  /* DAY PILL STRIP */
+  .day-strip-outer {
+    background: var(--surface);
+    padding: 0 20px 12px;
+    flex-shrink: 0;
+  }
+  .day-strip {
+    display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none;
+  }
+  .day-strip::-webkit-scrollbar { display: none; }
+
+  .day-pill {
+    flex-shrink: 0;
+    display: flex; flex-direction: column; align-items: center;
+    gap: 2px;
+    padding: 8px 14px;
+    border-radius: 14px;
+    cursor: pointer;
+    border: 1.5px solid transparent;
+    transition: all 0.18s;
+    min-width: 52px;
+  }
+  .day-pill.active {
+    background: var(--crimson);
+    box-shadow: 0 4px 14px rgba(200,16,46,0.35);
+  }
+  .day-pill:not(.active) {
+    background: var(--card);
+    border-color: var(--divider);
+  }
+  .day-pill:not(.active):hover {
+    border-color: var(--crimson);
+  }
+
+  .dp-label {
+    font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--neutral-mid);
+  }
+  .day-pill.active .dp-label { color: rgba(255,255,255,0.7); }
+
+  .dp-num {
+    font-size: 18px; font-weight: 800; color: var(--night); line-height: 1;
+  }
+  .day-pill.active .dp-num { color: #fff; }
+
+  .dp-dot-row { display: flex; gap: 3px; align-items: center; }
+  .dp-dot {
+    width: 4px; height: 4px; border-radius: 50%;
+    background: var(--neutral-lo);
+  }
+  .day-pill.active .dp-dot { background: rgba(255,255,255,0.5); }
+  .dp-dot.has-event { background: var(--crimson); }
+  .day-pill.active .dp-dot.has-event { background: white; }
+
+  /* Thin separator */
+  .sep {
+    height: 1px; background: var(--divider);
+    margin: 0 20px;
+    flex-shrink: 0;
+  }
+
+  /* SCROLL LIST */
+  .event-list {
+    flex: 1; overflow-y: auto; padding: 10px 0 8px;
+    scrollbar-width: none;
+  }
+  .event-list::-webkit-scrollbar { display: none; }
+
+  /* TIME LABEL (floating) */
+  .time-group-label {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 20px 4px;
+  }
+  .tgl-text {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px; font-weight: 500; color: var(--neutral-mid);
+    letter-spacing: 0.1em; text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .tgl-line { flex: 1; height: 1px; background: var(--divider); }
+
+  /* ---- EVENT ROW ---- */
+  /* Timeline layout: time column | line | card */
+  .event-row {
+    display: flex;
+    padding: 3px 20px 3px 16px;
+    gap: 0;
+    cursor: pointer;
+    transition: opacity 0.15s;
+    animation: fadeSlideIn 0.3s ease both;
+  }
+  @keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .event-row:hover { opacity: 0.88; }
+  .event-row:nth-child(1) { animation-delay: 0.04s; }
+  .event-row:nth-child(2) { animation-delay: 0.08s; }
+  .event-row:nth-child(3) { animation-delay: 0.12s; }
+  .event-row:nth-child(4) { animation-delay: 0.16s; }
+  .event-row:nth-child(5) { animation-delay: 0.20s; }
+  .event-row:nth-child(6) { animation-delay: 0.24s; }
+
+  /* TIME COLUMN */
+  .ev-time-col {
+    width: 48px;
+    flex-shrink: 0;
+    display: flex; flex-direction: column;
+    align-items: flex-end;
+    padding-top: 12px;
+    padding-right: 10px;
+  }
+  .ev-time-h {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px; font-weight: 500; color: var(--neutral-hi);
+    line-height: 1;
+  }
+  .ev-time-m {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px; font-weight: 400; color: var(--neutral-mid);
+    line-height: 1.2;
+  }
+
+  /* TIMELINE GUTTER */
+  .ev-gutter {
+    width: 20px;
+    flex-shrink: 0;
+    display: flex; flex-direction: column;
+    align-items: center;
+    position: relative;
+    padding-top: 14px;
+  }
+  .ev-dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    border: 2px solid var(--card);
+    background: var(--neutral-lo);
+    flex-shrink: 0;
+    z-index: 1;
+  }
+  .ev-line {
+    width: 1.5px;
+    flex: 1;
+    background: var(--divider);
+    min-height: 8px;
+    margin-top: 2px;
+  }
+
+  /* CARD */
+  .ev-card {
+    flex: 1;
+    background: var(--card);
+    border-radius: 14px;
+    margin: 4px 0 4px 8px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.055);
+    display: flex;
+  }
+
+  /* Rarity stripe */
+  .ev-stripe {
+    width: 3px;
+    flex-shrink: 0;
+    border-radius: 14px 0 0 14px;
+  }
+
+  .ev-card-inner {
+    flex: 1;
+    padding: 10px 12px 10px 10px;
+    display: flex; flex-direction: column; gap: 5px;
+  }
+
+  /* TOP ROW: badges + add button */
+  .ev-top {
+    display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  }
+  .ev-badges { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; min-width: 0; }
+
+  .ev-rarity-badge {
+    display: flex; align-items: center; gap: 3px;
+    border-radius: 6px; padding: 3px 7px;
+    font-size: 10px; font-weight: 700; white-space: nowrap;
+    letter-spacing: 0.02em;
+  }
+  .ev-rarity-icon { font-size: 9px; }
+
+  .ev-type-badge {
+    border-radius: 6px; padding: 3px 7px;
+    font-size: 10px; font-weight: 600;
+    background: #F0F0F3; color: var(--neutral-mid);
+    white-space: nowrap;
+  }
+
+  .ev-add-btn {
+    flex-shrink: 0;
+    border-radius: 8px; padding: 4px 10px;
+    font-size: 11px; font-weight: 700;
+    border: 1.5px solid var(--crimson);
+    background: transparent; color: var(--crimson);
+    cursor: pointer; white-space: nowrap;
+    transition: all 0.15s;
+    display: flex; align-items: center; gap: 3px;
+  }
+  .ev-add-btn.added {
+    background: var(--common); border-color: var(--common); color: white;
+  }
+  .ev-add-btn:hover:not(.added) { background: var(--crimson-soft); }
+
+  /* TITLE ROW */
+  .ev-name {
+    font-size: 14px; font-weight: 700; color: var(--night);
+    line-height: 1.25; letter-spacing: -0.01em;
+  }
+
+  /* META ROW */
+  .ev-meta {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .ev-meta-item {
+    display: flex; align-items: center; gap: 3px;
+    font-size: 11px; color: var(--neutral-mid); font-weight: 500;
+  }
+  .ev-meta-icon { font-size: 10px; opacity: 0.7; }
+
+  /* DESC (optional, for featured) */
+  .ev-desc {
+    font-size: 11px; color: var(--neutral-mid);
+    line-height: 1.5;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+
+  /* COLLECTIBLE PREVIEW (right side) */
+  .ev-collectible {
+    width: 44px; flex-shrink: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 2px;
+    padding: 6px 8px 6px 0;
+  }
+  .ev-creature-icon {
+    width: 32px; height: 32px;
+    border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+  .ev-creature-label {
+    font-size: 8px; font-weight: 600; color: var(--neutral-mid);
+    text-align: center; line-height: 1.2;
+    max-width: 40px; overflow: hidden; white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  /* ---- STATUS MODIFIERS ---- */
+
+  /* LIVE */
+  .ev-row-live .ev-dot { background: var(--status-live); border-color: #FFF; }
+  .ev-row-live .ev-card { border: 1.5px solid rgba(255,107,0,0.25); }
+  .ev-row-live .ev-line { background: rgba(255,107,0,0.2); }
+
+  .live-pulse {
+    display: flex; align-items: center; gap: 4px;
+    font-size: 10px; font-weight: 700; color: var(--status-live);
+    letter-spacing: 0.04em; text-transform: uppercase;
+  }
+  .live-dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--status-live);
+    animation: livePulse 1.4s ease-in-out infinite;
+  }
+  @keyframes livePulse {
+    0%,100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.3; transform: scale(0.75); }
+  }
+
+  /* DONE */
+  .ev-row-done { opacity: 0.55; }
+  .ev-row-done .ev-dot { background: var(--status-done); }
+
+  /* FEATURED */
+  .ev-row-featured .ev-card {
+    background: linear-gradient(105deg, #FFFCF0 0%, #FFF7DC 100%);
+    border: 1.5px solid rgba(232,168,0,0.25);
+  }
+  .ev-row-featured .ev-dot { background: var(--legendary); }
+
+  /* POINTS CHIP */
+  .ev-pts-chip {
+    display: inline-flex; align-items: center; gap: 3px;
+    background: rgba(0,0,0,0.04);
+    border-radius: 6px; padding: 2px 6px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px; font-weight: 500; color: var(--neutral-mid);
+  }
+
+  /* TAB BAR */
+  .tab-bar {
+    height: 84px; background: var(--card);
+    border-top: 1px solid var(--divider);
+    display: flex; align-items: flex-start;
+    justify-content: space-around; padding: 10px 0 0; flex-shrink: 0;
+  }
+  .tab-item {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    cursor: pointer; padding: 0 10px; flex: 1;
+  }
+  .tab-icon { font-size: 21px; }
+  .tab-label { font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 600; color: var(--neutral-mid); }
+  .tab-item.active .tab-label { color: var(--crimson); }
+  .tab-item.active .tab-icon { filter: drop-shadow(0 2px 4px rgba(200,16,46,0.3)); }
+  .tab-active-pip {
+    width: 18px; height: 3px; border-radius: 1.5px;
+    background: var(--crimson); margin-top: -2px;
+  }
+</style>
+</head>
+<body>
+
+<div style="display:flex;flex-direction:column;align-items:center;">
+  <div class="scene-label">Schedule — Day 3 View</div>
+  <div class="phone">
+
+    <!-- STATUS BAR -->
+    <div class="status">
+      <span class="status-time">4:21</span>
+      <div class="status-icons">
+        <svg width="15" height="11" viewBox="0 0 15 11"><rect x="0" y="6.5" width="2" height="4.5" rx="1" fill="#141418"/><rect x="3.2" y="4.5" width="2" height="6.5" rx="1" fill="#141418"/><rect x="6.5" y="2.5" width="2" height="8.5" rx="1" fill="#141418"/><rect x="9.8" y="0.5" width="2" height="10.5" rx="1" fill="#141418"/><rect x="13" y="0" width="2" height="11" rx="1" fill="#141418" opacity="0.25"/></svg>
+        <svg width="15" height="11" viewBox="0 0 20 14"><path d="M1 5C3.67 2.5 6.67 1.25 10 1.25s6.33 1.25 9 3.75" stroke="#141418" stroke-width="1.6" stroke-linecap="round" fill="none"/><path d="M4 8.5C5.93 6.5 7.83 5.5 10 5.5S14.07 6.5 16 8.5" stroke="#141418" stroke-width="1.6" stroke-linecap="round" fill="none"/><path d="M7 12c.83-.83 1.83-1.25 3-1.25s2.17.42 3 1.25" stroke="#141418" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg>
+        <svg width="25" height="12" viewBox="0 0 25 12"><rect x="0.5" y="0.5" width="21" height="11" rx="3.5" stroke="#141418" stroke-opacity="0.3"/><rect x="2" y="2" width="17" height="8" rx="2" fill="#141418"/><path d="M23 4v4" stroke="#141418" stroke-opacity="0.35" stroke-width="2" stroke-linecap="round"/></svg>
+      </div>
+    </div>
+
+    <!-- HEADER -->
+    <div class="header">
+      <div class="header-top">
+        <div class="screen-title">Schedule</div>
+        <div class="header-meta">
+          <strong>Day 3 of 7</strong>
+          5 events today
+        </div>
+      </div>
+
+      <!-- Week progress bar -->
+      <div class="week-bar-wrap">
+        <div class="week-bar-labels">
+          <span>Week progress</span>
+          <span>3 attended · 4 pts/event</span>
+        </div>
+        <div class="week-bar-bg">
+          <div class="week-bar-ticks">
+            <div class="week-tick"></div><div class="week-tick"></div><div class="week-tick"></div>
+            <div class="week-tick"></div><div class="week-tick"></div><div class="week-tick"></div>
+            <div class="week-tick"></div>
+          </div>
+          <div class="week-bar-fill"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DAY STRIP -->
+    <div class="day-strip-outer">
+      <div class="day-strip">
+        <div class="day-pill">
+          <div class="dp-label">Mon</div>
+          <div class="dp-num">14</div>
+          <div class="dp-dot-row">
+            <div class="dp-dot has-event"></div>
+            <div class="dp-dot has-event"></div>
+            <div class="dp-dot"></div>
+          </div>
+        </div>
+        <div class="day-pill">
+          <div class="dp-label">Tue</div>
+          <div class="dp-num">15</div>
+          <div class="dp-dot-row">
+            <div class="dp-dot has-event"></div>
+            <div class="dp-dot has-event"></div>
+            <div class="dp-dot has-event"></div>
+          </div>
+        </div>
+        <div class="day-pill active">
+          <div class="dp-label">Wed</div>
+          <div class="dp-num">16</div>
+          <div class="dp-dot-row">
+            <div class="dp-dot has-event"></div>
+            <div class="dp-dot has-event"></div>
+            <div class="dp-dot has-event"></div>
+          </div>
+        </div>
+        <div class="day-pill">
+          <div class="dp-label">Thu</div>
+          <div class="dp-num">17</div>
+          <div class="dp-dot-row">
+            <div class="dp-dot has-event"></div>
+            <div class="dp-dot"></div>
+            <div class="dp-dot"></div>
+          </div>
+        </div>
+        <div class="day-pill">
+          <div class="dp-label">Fri</div>
+          <div class="dp-num">18</div>
+          <div class="dp-dot-row">
+            <div class="dp-dot has-event"></div>
+            <div class="dp-dot has-event"></div>
+            <div class="dp-dot"></div>
+          </div>
+        </div>
+        <div class="day-pill">
+          <div class="dp-label">Sat</div>
+          <div class="dp-num">19</div>
+          <div class="dp-dot-row">
+            <div class="dp-dot"></div>
+            <div class="dp-dot"></div>
+            <div class="dp-dot"></div>
+          </div>
+        </div>
+        <div class="day-pill">
+          <div class="dp-label">Sun</div>
+          <div class="dp-num">20</div>
+          <div class="dp-dot-row">
+            <div class="dp-dot"></div>
+            <div class="dp-dot"></div>
+            <div class="dp-dot"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sep"></div>
+
+    <!-- EVENT LIST (timeline) -->
+    <div class="event-list">
+
+      <!-- PAST section -->
+      <div class="time-group-label">
+        <div class="tgl-text">Earlier</div>
+        <div class="tgl-line"></div>
+      </div>
+
+      <!-- DONE event 1 -->
+      <div class="event-row ev-row-done">
+        <div class="ev-time-col">
+          <div class="ev-time-h">10</div>
+          <div class="ev-time-m">:00 AM</div>
+        </div>
+        <div class="ev-gutter">
+          <div class="ev-dot"></div>
+          <div class="ev-line"></div>
+        </div>
+        <div class="ev-card">
+          <div class="ev-stripe" style="background:var(--common);"></div>
+          <div class="ev-card-inner">
+            <div class="ev-top">
+              <div class="ev-badges">
+                <div class="ev-rarity-badge" style="background:var(--common-bg);color:var(--common);">
+                  <span class="ev-rarity-icon">✦</span> Common
+                </div>
+                <div class="ev-type-badge">Hunt</div>
+              </div>
+              <div class="ev-add-btn added">✓ Attended</div>
+            </div>
+            <div class="ev-name">Morning Muppet Meetup</div>
+            <div class="ev-meta">
+              <div class="ev-meta-item"><span class="ev-meta-icon">📍</span> McKeldin Mall</div>
+              <div class="ev-meta-item"><span class="ev-meta-icon">⏱</span> 90 min</div>
+              <div class="ev-pts-chip">+40 pts</div>
+            </div>
+          </div>
+          <div class="ev-collectible">
+            <div class="ev-creature-icon" style="background:var(--common-bg);">🐢</div>
+            <div class="ev-creature-label">Mall Muppet</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DONE event 2 -->
+      <div class="event-row ev-row-done">
+        <div class="ev-time-col">
+          <div class="ev-time-h">12</div>
+          <div class="ev-time-m">:30 PM</div>
+        </div>
+        <div class="ev-gutter">
+          <div class="ev-dot"></div>
+          <div class="ev-line"></div>
+        </div>
+        <div class="ev-card">
+          <div class="ev-stripe" style="background:var(--rare);"></div>
+          <div class="ev-card-inner">
+            <div class="ev-top">
+              <div class="ev-badges">
+                <div class="ev-rarity-badge" style="background:var(--rare-bg);color:var(--rare);">
+                  <span class="ev-rarity-icon">◆</span> Rare
+                </div>
+                <div class="ev-type-badge">Performance</div>
+              </div>
+              <div class="ev-add-btn added">✓ Attended</div>
+            </div>
+            <div class="ev-name">Stamp Showcase</div>
+            <div class="ev-meta">
+              <div class="ev-meta-item"><span class="ev-meta-icon">📍</span> Stamp Student Union</div>
+              <div class="ev-meta-item"><span class="ev-meta-icon">⏱</span> 45 min</div>
+              <div class="ev-pts-chip">+75 pts</div>
+            </div>
+          </div>
+          <div class="ev-collectible">
+            <div class="ev-creature-icon" style="background:var(--rare-bg);">🔥</div>
+            <div class="ev-creature-label">Flame Jester</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LIVE section -->
+      <div class="time-group-label">
+        <div class="tgl-text" style="color:var(--status-live);">Happening now</div>
+        <div class="tgl-line" style="background:rgba(255,107,0,0.2);"></div>
+      </div>
+
+      <!-- LIVE event -->
+      <div class="event-row ev-row-live">
+        <div class="ev-time-col">
+          <div class="ev-time-h">2</div>
+          <div class="ev-time-m">:30 PM</div>
+        </div>
+        <div class="ev-gutter">
+          <div class="ev-dot"></div>
+          <div class="ev-line"></div>
+        </div>
+        <div class="ev-card">
+          <div class="ev-stripe" style="background:var(--status-live);"></div>
+          <div class="ev-card-inner">
+            <div class="ev-top">
+              <div class="ev-badges">
+                <div class="live-pulse">
+                  <div class="live-dot"></div>
+                  Live now
+                </div>
+              </div>
+              <div class="ev-add-btn added">✓ Added</div>
+            </div>
+            <div class="ev-name">McKeldin Time Capsule Hunt</div>
+            <div class="ev-meta">
+              <div class="ev-meta-item"><span class="ev-meta-icon">📍</span> McKeldin Mall</div>
+              <div class="ev-meta-item" style="color:var(--status-live);font-weight:600;">Ends 4:00 PM</div>
+            </div>
+            <div class="ev-desc">Follow AR clues hidden across the mall. Work solo or team up — 5 capsules to find.</div>
+          </div>
+          <div class="ev-collectible">
+            <div class="ev-creature-icon" style="background:#FFF0E8;">🎪</div>
+            <div class="ev-creature-label">Time Traveler</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- UPCOMING section -->
+      <div class="time-group-label" style="margin-top:4px;">
+        <div class="tgl-text">Upcoming</div>
+        <div class="tgl-line"></div>
+      </div>
+
+      <!-- FEATURED UPCOMING (Legendary) -->
+      <div class="event-row ev-row-featured">
+        <div class="ev-time-col">
+          <div class="ev-time-h">5</div>
+          <div class="ev-time-m">:00 PM</div>
+        </div>
+        <div class="ev-gutter">
+          <div class="ev-dot"></div>
+          <div class="ev-line"></div>
+        </div>
+        <div class="ev-card">
+          <div class="ev-stripe" style="background:var(--legendary);"></div>
+          <div class="ev-card-inner">
+            <div class="ev-top">
+              <div class="ev-badges">
+                <div class="ev-rarity-badge" style="background:var(--legendary-bg);color:var(--legendary);">
+                  <span class="ev-rarity-icon">✦✦</span> Legendary
+                </div>
+                <div class="ev-type-badge" style="background:#FFF4D6;color:#A07000;">★ Featured</div>
+              </div>
+              <div class="ev-add-btn">+ Add</div>
+            </div>
+            <div class="ev-name">Stadium Spirit Rally</div>
+            <div class="ev-meta">
+              <div class="ev-meta-item"><span class="ev-meta-icon">📍</span> Maryland Stadium</div>
+              <div class="ev-meta-item"><span class="ev-meta-icon">⏱</span> 2 hr</div>
+              <div class="ev-pts-chip" style="background:rgba(232,168,0,0.12);color:var(--legendary);">+150 pts</div>
+            </div>
+          </div>
+          <div class="ev-collectible">
+            <div class="ev-creature-icon" style="background:var(--legendary-bg);">⭐</div>
+            <div class="ev-creature-label">The Maestro</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- UPCOMING Epic -->
+      <div class="event-row">
+        <div class="ev-time-col">
+          <div class="ev-time-h">7</div>
+          <div class="ev-time-m">:30 PM</div>
+        </div>
+        <div class="ev-gutter">
+          <div class="ev-dot"></div>
+          <div class="ev-line"></div>
+        </div>
+        <div class="ev-card">
+          <div class="ev-stripe" style="background:var(--epic);"></div>
+          <div class="ev-card-inner">
+            <div class="ev-top">
+              <div class="ev-badges">
+                <div class="ev-rarity-badge" style="background:var(--epic-bg);color:var(--epic);">
+                  <span class="ev-rarity-icon">◈</span> Epic
+                </div>
+                <div class="ev-type-badge">Workshop</div>
+              </div>
+              <div class="ev-add-btn">+ Add</div>
+            </div>
+            <div class="ev-name">Puppet Workshop w/ Henson Archive</div>
+            <div class="ev-meta">
+              <div class="ev-meta-item"><span class="ev-meta-icon">📍</span> Stamp Student Union</div>
+              <div class="ev-meta-item"><span class="ev-meta-icon">⏱</span> 90 min</div>
+              <div class="ev-pts-chip">+100 pts</div>
+            </div>
+          </div>
+          <div class="ev-collectible">
+            <div class="ev-creature-icon" style="background:var(--epic-bg);">🎭</div>
+            <div class="ev-creature-label">Puppet Master</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- UPCOMING Common late -->
+      <div class="event-row">
+        <div class="ev-time-col">
+          <div class="ev-time-h">9</div>
+          <div class="ev-time-m">:30 PM</div>
+        </div>
+        <div class="ev-gutter">
+          <div class="ev-dot"></div>
+          <!-- no line after last -->
+        </div>
+        <div class="ev-card">
+          <div class="ev-stripe" style="background:var(--common);"></div>
+          <div class="ev-card-inner">
+            <div class="ev-top">
+              <div class="ev-badges">
+                <div class="ev-rarity-badge" style="background:var(--common-bg);color:var(--common);">
+                  <span class="ev-rarity-icon">✦</span> Common
+                </div>
+                <div class="ev-type-badge">Trail</div>
+              </div>
+              <div class="ev-add-btn">+ Add</div>
+            </div>
+            <div class="ev-name">Late Night Terp Trail</div>
+            <div class="ev-meta">
+              <div class="ev-meta-item"><span class="ev-meta-icon">📍</span> Campus-wide</div>
+              <div class="ev-meta-item"><span class="ev-meta-icon">⏱</span> 90 min</div>
+              <div class="ev-pts-chip">+40 pts</div>
+            </div>
+          </div>
+          <div class="ev-collectible">
+            <div class="ev-creature-icon" style="background:var(--common-bg);">🌙</div>
+            <div class="ev-creature-label">Night Crawler</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="height:16px;"></div>
+    </div>
+
+    <!-- TAB BAR -->
+    <div class="tab-bar">
+      <div class="tab-item"><div class="tab-icon">🏠</div><div class="tab-label">Home</div></div>
+      <div class="tab-item active">
+        <div class="tab-active-pip"></div>
+        <div class="tab-icon">📅</div>
+        <div class="tab-label" style="color:var(--crimson);">Schedule</div>
+      </div>
+      <div class="tab-item"><div class="tab-icon">🗺️</div><div class="tab-label">Map</div></div>
+      <div class="tab-item"><div class="tab-icon">✨</div><div class="tab-label">Collection</div></div>
+      <div class="tab-item"><div class="tab-icon">👤</div><div class="tab-label">Profile</div></div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>
