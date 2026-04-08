@@ -87,6 +87,9 @@ struct HomeScreen: View {
                         .font(DS.Typography.title2)
                         .foregroundStyle(DS.Color.primary)
                 }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    ProfileToolbarButton()
+                }
             }
             .onAppear {
                 withAnimation(.spring(response: 0.5, dampingFraction: 0.75)) {

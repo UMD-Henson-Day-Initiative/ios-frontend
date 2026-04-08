@@ -55,6 +55,11 @@ struct CollectionScreen: View {
                 }
             }
             .navigationTitle("My Collection")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    ProfileToolbarButton()
+                }
+            }
             .sheet(item: $selectedCollectible) { collectible in
                 CatalogDetailSheet(
                     collectible: collectible,

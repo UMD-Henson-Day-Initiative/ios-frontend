@@ -44,15 +44,8 @@ struct RootTabView: View {
             LeaderboardScreen()
                 .tag(AppTab.leaderboard)
                 .tabItem {
-                    Image(systemName: "trophy.fill")
-                    Text("Leaderboard")
-                }
-                }
-
-            ProfileScreen()
-                .tag(AppTab.profile)
                 .tabItem {
-                    Label("Profile", systemImage: tabRouter.selectedTab == .profile ? "person.circle.fill" : "person.circle")
+                    Label("Leaderboard", systemImage: tabRouter.selectedTab == .leaderboard ? "trophy.fill" : "trophy")
                 }
         }
         .tint(DS.Color.primary)
