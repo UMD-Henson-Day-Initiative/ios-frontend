@@ -1,13 +1,25 @@
 import SwiftUI
 
-/// Displays the user's collected items and the full collectible catalog.
-/// Tabs switch between "Collected" (items the user has found) and "Catalog"
-/// (all available collectibles with collected/uncollected status).
+// MARK: - Dark palette (Collection)
+private let bgDeep    = Color(hex: "#0A0C14")
+private let bgMid     = Color(hex: "#111422")
+private let bgCard    = Color(hex: "#181C2E")
+private let bgCardHi  = Color(hex: "#1F2438")
+private let bgSurface = Color(hex: "#252A3E")
+private let textHi    = Color(hex: "#F0F2FF")
+private let textMid   = Color(hex: "#8890B0")
+private let textLo    = Color(hex: "#454B68")
+private let dkCommon  = Color(hex: "#48C87A")
+private let dkRare    = Color(hex: "#4899FF")
+private let dkEpic    = Color(hex: "#B060FF")
+private let dkLeg     = Color(hex: "#FFD000")
+private let dkCrimson = Color(hex: "#C8102E")
+
+// MARK: - CollectionScreen
 struct CollectionScreen: View {
     @EnvironmentObject private var modelController: ModelController
-    @State private var selectedTab = 0   // 0 = collected, 1 = catalog
+    @State private var selectedRarity: String? = nil
     @State private var selectedCollectible: DatabaseCollectible?
-    @Namespace private var segmentNS
 
     private var collectedItems: [CollectedItemEntity] {
         UserDatabase.collectedItems(from: modelController)
@@ -21,124 +33,544 @@ struct CollectionScreen: View {
         modelController.currentUser?.totalPoints ?? 0
     }
 
-    private var catalogByName: [String: DatabaseCollectible] {
-        Dictionary(uniqueKeysWithValues: modelController.collectibleCatalog.map { ($0.name, $0) })
+    private var totalCP: Int {
+        collectedItems.compactMap { item in
+            modelController.collectibleCatalog.first { $0.name == item.collectibleName }?.cp
+        }.reduce(0, +)
+    }
+
+    private var userRank: Int {
+        (modelController.leaderboardUsers.firstIndex(where: { $0.id == modelController.currentUser?.id }) ?? 0) + 1
+    }
+
+    private var filteredCatalog: [DatabaseCollectible] {
+        guard let rarity = selectedRarity else { return modelController.collectibleCatalog }
+        return modelController.collectibleCatalog.filter { $0.rarity == rarity }
     }
 
     var body: some View {
         NavigationStack {
             ZStack {
-                DS.Color.surface.ignoresSafeArea()
-                ScrollView {
-                    VStack(spacing: DS.Spacing.section) {
-                        // Stat strip
-                        StatStripView(
-                            collected: collectedItems.count,
-                            total: modelController.collectibleCatalog.count,
-                            points: totalPoints
-                        )
-                        .padding(.horizontal, DS.Spacing.screenH)
+                bgDeep.ignoresSafeArea()
+                VStack(spacing: 0) {
+                    DexHeader(
+                        caught: collectedItems.count,
+                        total: modelController.collectibleCatalog.count
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
 
-                        // Custom segmented control
-                        CollectionSegmentControl(selected: $selectedTab, namespace: segmentNS)
-                            .padding(.horizontal, DS.Spacing.screenH)
+                    DexStatStrip(
+                        caught: collectedItems.count,
+                        points: totalPoints,
+                        totalCP: totalCP,
+                        rank: userRank
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
 
-                        // Content
-                        if selectedTab == 0 {
-                            collectedList
-                        } else {
-                            catalogGrid
+                    RarityFilterTabs(selected: $selectedRarity)
+                        .padding(.top, 14)
+
+                    ScrollView {
+                        let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: 3)
+                        LazyVGrid(columns: columns, spacing: 10) {
+                            ForEach(Array(filteredCatalog.enumerated()), id: \.element.id) { index, item in
+                                let dexIdx = (modelController.collectibleCatalog.firstIndex(where: { $0.id == item.id }) ?? index) + 1
+                                PokeCell(
+                                    collectible: item,
+                                    index: index,
+                                    dexNumber: dexIdx,
+                                    isCollected: collectedNames.contains(item.name)
+                                )
+                                .onTapGesture { selectedCollectible = item }
+                            }
                         }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 12)
+                        .padding(.bottom, 32)
                     }
-                    .padding(.top, DS.Spacing.card)
-                    .padding(.bottom, DS.Spacing.section)
                 }
             }
-            .navigationTitle("My Collection")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    ProfileToolbarButton()
-                }
-            }
+            .navigationBarHidden(true)
             .sheet(item: $selectedCollectible) { collectible in
-                CatalogDetailSheet(
+                DexDetailSheet(
                     collectible: collectible,
-                    collectedItem: collectedItems.first { $0.collectibleName == collectible.name }
+                    collectedItem: collectedItems.first { $0.collectibleName == collectible.name },
+                    dexNumber: (modelController.collectibleCatalog.firstIndex(where: { $0.id == collectible.id }) ?? 0) + 1
                 )
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
             }
         }
     }
+}
 
-    // MARK: - Collected list
+// MARK: - Dex header
 
-    private var collectedList: some View {
-        VStack(spacing: DS.Spacing.card) {
-            if collectedItems.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "star.square")
-                        .font(.system(size: 40))
-                        .foregroundStyle(DS.Color.neutral.opacity(0.4))
-                    Text("Nothing captured yet")
-                        .font(DS.Typography.title2)
-                        .foregroundStyle(DS.Color.campusNight)
-                    Text("Attend events to find AR collectibles.")
-                        .font(DS.Typography.body)
-                        .foregroundStyle(DS.Color.neutral)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 50)
-            } else {
-                ForEach(collectedItems, id: \.id) { item in
-                    let catalogItem = catalogByName[item.collectibleName]
-                    NavigationLink {
-                        CollectibleDetailCardScreen(item: item, catalogItem: catalogItem)
-                    } label: {
-                        CollectedItemRow(item: item, points: catalogItem?.points ?? 0, rarity: catalogItem?.rarity ?? "Common")
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, DS.Spacing.screenH)
-                }
+private struct DexHeader: View {
+    let caught: Int
+    let total: Int
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 0) {
+            Text("Pokédex")
+                .font(.system(size: 28, weight: .black))
+                .foregroundStyle(textHi)
+            Text(" #")
+                .font(.system(size: 28, weight: .black))
+                .foregroundStyle(dkRare)
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("\(caught)/\(total) caught")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(dkRare)
+                Text(String(format: "#%03d–#%03d", 1, total))
+                    .font(.system(size: 11, weight: .medium).monospaced())
+                    .foregroundStyle(textMid)
             }
         }
-    }
-
-    // MARK: - Catalog grid (3 columns)
-
-    private var catalogGrid: some View {
-        LazyVGrid(
-            columns: Array(repeating: GridItem(.flexible(), spacing: DS.Spacing.card), count: 3),
-            spacing: DS.Spacing.card
-        ) {
-            ForEach(modelController.collectibleCatalog) { collectible in
-                CollectibleGridCell(
-                    collectible: collectible,
-                    isCollected: collectedNames.contains(collectible.name)
-                )
-                .onTapGesture {
-                    selectedCollectible = collectible
-                }
-            }
-        }
-        .padding(.horizontal, DS.Spacing.screenH)
     }
 }
 
 // MARK: - Stat strip
 
-struct StatStripView: View {
-    let collected: Int
-    let total: Int
+private struct DexStatStrip: View {
+    let caught: Int
     let points: Int
+    let totalCP: Int
+    let rank: Int
 
     var body: some View {
-        HStack(spacing: DS.Spacing.card) {
-            StatTile(value: "\(collected)/\(total)", label: "Collected", icon: "star.fill")
-            StatTile(value: "\(points)", label: "Points",    icon: "bolt.fill")
+        HStack(spacing: 8) {
+            DexChip(value: "\(caught)", label: "CAUGHT", valueColor: dkCommon)
+            DexChip(value: "\(points)", label: "POINTS", valueColor: dkLeg)
+            DexChip(value: "CP \(totalCP)", label: "TOTAL CP", valueColor: textHi)
+            DexChip(value: "#\(rank)", label: "RANK", valueColor: dkRare)
         }
     }
 }
+
+private struct DexChip: View {
+    let value: String
+    let label: String
+    let valueColor: Color
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Text(value)
+                .font(.system(size: 15, weight: .black))
+                .foregroundStyle(valueColor)
+                .minimumScaleFactor(0.7)
+                .lineLimit(1)
+            Text(label)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(textMid)
+                .tracking(0.5)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .background(bgCard)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.05), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Rarity filter tabs
+
+private struct RarityFilterTabs: View {
+    @Binding var selected: String?
+
+    private let rarities: [(label: String, value: String?)] = [
+        ("All", nil),
+        ("✦ Common", "Common"),
+        ("◆ Rare", "Rare"),
+        ("◈ Epic", "Epic"),
+        ("✦✦ Legendary", "Legendary")
+    ]
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(rarities, id: \.label) { rarity in
+                    let isActive = selected == rarity.value
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            selected = rarity.value
+                        }
+                    } label: {
+                        Text(rarity.label)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(isActive ? .white : textLo)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 7)
+                            .background(
+                                Capsule()
+                                    .fill(isActive ? dkRare : Color.clear)
+                                    .shadow(color: isActive ? dkRare.opacity(0.4) : .clear, radius: 8, x: 0, y: 0)
+                            )
+                            .overlay(
+                                Capsule()
+                                    .strokeBorder(isActive ? Color.clear : textLo.opacity(0.5), lineWidth: 1)
+                            )
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 4)
+        }
+    }
+}
+
+// MARK: - Pokédex cell
+
+private struct PokeCell: View {
+    let collectible: DatabaseCollectible
+    let index: Int
+    let dexNumber: Int
+    let isCollected: Bool
+
+    @State private var floatOffset: CGFloat = 0
+
+    private var rarityColor: Color {
+        switch collectible.rarity {
+        case "Common":    return dkCommon
+        case "Rare":      return dkRare
+        case "Epic":      return dkEpic
+        case "Legendary": return dkLeg
+        default:          return dkCommon
+        }
+    }
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(bgCard)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(rarityColor.opacity(isCollected ? 0.35 : 0.1), lineWidth: 1)
+                )
+
+            RadialGradient(
+                gradient: Gradient(colors: [rarityColor.opacity(0.12), Color.clear]),
+                center: .top,
+                startRadius: 0,
+                endRadius: 80
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+            VStack(spacing: 0) {
+                HStack {
+                    Text(String(format: "#%03d", dexNumber))
+                        .font(.system(size: 8, weight: .bold).monospaced())
+                        .foregroundStyle(textLo)
+                    Spacer()
+                    Circle()
+                        .fill(rarityColor)
+                        .frame(width: 6, height: 6)
+                        .shadow(color: rarityColor.opacity(0.8), radius: 3, x: 0, y: 0)
+                }
+                .padding(.horizontal, 8)
+                .padding(.top, 8)
+
+                GeometryReader { geo in
+                    ZStack {
+                        if isCollected {
+                            if let imageName = collectible.imageName {
+                                AvifImage(named: imageName)
+                                    .scaledToFill()
+                                    .frame(width: geo.size.width, height: geo.size.height)
+                                    .clipped()
+                                    .offset(y: floatOffset)
+                            } else {
+                                Text(collectible.emoji)
+                                    .font(.system(size: 38))
+                                    .offset(y: floatOffset)
+                            }
+                        } else {
+                            Text(collectible.emoji)
+                                .font(.system(size: 38))
+                                .opacity(0.12)
+                            Text("🔒")
+                                .font(.system(size: 18))
+                        }
+                    }
+                    .frame(width: geo.size.width, height: geo.size.height)
+                }
+                .frame(height: 72)
+                .clipped()
+
+                VStack(spacing: 2) {
+                    Text(collectible.name)
+                        .font(.system(size: 10, weight: .heavy))
+                        .foregroundStyle(textHi)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    HStack(spacing: 3) {
+                        ForEach(collectible.types, id: \.self) { t in
+                            Text(t.uppercased())
+                                .font(.system(size: 7, weight: .semibold))
+                                .foregroundStyle(rarityColor)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(rarityColor.opacity(0.12))
+                                .clipShape(Capsule())
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 6)
+                .background(Color.black.opacity(0.35))
+            }
+
+            if isCollected {
+                Text("CP \(collectible.cp)")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(textHi)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+                    .padding(.top, 22)
+                    .frame(maxWidth: .infinity, alignment: .center)
+            }
+        }
+        .aspectRatio(0.75, contentMode: .fit)
+        .onAppear {
+            let delay = Double(index % 6) * 0.5
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                withAnimation(.easeInOut(duration: 3.5).repeatForever(autoreverses: true)) {
+                    floatOffset = -3
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Dex detail sheet
+
+private struct DexDetailSheet: View {
+    let collectible: DatabaseCollectible
+    let collectedItem: CollectedItemEntity?
+    let dexNumber: Int
+
+    @State private var floatOffset: CGFloat = 0
+    @Environment(\.dismiss) private var dismiss
+
+    private var rarityColor: Color {
+        switch collectible.rarity {
+        case "Common":    return dkCommon
+        case "Rare":      return dkRare
+        case "Epic":      return dkEpic
+        case "Legendary": return dkLeg
+        default:          return dkCommon
+        }
+    }
+
+    private var dayNumber: Int {
+        let calendar = Calendar.current
+        let collected = collectedItem?.foundAtDate ?? Date()
+        let diff = calendar.dateComponents([.day], from: AppConstants.Schedule.weekStart, to: collected).day ?? 0
+        return max(1, diff + 1)
+    }
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            bgMid.ignoresSafeArea()
+            VStack(spacing: 0) {
+                Capsule()
+                    .fill(bgSurface)
+                    .frame(width: 36, height: 3)
+                    .padding(.top, 12)
+                    .padding(.bottom, 20)
+
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 20) {
+                        // Stage
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .fill(
+                                    RadialGradient(
+                                        gradient: Gradient(colors: [rarityColor.opacity(0.25), bgCard]),
+                                        center: .center,
+                                        startRadius: 20,
+                                        endRadius: 120
+                                    )
+                                )
+                            VStack(spacing: 12) {
+                                ZStack {
+                                    if let imageName = collectible.imageName {
+                                        AvifImage(named: imageName)
+                                            .scaledToFill()
+                                            .frame(width: 100, height: 100)
+                                            .clipShape(Circle())
+                                            .offset(y: floatOffset)
+                                    } else {
+                                        Text(collectible.emoji)
+                                            .font(.system(size: 64))
+                                            .offset(y: floatOffset)
+                                    }
+                                }
+                                .frame(height: 100)
+
+                                Text(collectible.rarity.uppercased())
+                                    .font(.system(size: 10, weight: .black))
+                                    .foregroundStyle(rarityColor)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 4)
+                                    .background(rarityColor.opacity(0.15))
+                                    .clipShape(Capsule())
+
+                                Text(collectible.name)
+                                    .font(.system(size: 26, weight: .black))
+                                    .foregroundStyle(textHi)
+
+                                HStack(spacing: 6) {
+                                    Text(String(format: "#%03d", dexNumber))
+                                        .font(.system(size: 12, weight: .medium).monospaced())
+                                        .foregroundStyle(textMid)
+                                    if collectedItem != nil {
+                                        Text("·").foregroundStyle(textLo)
+                                        Text("Collected Day \(dayNumber)")
+                                            .font(.system(size: 12, weight: .medium).monospaced())
+                                            .foregroundStyle(textMid)
+                                    }
+                                }
+
+                                HStack(spacing: 6) {
+                                    ForEach(collectible.types, id: \.self) { t in
+                                        Text(t.uppercased())
+                                            .font(.system(size: 10, weight: .semibold))
+                                            .foregroundStyle(rarityColor)
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 4)
+                                            .background(rarityColor.opacity(0.12))
+                                            .clipShape(Capsule())
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 24)
+                        }
+                        .padding(.horizontal, 20)
+
+                        // Stats row
+                        HStack(spacing: 0) {
+                            DexDetailStat(value: "\(collectible.cp)", label: "CP", color: dkLeg)
+                            Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 44)
+                            DexDetailStat(value: "+\(collectible.points)", label: "POINTS", color: textHi)
+                            Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 44)
+                            DexDetailStat(
+                                value: collectedItem != nil ? "✓" : "–",
+                                label: "IN DEX",
+                                color: collectedItem != nil ? dkCommon : textLo
+                            )
+                            Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 44)
+                            DexDetailStat(value: "🏅", label: "BADGE", color: textHi)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .background(bgCard)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .strokeBorder(Color.white.opacity(0.05), lineWidth: 1)
+                        )
+                        .padding(.horizontal, 20)
+
+                        // CP bar
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("POWER LEVEL")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(textMid)
+                                    .tracking(0.5)
+                                Spacer()
+                                Text("\(collectible.cp) / 2200 CP")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundStyle(textMid)
+                            }
+                            GeometryReader { geo in
+                                ZStack(alignment: .leading) {
+                                    Capsule().fill(bgCard).frame(height: 6)
+                                    Capsule()
+                                        .fill(LinearGradient(
+                                            colors: [dkRare, dkLeg],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        ))
+                                        .frame(width: geo.size.width * CGFloat(collectible.cp) / 2200.0, height: 6)
+                                }
+                            }
+                            .frame(height: 6)
+                        }
+                        .padding(16)
+                        .background(bgCard)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .padding(.horizontal, 20)
+
+                        Text(collectible.flavorText)
+                            .font(.system(size: 13))
+                            .italic()
+                            .foregroundStyle(textMid)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 28)
+
+                        if let item = collectedItem {
+                            HStack(spacing: 8) {
+                                Circle().fill(dkCommon).frame(width: 8, height: 8)
+                                Text("Caught at \(item.foundAtTitle) · Day \(dayNumber)")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(textMid)
+                            }
+                        }
+
+                        Button { dismiss() } label: {
+                            Text("Done")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(textHi)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(bgSurface)
+                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 32)
+                    }
+                }
+            }
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 3.5).repeatForever(autoreverses: true)) {
+                floatOffset = -4
+            }
+        }
+    }
+}
+
+private struct DexDetailStat: View {
+    let value: String
+    let label: String
+    let color: Color
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Text(value)
+                .font(.system(size: 18, weight: .black))
+                .foregroundStyle(color)
+            Text(label)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(textMid)
+                .tracking(0.5)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+    }
+}
+
+// MARK: - StatTile (shared with HomeScreen)
 
 struct StatTile: View {
     let value: String
@@ -167,242 +599,18 @@ struct StatTile: View {
     }
 }
 
-// MARK: - Custom segmented control
-
-private struct CollectionSegmentControl: View {
-    @Binding var selected: Int
-    let namespace: Namespace.ID
-    private let tabs = ["Collected", "Catalog"]
-
-    var body: some View {
-        HStack(spacing: 0) {
-            ForEach(Array(tabs.enumerated()), id: \.offset) { index, title in
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        selected = index
-                    }
-                } label: {
-                    Text(title)
-                        .font(DS.Typography.label)
-                        .foregroundStyle(selected == index ? .white : DS.Color.neutral)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background {
-                            if selected == index {
-                                Capsule()
-                                    .fill(DS.Color.primary)
-                                    .matchedGeometryEffect(id: "segmentBackground", in: namespace)
-                            }
-                        }
-                }
-            }
-        }
-        .padding(4)
-        .background(Color(UIColor.secondarySystemBackground))
-        .clipShape(Capsule())
-    }
-}
-
-// MARK: - Collected item row
-
-private struct CollectedItemRow: View {
-    let item: CollectedItemEntity
-    let points: Int
-    let rarity: String
-
-    var body: some View {
-        HStack(spacing: 12) {
-            // Rarity color dot
-            Circle()
-                .fill(rarity.rarityColor())
-                .frame(width: 10, height: 10)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(item.collectibleName)
-                    .font(DS.Typography.title2)
-                    .foregroundStyle(DS.Color.campusNight)
-                Text("\(rarity) · \(item.foundAtTitle)")
-                    .font(DS.Typography.caption)
-                    .foregroundStyle(DS.Color.neutral)
-                    .lineLimit(1)
-            }
-
-            Spacer()
-
-            VStack(alignment: .trailing, spacing: 2) {
-                Text("+\(points)")
-                    .font(DS.Typography.title2)
-                    .foregroundStyle(DS.Color.primary)
-                Text("pts")
-                    .font(DS.Typography.caption)
-                    .foregroundStyle(DS.Color.neutral)
-            }
-        }
-        .padding(DS.Spacing.cardPad)
-        .background(DS.Color.surfaceElevated)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.card, style: .continuous))
-        .shadow(color: DS.Shadow.cardColor, radius: DS.Shadow.cardRadius, x: DS.Shadow.cardX, y: DS.Shadow.cardY)
-    }
-}
-
-// MARK: - Grid cell
-
-private struct CollectibleGridCell: View {
-    let collectible: DatabaseCollectible
-    let isCollected: Bool
-
-    var body: some View {
-        ZStack {
-            // Background tinted by rarity
-            RoundedRectangle(cornerRadius: DS.Radius.statTile, style: .continuous)
-                .fill(collectible.rarity.rarityTint())
-
-            VStack(spacing: 6) {
-                // Creature placeholder — SF Symbol as stand-in until custom illustration assets exist
-                Image(systemName: isCollected ? "sparkles" : "lock.fill")
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundStyle(isCollected ? collectible.rarity.rarityColor() : DS.Color.neutral.opacity(0.5))
-                    .saturation(isCollected ? 1 : 0.3)
-                    .blur(radius: isCollected ? 0 : 1)
-                    .frame(height: 44)
-
-                Text(collectible.name)
-                    .font(DS.Typography.caption)
-                    .foregroundStyle(isCollected ? DS.Color.campusNight : DS.Color.neutral)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 4)
-            }
-            .padding(.vertical, 12)
-
-            // Lock overlay for uncollected
-            if !isCollected {
-                RoundedRectangle(cornerRadius: DS.Radius.statTile, style: .continuous)
-                    .fill(Color.black.opacity(0.06))
-            }
-        }
-        .aspectRatio(1, contentMode: .fit)
-        .shadow(color: DS.Shadow.cardColor, radius: 6, x: 0, y: 2)
-    }
-}
-
-// MARK: - Catalog detail sheet
-
-private struct CatalogDetailSheet: View {
-    let collectible: DatabaseCollectible
-    let collectedItem: CollectedItemEntity?
-
-    private static let dateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateStyle = .medium
-        f.timeStyle = .short
-        return f
-    }()
-
-    var body: some View {
-        ScrollView {
-            VStack(spacing: DS.Spacing.card) {
-                // Header
-                ZStack {
-                    RoundedRectangle(cornerRadius: DS.Radius.card)
-                        .fill(collectible.rarity.rarityTint())
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 72))
-                        .foregroundStyle(collectible.rarity.rarityColor())
-                        .padding(.vertical, 32)
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 160)
-                .padding(.horizontal, DS.Spacing.screenH)
-
-                VStack(alignment: .leading, spacing: DS.Spacing.card) {
-                    HStack {
-                        Text(collectible.name)
-                            .font(DS.Typography.display)
-                            .foregroundStyle(DS.Color.campusNight)
-                        Spacer()
-                        RarityBadge(rarity: collectible.rarity)
-                    }
-
-                    Label(collectible.location, systemImage: "mappin")
-                        .font(DS.Typography.body)
-                        .foregroundStyle(DS.Color.neutral)
-
-                    Text("+\(collectible.points) points")
-                        .font(DS.Typography.title2)
-                        .foregroundStyle(DS.Color.primary)
-
-                    if let item = collectedItem {
-                        Divider()
-                        Label("Collected \(Self.dateFormatter.string(from: item.foundAtDate))", systemImage: "checkmark.circle.fill")
-                            .font(DS.Typography.body)
-                            .foregroundStyle(DS.Color.statusCompleted)
-                    } else {
-                        Divider()
-                        Label("Not yet collected", systemImage: "lock.fill")
-                            .font(DS.Typography.body)
-                            .foregroundStyle(DS.Color.neutral)
-                    }
-                }
-                .padding(.horizontal, DS.Spacing.screenH)
-                .padding(.bottom, DS.Spacing.section)
-            }
-            .padding(.top, DS.Spacing.card)
-        }
-    }
-}
-
-// MARK: - Full detail screen (NavigationLink target)
-
-private struct CollectibleDetailCardScreen: View {
-    let item: CollectedItemEntity
-    let catalogItem: DatabaseCollectible?
-
-    private static let foundDateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateStyle = .medium
-        f.timeStyle = .short
-        return f
-    }()
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: DS.Spacing.card) {
-                Text(item.collectibleName)
-                    .font(DS.Typography.display)
-                    .foregroundStyle(DS.Color.campusNight)
-
-                detailRow(title: "Points",     value: "+\(catalogItem?.points ?? 0)")
-                detailRow(title: "Rarity",     value: item.rarity)
-                detailRow(title: "Found at",   value: item.foundAtTitle)
-                detailRow(title: "Found on",   value: Self.foundDateFormatter.string(from: item.foundAtDate))
-
-                if let c = catalogItem {
-                    detailRow(title: "Catalog location", value: c.location)
-                }
-            }
-            .padding(DS.Spacing.screenH)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .background(DS.Color.surface.ignoresSafeArea())
-        .navigationTitle("Collectible Details")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    @ViewBuilder
-    private func detailRow(title: String, value: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(DS.Typography.caption)
-                .foregroundStyle(DS.Color.neutral)
-            Text(value)
-                .font(DS.Typography.body)
-                .foregroundStyle(DS.Color.campusNight)
-        }
-        .padding(DS.Spacing.cardPad)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DS.Color.surfaceElevated)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.statTile, style: .continuous))
+private extension Color {
+    init(hex: String) {
+        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&int)
+        self.init(
+            .sRGB,
+            red:   Double((int >> 16) & 0xFF) / 255,
+            green: Double((int >> 8)  & 0xFF) / 255,
+            blue:  Double(int         & 0xFF) / 255,
+            opacity: 1
+        )
     }
 }
 

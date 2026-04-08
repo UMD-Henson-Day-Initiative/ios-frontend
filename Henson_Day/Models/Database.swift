@@ -50,6 +50,17 @@ struct DatabaseEvent: Identifiable {
     var metadataLine: String {
         "Day \(dayNumber) • \(timeRange) • \(locationName)"
     }
+
+    var eventTypeName: String {
+        switch pinType {
+        case .collectible: return "Hunt"
+        case .event:       return "Rally"
+        case .battle:      return "Battle"
+        case .concert:     return "Concert"
+        case .site:        return "Showcase"
+        case .homebase:    return "Check-In"
+        }
+    }
 }
 
 struct DatabaseCollectible: Identifiable {
@@ -61,6 +72,12 @@ struct DatabaseCollectible: Identifiable {
     // File name in /3DModels used when spawning in AR.
     let modelFileName: String
     let points: Int
+    let emoji: String
+    // Filename (without extension) in Henson_Day/Images/ for the AVIF photo.
+    let imageName: String?
+    let flavorText: String
+    let types: [String]
+    let cp: Int
 }
 
 enum Database {
@@ -93,15 +110,15 @@ enum Database {
     ]
 
     static let collectibleCatalog: [DatabaseCollectible] = [
-        .init(id: "c1", name: "Stadium Stomper", rarity: "Rare", location: "Maryland Stadium", modelFileName: "robot", points: 50),
-        .init(id: "c2", name: "Mall Muppet", rarity: "Common", location: "McKeldin Mall", modelFileName: "toy_car", points: 40),
-        .init(id: "c3", name: "Soundwave Snare", rarity: "Rare", location: "Chapel Field", modelFileName: "hummingbird_anim", points: 55),
-        .init(id: "c4", name: "Quantum Smth", rarity: "Legendary", location: "IRB Courtyard", modelFileName: "toy_biplane_realistic", points: 75),
-        .init(id: "c5", name: "Finale Flare", rarity: "Legendary", location: "McKeldin Steps", modelFileName: "slide", points: 100),
-        .init(id: "c6", name: "Battle Buddy", rarity: "Rare", location: "Stamp Student Union", modelFileName: "robot", points: 50),
-        .init(id: "c7", name: "Lab Spark", rarity: "Common", location: "Idea Factory", modelFileName: "toy_car", points: 30),
-        .init(id: "c8", name: "Homebase Hero", rarity: "Common", location: "Hornbake Plaza", modelFileName: "hummingbird_anim", points: 25),
-        .init(id: "c9", name: "Night Runner", rarity: "Rare", location: "Lot 1 Loop", modelFileName: "toy_biplane_realistic", points: 45)
+        .init(id: "c1", name: "Stadium Stomper", rarity: "Rare",      location: "Maryland Stadium",    modelFileName: "robot",                 points: 50,  emoji: "🏟️", imageName: "premium_photo-1764702327295-2ff77a60954f", flavorText: "A legendary stomper who thunders across the stadium field, rattling the bleachers with every step.",      types: ["Ground", "Fire"],    cp: 780),
+        .init(id: "c2", name: "Mall Muppet",     rarity: "Common",   location: "McKeldin Mall",       modelFileName: "toy_car",               points: 40,  emoji: "🐢", imageName: "photo-1775584049939-2b284e207375",              flavorText: "A cheerful wanderer who calls the mall home, collecting dropped coins and leftover fries.",             types: ["Nature", "Water"],   cp: 540),
+        .init(id: "c3", name: "Soundwave Snare", rarity: "Rare",     location: "Chapel Field",        modelFileName: "hummingbird_anim",      points: 55,  emoji: "🎵", imageName: "photo-1674424832822-1cb49a329fb9",              flavorText: "Born from a standing ovation, this creature vibrates at precisely 440 Hz at all times.",              types: ["Electric", "Sound"],  cp: 820),
+        .init(id: "c4", name: "Quantum Smth",    rarity: "Legendary", location: "IRB Courtyard",       modelFileName: "toy_biplane_realistic", points: 75,  emoji: "⚡", imageName: "premium_photo-1720694751690-ab68c805bf36",      flavorText: "Exists in two places at once. Science cannot explain it. Facilities management finds this deeply inconvenient.", types: ["Psychic", "Tech"], cp: 1520),
+        .init(id: "c5", name: "Finale Flare",    rarity: "Legendary", location: "McKeldin Steps",      modelFileName: "slide",                 points: 100, emoji: "⭐", imageName: "premium_photo-1774881398780-9c98f9110cfb",      flavorText: "Only appears on the final day. Those who find it are said to carry some of its glow for years.",       types: ["Mystic", "Fire"],    cp: 1920),
+        .init(id: "c6", name: "Battle Buddy",    rarity: "Rare",      location: "Stamp Student Union", modelFileName: "robot",                 points: 50,  emoji: "🤺", imageName: "premium_photo-1775450651387-2a2085698dad",      flavorText: "Forged in the heat of the Terp Team Battle, it respects a worthy opponent above all else.",           types: ["Fighting", "Steel"], cp: 760),
+        .init(id: "c7", name: "Lab Spark",       rarity: "Common",   location: "Idea Factory",        modelFileName: "toy_car",               points: 30,  emoji: "🔬", imageName: "premium_photo-1673281336580-92e2bc649008",      flavorText: "Hatched from an unattended Petri dish. Highly curious. Do not leave near open notebooks.",              types: ["Electric", "Smart"], cp: 420),
+        .init(id: "c8", name: "Homebase Hero",   rarity: "Common",   location: "Hornbake Plaza",      modelFileName: "hummingbird_anim",      points: 25,  emoji: "🏠", imageName: nil,                                             flavorText: "The unsung guardian of Homebase. Every day, exactly 10:00 AM. Never late, never early.",               types: ["Normal"],            cp: 310),
+        .init(id: "c9", name: "Night Runner",    rarity: "Rare",     location: "Lot 1 Loop",          modelFileName: "toy_biplane_realistic", points: 45,  emoji: "🌙", imageName: nil,                                             flavorText: "Spotted only after dark, circling the loop at a pace no runner can match.",                             types: ["Shadow", "Speed"],   cp: 690)
     ]
 
     static let pins: [DatabasePinSeed] = [
