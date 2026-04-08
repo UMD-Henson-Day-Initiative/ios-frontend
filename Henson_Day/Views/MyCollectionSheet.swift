@@ -53,3 +53,14 @@ struct MyCollectionSheet: View {
         }
     }
 }
+
+#Preview("With Items") {
+    MyCollectionSheet(items: [
+        CollectedItemEntity(collectibleName: "Stadium Stomper", rarity: "Rare", foundAtTitle: "Maryland Stadium", playerID: UUID()),
+        CollectedItemEntity(collectibleName: "Mall Muppet", rarity: "Common", foundAtTitle: "The Mall", playerID: UUID()),
+    ])
+}
+
+#Preview("Empty") {
+    MyCollectionSheet(items: [])
+}

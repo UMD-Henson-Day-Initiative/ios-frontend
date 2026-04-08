@@ -249,6 +249,13 @@ struct EventDetailScreen: View {
     }
 }
 
+#Preview("Event Detail") {
+    NavigationStack {
+        EventDetailScreen(eventId: Database.events.first?.id ?? "")
+    }
+    .environmentObject(ModelController.preview())
+}
+
 struct EventTypeChip: View {
     let pinType: PinType
 

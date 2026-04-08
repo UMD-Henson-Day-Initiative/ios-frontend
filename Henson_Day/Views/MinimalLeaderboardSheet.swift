@@ -47,6 +47,17 @@ struct MinimalLeaderboardSheet: View {
     }
 }
 
+#Preview {
+    MinimalLeaderboardSheet(
+        players: [
+            PlayerEntity(displayName: "TerpHunter", avatarColorHex: "E21833", avatarType: .turtle, totalPoints: 850, isLocalUser: true),
+            PlayerEntity(displayName: "MuppetFan99", avatarColorHex: "FFD520", avatarType: .fox, totalPoints: 720),
+            PlayerEntity(displayName: "KermitKing", avatarColorHex: "4CAF50", avatarType: .panda, totalPoints: 610),
+        ],
+        localUserID: nil
+    )
+}
+
 private extension Color {
     init(hex: String) {
         let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)

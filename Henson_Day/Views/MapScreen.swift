@@ -374,7 +374,7 @@ struct MapScreen: View {
 
 #Preview {
     MapScreen()
-        .environmentObject(ModelController())
+        .environmentObject(ModelController.preview())
         .environmentObject(TabRouter())
         .environmentObject(CameraPermissionManager())
         .environmentObject(WorldAnchorManager())

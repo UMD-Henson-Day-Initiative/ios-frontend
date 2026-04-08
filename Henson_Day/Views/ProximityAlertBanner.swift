@@ -116,3 +116,46 @@ struct ProximityAlertBanner: View {
         }
     }
 }
+
+#Preview {
+    VStack {
+        Spacer()
+        ProximityAlertBanner(
+            pin: PinEntity(
+                pinType: .collectible,
+                title: "McKeldin Mall",
+                latitude: 38.9860,
+                longitude: -76.9440,
+                pinDescription: "Central campus mall",
+                hasARCollectible: true,
+                collectibleName: "Mall Muppet",
+                collectibleRarity: "Common"
+            ),
+            distance: 25,
+            collectibleName: "Mall Muppet",
+            rarity: "Common",
+            onViewAR: {},
+            onDismiss: {}
+        )
+
+        ProximityAlertBanner(
+            pin: PinEntity(
+                pinType: .event,
+                title: "Maryland Stadium",
+                latitude: 38.9910,
+                longitude: -76.9488,
+                pinDescription: "Stadium spirit rally",
+                hasARCollectible: true,
+                collectibleName: "Stadium Stomper",
+                collectibleRarity: "Rare"
+            ),
+            distance: 12,
+            collectibleName: "Stadium Stomper",
+            rarity: "Rare",
+            onViewAR: {},
+            onDismiss: {}
+        )
+    }
+    .padding(.bottom, 20)
+    .background(Color(.systemGroupedBackground))
+}

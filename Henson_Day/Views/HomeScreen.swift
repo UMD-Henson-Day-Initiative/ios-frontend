@@ -172,7 +172,7 @@ struct HomeScreen: View {
 
 #Preview {
     HomeScreen()
-        .environmentObject(ModelController())
+        .environmentObject(ModelController.preview())
         .environmentObject(TabRouter())
 }
 

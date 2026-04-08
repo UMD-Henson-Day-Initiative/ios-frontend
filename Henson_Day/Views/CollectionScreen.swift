@@ -217,5 +217,5 @@ private struct CollectibleDetailCardScreen: View {
 
 #Preview {
     CollectionScreen()
-        .environmentObject(ModelController())
+        .environmentObject(ModelController.preview())
 }

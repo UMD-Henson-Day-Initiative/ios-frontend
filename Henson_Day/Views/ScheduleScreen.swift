@@ -203,5 +203,6 @@ private struct ScheduleEventCard: View {
 
 #Preview {
     ScheduleScreen()
-        .environmentObject(ModelController())
+        .environmentObject(ModelController.preview())
+        .environmentObject(TabRouter())
 }

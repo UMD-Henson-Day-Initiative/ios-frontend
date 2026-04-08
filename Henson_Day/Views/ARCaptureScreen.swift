@@ -87,5 +87,7 @@ struct ARCaptureScreen: View {
     }
 }
 
-
-
+#Preview {
+    ARCaptureScreen(collectibleId: Database.collectibleCatalog.first?.id ?? "")
+        .environmentObject(ModelController.preview())
+}

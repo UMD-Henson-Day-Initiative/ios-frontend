@@ -223,5 +223,5 @@ struct LeaderboardRow: View {
 
 #Preview {
     LeaderboardScreen()
-    .environmentObject(ModelController())
+        .environmentObject(ModelController.preview())
 }

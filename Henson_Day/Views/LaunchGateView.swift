@@ -119,6 +119,11 @@ struct LaunchGateView: View {
     }
 }
 
+#Preview {
+    LaunchGateView()
+        .environmentObject(ModelController.preview())
+}
+
 final class LaunchPermissionState: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published private(set) var locationStatus: CLAuthorizationStatus = .notDetermined
     @Published private(set) var cameraStatus: AVAuthorizationStatus = .notDetermined

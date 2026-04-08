@@ -345,7 +345,7 @@ struct SettingsRow: View {
 
 #Preview {
     ProfileScreen()
-        .environmentObject(ModelController())
+        .environmentObject(ModelController.preview())
         .environmentObject(TabRouter())
 }
 

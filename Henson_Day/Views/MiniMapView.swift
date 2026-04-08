@@ -25,6 +25,12 @@ struct MiniMapView: View {
     }
 }
 
+#Preview {
+    MiniMapView(locationManager: LocationPermissionManager())
+        .frame(width: 180, height: 240)
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+}
+
 struct LocationPermissionPlaceholder: View {
     var body: some View {
         ZStack {

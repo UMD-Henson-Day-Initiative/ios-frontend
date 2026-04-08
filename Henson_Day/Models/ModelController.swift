@@ -39,6 +39,13 @@ final class ModelController: ObservableObject {
     private let logger = Logger(subsystem: "HensonDay", category: "ModelController")
     private let campusConfigProvider: CampusConfigProviding
 
+    static let schema = Schema([
+        PlayerEntity.self,
+        PinEntity.self,
+        BadgeEntity.self,
+        CollectedItemEntity.self
+    ])
+
     convenience init() {
         self.init(campusConfigProvider: CampusConfigProvider.active)
     }
@@ -47,6 +54,37 @@ final class ModelController: ObservableObject {
         self.campusConfigProvider = campusConfigProvider
         self.campusCenter = campusConfigProvider.campusCenter
         initializeStore()
+    }
+
+    /// Private init that skips `initializeStore()` — used only by `preview()`.
+    private init(campusConfigProvider: CampusConfigProviding, skipStore: Bool) {
+        self.campusConfigProvider = campusConfigProvider
+        self.campusCenter = campusConfigProvider.campusCenter
+    }
+
+    /// Creates a ModelController backed by an in-memory SwiftData store with seeded data.
+    /// Use this in `#Preview` blocks so previews don't touch the on-disk store.
+    static func preview() -> ModelController {
+        let controller = ModelController(campusConfigProvider: CampusConfigProvider.active, skipStore: true)
+        let config = ModelConfiguration("HensonDayPreview", schema: schema, isStoredInMemoryOnly: true)
+        do {
+            let container = try ModelContainer(for: schema, configurations: [config])
+            controller.modelContainer = container
+            controller.context = ModelContext(container)
+            controller.seedPlayers()
+            controller.seedPins()
+            controller.seedBadges()
+            try controller.context?.save()
+            controller.refreshPublishedData()
+            controller.scheduleEvents = Database.events.sorted {
+                ($0.dayNumber, $0.timeRange) < ($1.dayNumber, $1.timeRange)
+            }
+            controller.collectibleCatalog = Database.collectibleCatalog
+            controller.isSeedLoading = false
+        } catch {
+            // Previews will show loading state if this fails
+        }
+        return controller
     }
 
     func clearUserFacingError() {
@@ -70,16 +108,9 @@ final class ModelController: ObservableObject {
         collectibleCatalog = []
         campusCenter = campusConfigProvider.campusCenter
 
-        let schema = Schema([
-            PlayerEntity.self,
-            PinEntity.self,
-            BadgeEntity.self,
-            CollectedItemEntity.self
-        ])
-
-        let config = ModelConfiguration("HensonDayOffline", schema: schema, isStoredInMemoryOnly: false)
+        let config = ModelConfiguration("HensonDayOffline", schema: Self.schema, isStoredInMemoryOnly: false)
         do {
-            let container = try ModelContainer(for: schema, configurations: [config])
+            let container = try ModelContainer(for: Self.schema, configurations: [config])
             modelContainer = container
             context = ModelContext(container)
         } catch {
