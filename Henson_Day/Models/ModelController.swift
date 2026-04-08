@@ -337,8 +337,8 @@ final class ModelController: ObservableObject {
     /// Normalizes text for resilient matching by lowercasing and stripping punctuation.
     private func normalizeForMatching(_ text: String) -> String {
         let lowered = text.lowercased()
-        let cleaned = lowered.unicodeScalars.map { scalar -> Character in
-            CharacterSet.alphanumerics.contains(scalar) ? Character(scalar) : " "
+        let cleaned = lowered.unicodeScalars.map { scalar -> Swift.Character in
+            CharacterSet.alphanumerics.contains(scalar) ? Swift.Character(String(scalar)) : " "
         }
         return String(cleaned)
             .split(separator: " ")
