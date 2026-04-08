@@ -5,20 +5,22 @@ import Combine
 
 struct MiniMapView: View {
     @ObservedObject var locationManager: LocationPermissionManager
+    @State private var cameraPosition: MapCameraPosition = .automatic
 
     var body: some View {
         Group {
             if locationManager.isDeniedOrRestricted {
                 LocationPermissionPlaceholder()
             } else {
-                Map(
-                    coordinateRegion: $locationManager.region,
-                    interactionModes: [.all],
-                    showsUserLocation: true,
-                    userTrackingMode: .constant(.follow)
-                )
+                Map(position: $cameraPosition, interactionModes: [.all]) {
+                    UserAnnotation()
+                }
                 .onAppear {
+                    cameraPosition = .region(locationManager.region)
                     locationManager.requestWhenInUseAuthorizationIfNeeded()
+                }
+                .onReceive(locationManager.$region) { region in
+                    cameraPosition = .region(region)
                 }
             }
         }
