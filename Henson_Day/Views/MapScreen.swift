@@ -32,8 +32,6 @@ struct MapScreen: View {
     @State private var selectedPinID: UUID?
     @State private var isDetailPresented = false
     @State private var arPin: PinEntity?
-    @State private var showLeaderboard = false
-    @State private var showCollection = false
     @State private var isCameraPrimary = false
     @State private var suppressMiniCameraFeed = false
     @State private var isPreparingTeleportLaunch = false
@@ -65,7 +63,6 @@ struct MapScreen: View {
                 VStack(spacing: 0) {
                     topStatusStrip
                     Spacer()
-                    floatingActions
                 }
 
                 miniSwapPanel
@@ -75,6 +72,11 @@ struct MapScreen: View {
 
                     PinDetailBottomSheet(
                         detail: detailForPin(selectedPin),
+                        pinCoordinate: CLLocationCoordinate2D(
+                            latitude: selectedPin.latitude,
+                            longitude: selectedPin.longitude
+                        ),
+                        userLocation: locationManager.effectiveCoordinate,
                         isPresented: Binding(
                             get: { isDetailPresented },
                             set: { newValue in
@@ -84,9 +86,6 @@ struct MapScreen: View {
                                 }
                             }
                         ),
-                        onNavigate: {
-                            openInMaps(selectedPin)
-                        },
                         onPrimaryAction: {
                             handlePrimaryAction(for: selectedPin)
                         },
@@ -97,15 +96,6 @@ struct MapScreen: View {
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
-        }
-        .sheet(isPresented: $showLeaderboard) {
-            MinimalLeaderboardSheet(
-                players: modelController.leaderboardUsers,
-                localUserID: modelController.currentUser?.id
-            )
-        }
-        .sheet(isPresented: $showCollection) {
-            MyCollectionSheet(items: modelController.collectionItemsForCurrentUser())
         }
         .fullScreenCover(item: $arPin) { pin in
             ARCollectibleExperienceView(pin: pin)
@@ -291,32 +281,7 @@ struct MapScreen: View {
         }
     }
 
-    private var floatingActions: some View {
-        HStack(spacing: 12) {
-            Button {
-                showLeaderboard = true
-            } label: {
-                Label("Leaderboard", systemImage: "list.number")
-                    .font(.subheadline.weight(.semibold))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(.thinMaterial)
-                    .clipShape(Capsule())
-            }
 
-            Button {
-                showCollection = true
-            } label: {
-                Label("My Collection", systemImage: "cube.box")
-                    .font(.subheadline.weight(.semibold))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(.thinMaterial)
-                    .clipShape(Capsule())
-            }
-        }
-        .padding(.bottom, 18)
-    }
 
     private func detailForPin(_ pin: PinEntity) -> MapPinDetail {
         let parsed = parseSubtitle(pin.subtitle)
@@ -353,20 +318,10 @@ struct MapScreen: View {
         case .battle:
             arPin = pin
         case .homebase:
-            showCollection = true
+            tabRouter.selectedTab = .collection
         case .site, .concert:
             break
         }
-    }
-
-    private func openInMaps(_ pin: PinEntity) {
-        let coordinate = CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)
-        let placemark = MKPlacemark(coordinate: coordinate)
-        let mapItem = MKMapItem(placemark: placemark)
-        mapItem.name = pin.title
-        mapItem.openInMaps(launchOptions: [
-            MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeWalking
-        ])
     }
 
     private func openEventDetails(for pin: PinEntity) {

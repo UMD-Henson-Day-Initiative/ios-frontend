@@ -9,7 +9,7 @@ struct HomeScreen: View {
 
     @State private var heroAppeared = false
     @State private var statsAppeared = false
-    @State private var gridAppeared = false
+    @State private var cardsAppeared = false
 
     private var nextEvent: DatabaseEvent? {
         modelController.scheduleEvents.first
@@ -49,31 +49,27 @@ struct HomeScreen: View {
                         ) {
                             tabRouter.selectedTab = .collection
                         } onLeaderboard: {
-                            tabRouter.selectedTab = .profile
+                            tabRouter.selectedTab = .leaderboard
                         }
                         .padding(.horizontal, DS.Spacing.screenH)
                         .opacity(statsAppeared ? 1 : 0)
                         .offset(y: statsAppeared ? 0 : 12)
 
-                        // Explore grid
+                        // How it works
                         VStack(alignment: .leading, spacing: 14) {
-                            Text("Explore")
+                            Text("How It Works")
                                 .font(DS.Typography.display)
                                 .foregroundStyle(DS.Color.campusNight)
                                 .padding(.horizontal, DS.Spacing.screenH)
 
-                            LazyVGrid(
-                                columns: [GridItem(.flexible(), spacing: DS.Spacing.card), GridItem(.flexible(), spacing: DS.Spacing.card)],
-                                spacing: DS.Spacing.card
-                            ) {
-                                ForEach(Array(navTiles.enumerated()), id: \.offset) { index, tile in
-                                    NavTile(tile: tile)
-                                        .onTapGesture { tile.action() }
-                                        .opacity(gridAppeared ? 1 : 0)
-                                        .offset(y: gridAppeared ? 0 : 16)
+                            VStack(spacing: DS.Spacing.card) {
+                                ForEach(Array(tutorialCards.enumerated()), id: \.offset) { index, card in
+                                    TutorialCard(card: card)
+                                        .opacity(cardsAppeared ? 1 : 0)
+                                        .offset(y: cardsAppeared ? 0 : 14)
                                         .animation(
-                                            .easeOut(duration: 0.3).delay(Double(index) * 0.06),
-                                            value: gridAppeared
+                                            .easeOut(duration: 0.32).delay(Double(index) * 0.07),
+                                            value: cardsAppeared
                                         )
                                 }
                             }
@@ -100,36 +96,41 @@ struct HomeScreen: View {
                     statsAppeared = true
                 }
                 withAnimation(.easeOut(duration: 0.3).delay(0.22)) {
-                    gridAppeared = true
+                    cardsAppeared = true
                 }
             }
         }
     }
 
-    private var navTiles: [NavTileModel] {
+    private var tutorialCards: [TutorialCardModel] {
         [
-            NavTileModel(
-                title: "Schedule", icon: "calendar",
-                background: DS.Color.primaryTint, accent: DS.Color.primary,
-                action: { tabRouter.selectedTab = .schedule }
+            TutorialCardModel(
+                icon: "calendar",
+                color: DS.Color.primary,
+                tint: DS.Color.primaryTint,
+                title: "Schedule",
+                description: "Browse all Henson Week events, see what collectibles each one offers, and plan your week."
             ),
-            NavTileModel(
-                title: "Map", icon: "map.fill",
-                background: Color(red: 240/255, green: 247/255, blue: 255/255),
-                accent: DS.Color.Rarity.rare,
-                action: { tabRouter.selectedTab = .map }
+            TutorialCardModel(
+                icon: "map.fill",
+                color: DS.Color.Rarity.rare,
+                tint: DS.Color.Rarity.rareTint,
+                title: "Map",
+                description: "Explore campus, tap event pins to see what's happening nearby, and launch AR to capture muppets."
             ),
-            NavTileModel(
-                title: "Collection", icon: "star.square.fill",
-                background: DS.Color.Rarity.legendaryTint,
-                accent: DS.Color.gold,
-                action: { tabRouter.selectedTab = .collection }
+            TutorialCardModel(
+                icon: "star.square.fill",
+                color: DS.Color.gold,
+                tint: DS.Color.Rarity.legendaryTint,
+                title: "Collection",
+                description: "View every muppet you've collected, check their rarity, and track how many points you've earned."
             ),
-            NavTileModel(
-                title: "Profile", icon: "person.circle.fill",
-                background: DS.Color.Rarity.commonTint,
-                accent: DS.Color.Rarity.common,
-                action: { tabRouter.selectedTab = .profile }
+            TutorialCardModel(
+                icon: "trophy.fill",
+                color: DS.Color.Rarity.epic,
+                tint: DS.Color.Rarity.epicTint,
+                title: "Leaderboard",
+                description: "See where you rank against the rest of campus across the full week."
             ),
         ]
     }
@@ -209,32 +210,42 @@ private struct HomeStatStrip: View {
     }
 }
 
-// MARK: - Nav tile
+// MARK: - Tutorial card
 
-private struct NavTileModel {
-    let title: String
+private struct TutorialCardModel {
     let icon: String
-    let background: Color
-    let accent: Color
-    let action: () -> Void
+    let color: Color
+    let tint: Color
+    let title: String
+    let description: String
 }
 
-private struct NavTile: View {
-    let tile: NavTileModel
+private struct TutorialCard: View {
+    let card: TutorialCardModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Image(systemName: tile.icon)
-                .font(.system(size: 32, weight: .semibold))
-                .foregroundStyle(tile.accent)
-            Spacer()
-            Text(tile.title)
-                .font(DS.Typography.title2)
-                .foregroundStyle(DS.Color.campusNight)
+        HStack(spacing: 16) {
+            Image(systemName: card.icon)
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundStyle(card.color)
+                .frame(width: 52, height: 52)
+                .background(card.tint)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(card.title)
+                    .font(DS.Typography.title2)
+                    .foregroundStyle(DS.Color.campusNight)
+                Text(card.description)
+                    .font(DS.Typography.body)
+                    .foregroundStyle(DS.Color.neutral)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, minHeight: 130, alignment: .topLeading)
         .padding(DS.Spacing.cardPad)
-        .background(tile.background)
+        .background(DS.Color.surfaceElevated)
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.card, style: .continuous))
         .shadow(color: DS.Shadow.cardColor, radius: DS.Shadow.cardRadius, x: DS.Shadow.cardX, y: DS.Shadow.cardY)
     }

@@ -23,6 +23,7 @@ enum AppConstants {
         static let spawnRadiusMeters: CLLocationDistance = 30
         static let maxPlacements = 3
         static let walkAwayDistanceMeters: Float = 12
+        static let collectibleProximityMeters: CLLocationDistance = 150
 
         // AR flow timing values
         static let teleportFallbackDelaySeconds: TimeInterval = 2.0
