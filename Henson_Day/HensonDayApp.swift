@@ -9,6 +9,7 @@ struct HensonDayApp: App {
     @StateObject private var cameraPermission = CameraPermissionManager()
     @StateObject private var worldAnchorManager = WorldAnchorManager()
     @StateObject private var locationManager = LocationPermissionManager()
+    @StateObject private var contentService = ContentService()
 
     var body: some Scene {
         WindowGroup {
@@ -18,6 +19,11 @@ struct HensonDayApp: App {
                 .environmentObject(cameraPermission)
                 .environmentObject(worldAnchorManager)
                 .environmentObject(locationManager)
+                .environmentObject(contentService)
+                .task {
+                    await contentService.loadFromBundle()
+                    await contentService.refreshFromRemoteIfAvailable()
+                }
         }
     }
 }

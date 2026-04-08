@@ -1,6 +1,7 @@
 // ContentService.swift
 
 import Foundation
+import Combine
 
 /// Central content loader for assets, characters, and narrative graph.
 @MainActor
@@ -56,3 +57,4 @@ final class ContentService: ObservableObject {
         }.value
     }
 }
+
