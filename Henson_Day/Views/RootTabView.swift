@@ -41,6 +41,13 @@ struct RootTabView: View {
                     Label("Collection", systemImage: tabRouter.selectedTab == .collection ? "star.square.fill" : "star.square")
                 }
 
+            LeaderboardScreen()
+                .tag(AppTab.leaderboard)
+                .tabItem {
+                    Image(systemName: "trophy.fill")
+                    Text("Leaderboard")
+                }
+
             ProfileScreen()
                 .tag(AppTab.profile)
                 .tabItem {
