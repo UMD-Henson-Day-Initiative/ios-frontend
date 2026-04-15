@@ -83,3 +83,67 @@ struct AnnouncementDTO: Decodable {
     let priority: String?
     let isActive: Bool?
 }
+
+// MARK: - DTO → local model converters
+
+extension EventDTO {
+    /// Convert to a `DatabaseEvent`, computing `dayNumber` relative to the season
+    /// start date (or `AppConstants.Schedule.weekStart` as fallback).
+    func toDatabaseEvent(seasonStart: Date? = nil) -> DatabaseEvent {
+        let anchor = seasonStart ?? AppConstants.Schedule.weekStart
+        let cal = Calendar.current
+        let dayOffset = cal.dateComponents([.day], from: cal.startOfDay(for: anchor), to: cal.startOfDay(for: startsAt)).day ?? 0
+        let dayNumber = max(1, dayOffset + 1)
+
+        let fmt = DateFormatter()
+        fmt.dateFormat = "h:mm a"
+        let timeRange = "\(fmt.string(from: startsAt)) – \(fmt.string(from: endsAt))"
+
+        return DatabaseEvent(
+            id: id,
+            dayNumber: dayNumber,
+            title: title,
+            timeRange: timeRange,
+            locationName: locationName,
+            description: description,
+            pinType: PinType(rawValue: pinType) ?? .event,
+            collectibleName: nil
+        )
+    }
+}
+
+extension PinDTO {
+    /// Convert to a `PinEntity` for SwiftData persistence.
+    func toPinEntity() -> PinEntity {
+        PinEntity(
+            pinType: PinType(rawValue: pinType) ?? .site,
+            title: title,
+            subtitle: subtitle,
+            latitude: latitude,
+            longitude: longitude,
+            pinDescription: description,
+            hasARCollectible: hasArCollectible ?? false,
+            collectibleName: nil,
+            collectibleRarity: nil
+        )
+    }
+}
+
+extension CollectibleDTO {
+    /// Convert to a `DatabaseCollectible` for catalog display and AR flow.
+    func toDatabaseCollectible() -> DatabaseCollectible {
+        DatabaseCollectible(
+            id: id,
+            name: name,
+            rarity: rarity,
+            location: "",
+            modelFileName: modelFileName,
+            points: points,
+            emoji: "",
+            imageName: nil,
+            flavorText: flavorText,
+            types: types ?? [],
+            cp: cp
+        )
+    }
+}

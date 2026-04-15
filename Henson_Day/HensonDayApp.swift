@@ -26,6 +26,10 @@ struct HensonDayApp: App {
                     if let remoteConfig = contentService.remoteCampusConfig {
                         CampusConfigProvider.applyRemoteConfig(remoteConfig)
                     }
+                    // Overlay remote events, pins, and collectibles onto ModelController
+                    if contentService.syncState == .synced {
+                        modelController.applyRemoteContent(from: contentService)
+                    }
                 }
                 .preferredColorScheme(.light)
         }

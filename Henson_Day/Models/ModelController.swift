@@ -411,4 +411,85 @@ final class ModelController: ObservableObject {
             logger.error("\(context, privacy: .public): \(message, privacy: .public)")
         }
     }
+
+    // MARK: - Remote content integration
+
+    /// Apply remote content from ContentService, replacing seed/fallback data where
+    /// remote data is available. Remote pins are upserted into SwiftData by title;
+    /// events and collectibles replace the in-memory arrays directly.
+    func applyRemoteContent(from contentService: ContentService) {
+        let seasonStart = contentService.remoteCampusConfig.flatMap { _ in
+            // Use the season start from bootstrap if available, else weekStart
+            AppConstants.Schedule.weekStart as Date?
+        }
+
+        // Events: replace schedule if remote events are available
+        if !contentService.remoteEvents.isEmpty {
+            let remoteEvents = contentService.remoteEvents
+                .map { $0.toDatabaseEvent(seasonStart: seasonStart) }
+                .sorted { ($0.dayNumber, $0.timeRange) < ($1.dayNumber, $1.timeRange) }
+            self.scheduleEvents = remoteEvents
+            logger.info("Applied \(remoteEvents.count) remote events")
+        }
+
+        // Collectibles: replace catalog if remote collectibles are available
+        if !contentService.remoteCollectibles.isEmpty {
+            let remoteCatalog = contentService.remoteCollectibles
+                .filter { $0.isActive ?? true }
+                .map { $0.toDatabaseCollectible() }
+            self.collectibleCatalog = remoteCatalog
+            logger.info("Applied \(remoteCatalog.count) remote collectibles")
+        }
+
+        // Pins: upsert into SwiftData so the map reflects remote state
+        if !contentService.remotePins.isEmpty {
+            upsertRemotePins(contentService.remotePins)
+        }
+
+        // Campus center: update if remote config changed
+        if let remoteConfig = contentService.remoteCampusConfig {
+            campusCenter = CLLocationCoordinate2D(
+                latitude: remoteConfig.centerLatitude,
+                longitude: remoteConfig.centerLongitude
+            )
+        }
+    }
+
+    /// Upsert remote pins into SwiftData. Matches by title: updates existing pins
+    /// and inserts new ones. Preserves locally-tracked collectible progress.
+    private func upsertRemotePins(_ remotePins: [PinDTO]) {
+        guard let context else {
+            logger.warning("Cannot upsert remote pins: no SwiftData context")
+            return
+        }
+
+        do {
+            let existingPins = try context.fetch(FetchDescriptor<PinEntity>())
+            let existingByTitle = Dictionary(uniqueKeysWithValues: existingPins.map { ($0.title, $0) })
+
+            for dto in remotePins where !(dto.isHidden ?? false) {
+                if let existing = existingByTitle[dto.title] {
+                    existing.pinType = PinType(rawValue: dto.pinType) ?? .site
+                    existing.subtitle = dto.subtitle
+                    existing.latitude = dto.latitude
+                    existing.longitude = dto.longitude
+                    existing.pinDescription = dto.description
+                    existing.hasARCollectible = dto.hasArCollectible ?? false
+                } else {
+                    context.insert(dto.toPinEntity())
+                }
+            }
+
+            try context.save()
+            refreshPublishedData()
+            logger.info("Upserted \(remotePins.count) remote pins")
+        } catch {
+            publishRuntimeError(
+                title: "Pin sync issue",
+                message: "Some map pins may not reflect the latest content.",
+                context: "Remote pin upsert",
+                error: error
+            )
+        }
+    }
 }
