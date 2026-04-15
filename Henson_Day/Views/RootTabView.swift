@@ -95,6 +95,12 @@ struct HensonBottomBar: View {
                     }
                     .contentShape(Rectangle())
                 }
+            }
+        }
+        .background(
+            }
+        }
+        .background(
             DS.Color.surfaceElevated
                 .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: -3)
                 .ignoresSafeArea(edges: .bottom)
