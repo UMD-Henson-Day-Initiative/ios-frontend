@@ -127,12 +127,20 @@ struct LaunchGateView: View {
                 .font(.caption)
                 .padding(.top, 4)
         case .syncingRemote:
-            HStack(spacing: 6) {
-                ProgressView()
-                    .controlSize(.small)
-                Text("Syncing latest content")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            VStack(spacing: 6) {
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Checking for content updates")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if contentService.hasRemoteOverlayContent {
+                    Text("Showing cached content while the latest updates load.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
             }
             .padding(.top, 4)
         case .synced:

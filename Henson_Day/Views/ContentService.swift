@@ -61,11 +61,17 @@ final class ContentService: ObservableObject {
         environment.remoteContentDisabledReason
     }
 
+    @discardableResult
+    func restoreCachedRemoteContentIfAvailable() -> Bool {
+        loadCachedRemoteContentIfAvailable()
+        return hasRemoteOverlayContent
+    }
+
     /// Full startup load: bundle first, then remote overlay if enabled.
     func loadContent() async {
         logger.info("Loading content for environment \(self.environment.name.rawValue, privacy: .public)")
         await loadFromBundle()
-        loadCachedRemoteContentIfAvailable()
+        _ = restoreCachedRemoteContentIfAvailable()
         if environment.usesRemoteContent {
             await refreshFromRemote()
         } else {
@@ -170,7 +176,9 @@ final class ContentService: ObservableObject {
         switch syncState {
         case .synced, .bundleOnly(_), .stale, .failed:
             return true
-        case .idle, .loadingBundle, .syncingRemote:
+        case .syncingRemote:
+            return hasRemoteOverlayContent
+        case .idle, .loadingBundle:
             return false
         }
     }

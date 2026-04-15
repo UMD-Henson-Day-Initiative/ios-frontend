@@ -18,6 +18,17 @@ struct HensonDayApp: App {
         _contentService = StateObject(wrappedValue: ContentService(environment: environment))
     }
 
+    private func applyAvailableRemoteContent() {
+        if environment.featureFlags.enableRemoteCampusConfig,
+           let remoteConfig = contentService.remoteCampusConfig {
+            CampusConfigProvider.applyRemoteConfig(remoteConfig)
+        }
+
+        if contentService.hasRemoteOverlayContent {
+            modelController.applyRemoteContent(from: contentService)
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             LaunchGateView()
@@ -28,18 +39,20 @@ struct HensonDayApp: App {
                 .environmentObject(locationManager)
                 .environmentObject(contentService)
                 .task {
-                    await contentService.loadContent()
-                    // Apply remote campus config when available
-                    if environment.featureFlags.enableRemoteCampusConfig,
-                       let remoteConfig = contentService.remoteCampusConfig {
-                        CampusConfigProvider.applyRemoteConfig(remoteConfig)
+                    await contentService.loadFromBundle()
+
+                    if contentService.restoreCachedRemoteContentIfAvailable() {
+                        applyAvailableRemoteContent()
                     }
-                    // Overlay remote events, pins, and collectibles onto ModelController
-                    switch contentService.syncState {
-                    case .synced, .stale:
-                        modelController.applyRemoteContent(from: contentService)
-                    default:
-                        break
+
+                    if environment.usesRemoteContent {
+                        await contentService.refreshFromRemote()
+                        switch contentService.syncState {
+                        case .synced, .stale:
+                            applyAvailableRemoteContent()
+                        default:
+                            break
+                        }
                     }
                 }
                 .preferredColorScheme(.light)
