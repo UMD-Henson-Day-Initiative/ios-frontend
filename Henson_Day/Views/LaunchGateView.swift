@@ -2,14 +2,24 @@ import SwiftUI
 import AVFoundation
 import CoreLocation
 import Combine
+import os
 
 /// App startup gate that checks camera and location permissions before allowing
-/// entry to the main app. Shows permission status, handles retry/settings flow,
-/// and waits for ModelController to finish seeding before transitioning to RootTabView.
+/// entry to the main app. Shows permission status, content sync progress, handles
+/// retry/settings flow, and waits for ModelController to finish seeding before
+/// transitioning to RootTabView.
 struct LaunchGateView: View {
     @EnvironmentObject private var modelController: ModelController
+    @EnvironmentObject private var contentService: ContentService
     @StateObject private var permissionState = LaunchPermissionState()
     @State private var hasEnteredApp = false
+
+    private let logger = Logger(subsystem: "HensonDay", category: "Launch")
+
+    /// True when both local seed and content service have finished their initial work.
+    private var isStartupComplete: Bool {
+        !modelController.isSeedLoading && contentService.hasUsableContent
+    }
 
     var body: some View {
         Group {
@@ -21,6 +31,7 @@ struct LaunchGateView: View {
         }
         .onAppear {
             permissionState.refreshAndRequestIfNeeded()
+            logger.info("Launch gate appeared")
         }
     }
 
@@ -40,25 +51,9 @@ struct LaunchGateView: View {
                     ProgressView("Preparing offline data")
                         .padding(.top, 8)
                 } else if let startupErrorMessage = modelController.startupErrorMessage {
-                    VStack(spacing: 10) {
-                        Label("Offline data failed to load", systemImage: "exclamationmark.triangle.fill")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.red)
-
-                        Text(startupErrorMessage)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-
-                        Button("Retry") {
-                            modelController.retryInitialization()
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(Color("UMDRed"))
-                        .padding(.top, 4)
-                    }
-                    .padding(.top, 6)
+                    startupErrorView(message: startupErrorMessage)
                 } else {
+                    // Permissions
                     VStack(spacing: 10) {
                         permissionRow(
                             title: "Location",
@@ -75,6 +70,9 @@ struct LaunchGateView: View {
                     }
                     .padding(.top, 6)
 
+                    // Content sync status
+                    contentSyncStatusView
+
                     if permissionState.anyDenied {
                         Button("Open Settings") {
                             permissionState.openSettings()
@@ -83,16 +81,104 @@ struct LaunchGateView: View {
                     }
 
                     Button("Enter Map") {
+                        logger.info("User entered app. Sync state: \(String(describing: contentService.syncState))")
                         hasEnteredApp = true
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(Color("UMDRed"))
                     .padding(.top, 4)
+                    .disabled(!isStartupComplete)
                 }
             }
             .padding(24)
         }
     }
+
+    // MARK: - Startup error (SwiftData failed)
+
+    private func startupErrorView(message: String) -> some View {
+        VStack(spacing: 10) {
+            Label("Offline data failed to load", systemImage: "exclamationmark.triangle.fill")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.red)
+
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            Button("Retry") {
+                modelController.retryInitialization()
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Color("UMDRed"))
+            .padding(.top, 4)
+        }
+        .padding(.top, 6)
+    }
+
+    // MARK: - Content sync status
+
+    @ViewBuilder
+    private var contentSyncStatusView: some View {
+        switch contentService.syncState {
+        case .idle, .loadingBundle:
+            ProgressView("Loading content")
+                .font(.caption)
+                .padding(.top, 4)
+        case .syncingRemote:
+            HStack(spacing: 6) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Syncing latest content")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.top, 4)
+        case .synced:
+            Label("Content up to date", systemImage: "checkmark.circle.fill")
+                .font(.caption)
+                .foregroundStyle(.green)
+                .padding(.top, 4)
+        case .bundleOnly:
+            Label("Using offline content", systemImage: "internaldrive.fill")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.top, 4)
+        case .stale:
+            VStack(spacing: 6) {
+                Label("Content may be outdated", systemImage: "clock.arrow.circlepath")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                Button("Retry Sync") {
+                    Task { await contentService.refreshFromRemote() }
+                }
+                .font(.caption)
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+            .padding(.top, 4)
+        case .failed(let message):
+            VStack(spacing: 6) {
+                Label("Content sync failed", systemImage: "wifi.exclamationmark")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                Text(message)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                Button("Retry") {
+                    Task { await contentService.refreshFromRemote() }
+                }
+                .font(.caption)
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+            .padding(.top, 4)
+        }
+    }
+
+    // MARK: - Shared row
 
     private func permissionRow(title: String, granted: Bool, denied: Bool, icon: String) -> some View {
         HStack {
@@ -167,8 +253,10 @@ final class LaunchPermissionState: NSObject, ObservableObject, CLLocationManager
         }
     }
 
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        locationStatus = manager.authorizationStatus
+    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        Task { @MainActor in
+            locationStatus = manager.authorizationStatus
+        }
     }
 
     func openSettings() {

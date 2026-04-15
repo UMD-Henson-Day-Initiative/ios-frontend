@@ -9,7 +9,7 @@ struct HensonDayApp: App {
     @StateObject private var cameraPermission = CameraPermissionManager()
     @StateObject private var worldAnchorManager = WorldAnchorManager()
     @StateObject private var locationManager = LocationPermissionManager()
-    @StateObject private var contentService = ContentService()
+    @StateObject private var contentService = ContentService(environment: .current)
 
     var body: some Scene {
         WindowGroup {
@@ -21,8 +21,11 @@ struct HensonDayApp: App {
                 .environmentObject(locationManager)
                 .environmentObject(contentService)
                 .task {
-                    await contentService.loadFromBundle()
-                    await contentService.refreshFromRemoteIfAvailable()
+                    await contentService.loadContent()
+                    // Apply remote campus config when available
+                    if let remoteConfig = contentService.remoteCampusConfig {
+                        CampusConfigProvider.applyRemoteConfig(remoteConfig)
+                    }
                 }
                 .preferredColorScheme(.light)
         }

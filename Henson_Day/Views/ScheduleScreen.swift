@@ -1,6 +1,9 @@
 import SwiftUI
 
 // MARK: - Schedule screen
+/// Day-filtered event schedule. Renders a header with event count, a horizontal
+/// strip of day pills, and a vertical timeline of events for the selected day.
+/// Supports deep-linking from map pins via `TabRouter.focusedScheduleEventID`.
 struct ScheduleScreen: View {
     @EnvironmentObject private var modelController: ModelController
     @EnvironmentObject private var tabRouter: TabRouter

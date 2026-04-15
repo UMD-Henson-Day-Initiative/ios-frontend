@@ -1,5 +1,11 @@
 import SwiftUI
 
+/// UMD Index (collection) screen displaying all collectibles in a Pokédex-style grid.
+///
+/// Shows caught/total stats, CP totals, rarity filter tabs, and a tappable grid of
+/// collectible cells. Tapping a cell opens `DexDetailSheet` with flavor text, types,
+/// and image. Collected items are highlighted; uncollected items show silhouettes.
+
 // MARK: - Light-mode palette (Collection / UMD Index)
 private let bgDeep    = DS.Color.surface
 private let bgMid     = DS.Color.surface
@@ -16,6 +22,8 @@ private let dkLeg     = DS.Color.Rarity.legendary
 private let dkCrimson = DS.Color.primary
 
 // MARK: - CollectionScreen
+/// Main collection tab view. Reads the full collectible catalog and the user's
+/// captured items from `ModelController`, then renders a filterable grid.
 struct CollectionScreen: View {
     @EnvironmentObject private var modelController: ModelController
     @State private var selectedRarity: String? = nil
