@@ -6,6 +6,8 @@ import SwiftUI
 struct LeaderboardScreen: View {
     @EnvironmentObject private var modelController: ModelController
     @State private var filter: Filter = .all
+    @State private var selectedUser: PlayerEntity?
+    @State private var showFullProfile = false
     @Namespace private var filterNS
 
     enum Filter: CaseIterable {
@@ -61,6 +63,7 @@ struct LeaderboardScreen: View {
                         VStack(spacing: DS.Spacing.card) {
                             ForEach(Array(displayedUsers.enumerated()), id: \.element.id) { index, user in
                                 LeaderboardRow(rank: index + 1, user: user)
+                                    .onTapGesture { selectedUser = user }
                             }
                         }
                         .padding(.horizontal, DS.Spacing.screenH)
@@ -74,6 +77,26 @@ struct LeaderboardScreen: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     ProfileToolbarButton()
+                }
+            }
+            .sheet(item: $selectedUser) { user in
+                LeaderboardUserPopup(
+                    user: user,
+                    rank: (displayedUsers.firstIndex(where: { $0.id == user.id }) ?? 0) + 1,
+                    onOpenProfile: {
+                        selectedUser = nil
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                            selectedUser = user
+                            showFullProfile = true
+                        }
+                    }
+                )
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+            }
+            .navigationDestination(isPresented: $showFullProfile) {
+                if let user = selectedUser {
+                    PublicProfileView(user: user, rank: (displayedUsers.firstIndex(where: { $0.id == user.id }) ?? 0) + 1)
                 }
             }
         }

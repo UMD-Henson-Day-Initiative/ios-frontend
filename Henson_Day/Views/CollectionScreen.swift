@@ -1,19 +1,19 @@
 import SwiftUI
 
-// MARK: - Dark palette (Collection)
-private let bgDeep    = Color(hex: "#0A0C14")
-private let bgMid     = Color(hex: "#111422")
-private let bgCard    = Color(hex: "#181C2E")
-private let bgCardHi  = Color(hex: "#1F2438")
-private let bgSurface = Color(hex: "#252A3E")
-private let textHi    = Color(hex: "#F0F2FF")
-private let textMid   = Color(hex: "#8890B0")
-private let textLo    = Color(hex: "#454B68")
-private let dkCommon  = Color(hex: "#48C87A")
-private let dkRare    = Color(hex: "#4899FF")
-private let dkEpic    = Color(hex: "#B060FF")
-private let dkLeg     = Color(hex: "#FFD000")
-private let dkCrimson = Color(hex: "#C8102E")
+// MARK: - Light-mode palette (Collection / UMD Index)
+private let bgDeep    = DS.Color.surface
+private let bgMid     = DS.Color.surface
+private let bgCard    = DS.Color.surfaceElevated
+private let bgCardHi  = Color(UIColor.secondarySystemBackground)
+private let bgSurface = Color(UIColor.tertiarySystemBackground)
+private let textHi    = DS.Color.campusNight
+private let textMid   = DS.Color.neutral
+private let textLo    = Color(UIColor.tertiaryLabel)
+private let dkCommon  = DS.Color.Rarity.common
+private let dkRare    = DS.Color.Rarity.rare
+private let dkEpic    = DS.Color.Rarity.epic
+private let dkLeg     = DS.Color.Rarity.legendary
+private let dkCrimson = DS.Color.primary
 
 // MARK: - CollectionScreen
 struct CollectionScreen: View {
@@ -51,7 +51,7 @@ struct CollectionScreen: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                bgDeep.ignoresSafeArea()
+                DS.Color.surface.ignoresSafeArea()
                 VStack(spacing: 0) {
                     DexHeader(
                         caught: collectedItems.count,
@@ -174,8 +174,9 @@ private struct DexChip: View {
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.05), lineWidth: 1)
+                .strokeBorder(Color.black.opacity(0.06), lineWidth: 1)
         )
+        .shadow(color: DS.Shadow.cardColor, radius: 4, x: 0, y: 2)
     }
 }
 
@@ -249,9 +250,10 @@ private struct PokeCell: View {
         ZStack(alignment: .top) {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(bgCard)
+                .shadow(color: DS.Shadow.cardColor, radius: DS.Shadow.cardRadius, x: DS.Shadow.cardX, y: DS.Shadow.cardY)
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(rarityColor.opacity(isCollected ? 0.35 : 0.1), lineWidth: 1)
+                        .strokeBorder(rarityColor.opacity(isCollected ? 0.25 : 0.08), lineWidth: 1)
                 )
 
             RadialGradient(
@@ -324,16 +326,16 @@ private struct PokeCell: View {
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 6)
-                .background(Color.black.opacity(0.35))
+                .background(Color(UIColor.secondarySystemBackground).opacity(0.92))
             }
 
             if isCollected {
                 Text("CP \(collectible.cp)")
                     .font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(textHi)
+                    .foregroundStyle(DS.Color.campusNight)
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)
-                    .background(.ultraThinMaterial)
+                    .background(.thinMaterial)
                     .clipShape(Capsule())
                     .padding(.top, 22)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -380,10 +382,10 @@ private struct DexDetailSheet: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            bgMid.ignoresSafeArea()
+            DS.Color.surface.ignoresSafeArea()
             VStack(spacing: 0) {
                 Capsule()
-                    .fill(bgSurface)
+                    .fill(Color(UIColor.tertiaryLabel))
                     .frame(width: 36, height: 3)
                     .padding(.top, 12)
                     .padding(.bottom, 20)
@@ -460,15 +462,15 @@ private struct DexDetailSheet: View {
                         // Stats row
                         HStack(spacing: 0) {
                             DexDetailStat(value: "\(collectible.cp)", label: "CP", color: dkLeg)
-                            Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 44)
+                            Rectangle().fill(Color(UIColor.separator).opacity(0.3)).frame(width: 1, height: 44)
                             DexDetailStat(value: "+\(collectible.points)", label: "POINTS", color: textHi)
-                            Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 44)
+                            Rectangle().fill(Color(UIColor.separator).opacity(0.3)).frame(width: 1, height: 44)
                             DexDetailStat(
                                 value: collectedItem != nil ? "✓" : "–",
                                 label: "IN DEX",
                                 color: collectedItem != nil ? dkCommon : textLo
                             )
-                            Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1, height: 44)
+                            Rectangle().fill(Color(UIColor.separator).opacity(0.3)).frame(width: 1, height: 44)
                             DexDetailStat(value: "🏅", label: "BADGE", color: textHi)
                         }
                         .frame(maxWidth: .infinity)
@@ -476,7 +478,7 @@ private struct DexDetailSheet: View {
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                         .overlay(
                             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .strokeBorder(Color.white.opacity(0.05), lineWidth: 1)
+                                .strokeBorder(Color(UIColor.separator).opacity(0.2), lineWidth: 1)
                         )
                         .padding(.horizontal, 20)
 
@@ -530,10 +532,10 @@ private struct DexDetailSheet: View {
                         Button { dismiss() } label: {
                             Text("Done")
                                 .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(textHi)
+                                .foregroundStyle(.white)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
-                                .background(bgSurface)
+                                .background(DS.Color.primary)
                                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                         }
                         .padding(.horizontal, 20)

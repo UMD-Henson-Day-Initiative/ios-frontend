@@ -6,3 +6,4 @@ CLAUDE.md
 *.xcuserstate
 **/xcuserdata/
 **/templates
+.fake
