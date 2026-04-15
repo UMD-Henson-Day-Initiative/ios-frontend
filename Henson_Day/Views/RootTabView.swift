@@ -56,6 +56,7 @@ struct RootTabView: View {
 
 struct HensonBottomBar: View {
     @Binding var selected: AppTab
+    @Namespace private var tabNS
 
     private let tabs: [(tab: AppTab, label: String, icon: String, iconFilled: String)] = [
         (.home,        "Home",       "house",       "house.fill"),
@@ -85,12 +86,13 @@ struct HensonBottomBar: View {
                     .foregroundStyle(isActive ? DS.Color.primary : DS.Color.neutral)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
-                    .background(
-                        isActive
-                            ? DS.Color.primaryTint
+                    .background {
+                        if isActive {
+                            DS.Color.primaryTint
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
-                            : nil
-                    )
+                                .matchedGeometryEffect(id: "activeTab", in: tabNS)
+                        }
+                    }
                     .contentShape(Rectangle())
                 }
             DS.Color.surfaceElevated
