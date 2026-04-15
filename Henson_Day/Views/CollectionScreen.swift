@@ -18,12 +18,12 @@ private enum CT {
     static let hensRedPale     = Color(red: 1.00, green: 0.88, blue: 0.88)   // blush background tint
     static let hensYellow      = Color(red: 1.00, green: 0.85, blue: 0.20)   // warm gold-yellow
     static let hensYellowSoft  = Color(red: 1.00, green: 0.93, blue: 0.55)   // soft butter yellow
-    static let hensCream       = Color(red: 1.00, green: 0.97, blue: 0.90)   // warm off-white
+    static let hensCream       = Color(red: 1.00, green: 1.00, blue: 1.00)   // warm off-white
     static let hensWarm        = Color(red: 0.99, green: 0.94, blue: 0.82)   // warm card background
     static let hensMid         = Color(red: 0.97, green: 0.88, blue: 0.72)   // slightly deeper warm
     static let hensDimText     = Color(red: 0.65, green: 0.30, blue: 0.25)   // muted red-brown text
     static let hensFadedText   = Color(red: 0.75, green: 0.45, blue: 0.35)   // softer label text
-    static let hensBackground  = Color(red: 1.00, green: 0.96, blue: 0.90)   // full screen bg
+    static let hensBackground  = Color(red: 1.00, green: 1.00, blue: 1.00)   // full screen bg
 }
 
 // MARK: - Main Screen
@@ -51,7 +51,7 @@ struct CollectiblesScreen: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                CT.hensBackground.ignoresSafeArea()
+                Color.white.ignoresSafeArea()
 
                 ScrollView {
                     VStack(spacing: 0) {
@@ -99,8 +99,7 @@ private struct FestiveBannerHeaderView: View {
     let totalPoints: Int
 
     var body: some View {
-        ZStack(alignment: .top) {
-            CT.hensRed
+        VStack(spacing: 0){
 
             VStack(spacing: 0) {
                 // Bunting / flag garland
