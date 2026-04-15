@@ -31,6 +31,9 @@ enum AppConstants {
 
     enum AR {
         static let spawnRadiusMeters: CLLocationDistance = 30
+        static let maxPlacements = 3
+        static let walkAwayDistanceMeters: Float = 12
+        static let collectibleProximityMeters: CLLocationDistance = 150
         // AR flow timing values
         static let teleportFallbackDelaySeconds: TimeInterval = 2.0
         static let teleportLaunchDelaySeconds: TimeInterval = 0.2
@@ -72,6 +75,17 @@ enum AppConstants {
 
     enum URLs {
         static let universityHome = "https://umd.edu/"
+    }
+
+    enum Schedule {
+        /// Anchor date for Day 1 of the Henson Day event week.
+        static let weekStart: Date = {
+            var comps = DateComponents()
+            comps.year = 2026
+            comps.month = 4
+            comps.day = 14
+            return Calendar.current.startOfDay(for: Calendar.current.date(from: comps) ?? Date())
+        }()
     }
 
     enum SceneKitPortal { // playing around from tutorials that were sent to GroupChat

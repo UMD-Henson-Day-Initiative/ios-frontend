@@ -67,6 +67,11 @@ struct MapScreen: View {
 
                     PinDetailBottomSheet(
                         detail: detailForPin(selectedPin),
+                        pinCoordinate: CLLocationCoordinate2D(
+                            latitude: selectedPin.latitude,
+                            longitude: selectedPin.longitude
+                        ),
+                        userLocation: locationManager.effectiveCoordinate,
                         isPresented: Binding(
                             get: { isDetailPresented },
                             set: { newValue in
@@ -76,9 +81,6 @@ struct MapScreen: View {
                                 }
                             }
                         ),
-                        onNavigate: {
-                            openInMaps(selectedPin)
-                        },
                         onPrimaryAction: {
                             handlePrimaryAction(for: selectedPin)
                         },
@@ -245,7 +247,6 @@ struct MapScreen: View {
         }
     }
 
-
     private func detailForPin(_ pin: PinEntity) -> MapPinDetail {
         let parsed = parseSubtitle(pin.subtitle)
 
@@ -285,16 +286,6 @@ struct MapScreen: View {
         case .site, .concert:
             break
         }
-    }
-
-    private func openInMaps(_ pin: PinEntity) {
-        let coordinate = CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)
-        let placemark = MKPlacemark(coordinate: coordinate)
-        let mapItem = MKMapItem(placemark: placemark)
-        mapItem.name = pin.title
-        mapItem.openInMaps(launchOptions: [
-            MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeWalking
-        ])
     }
 
     private func openEventDetails(for pin: PinEntity) {

@@ -2,6 +2,10 @@
 
 Henson Day is a SwiftUI + SwiftData + RealityKit app for a campus AR scavenger hunt. Users browse map pins, open event details, capture AR collectibles, and track leaderboard/collection progress.
 
+## Planning Docs
+
+- docs/real-functionality-roadmap.md
+
 ## Architecture Overview
 
 - App entry: HensonDayApp.swift
