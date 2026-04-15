@@ -7,7 +7,7 @@ struct LeaderboardScreen: View {
     @EnvironmentObject private var modelController: ModelController
     @State private var filter: Filter = .all
     @State private var selectedUser: PlayerEntity?
-    @State private var showFullProfile = false
+    @State private var profileUser: PlayerEntity?
     @Namespace private var filterNS
 
     enum Filter: CaseIterable {
@@ -85,19 +85,14 @@ struct LeaderboardScreen: View {
                     rank: (displayedUsers.firstIndex(where: { $0.id == user.id }) ?? 0) + 1,
                     onOpenProfile: {
                         selectedUser = nil
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                            selectedUser = user
-                            showFullProfile = true
-                        }
+                        profileUser = user
                     }
                 )
                 .presentationDetents([.medium])
                 .presentationDragIndicator(.visible)
             }
-            .navigationDestination(isPresented: $showFullProfile) {
-                if let user = selectedUser {
-                    PublicProfileView(user: user, rank: (displayedUsers.firstIndex(where: { $0.id == user.id }) ?? 0) + 1)
-                }
+            .navigationDestination(item: $profileUser) { user in
+                PublicProfileView(user: user, rank: (displayedUsers.firstIndex(where: { $0.id == user.id }) ?? 0) + 1)
             }
         }
     }
@@ -282,6 +277,10 @@ struct LeaderboardRow: View {
             }
 
             Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(DS.Color.neutral.opacity(0.5))
         }
         .padding(DS.Spacing.cardPad)
         .background(user.isLocalUser ? DS.Color.primaryTint : DS.Color.surfaceElevated)
