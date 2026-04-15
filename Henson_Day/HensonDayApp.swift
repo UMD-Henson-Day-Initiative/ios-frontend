@@ -4,12 +4,19 @@ import SwiftUI
 
 @main
 struct HensonDayApp: App {
+    private let environment: AppEnvironment
     @StateObject private var modelController = ModelController()
     @StateObject private var tabRouter = TabRouter()
     @StateObject private var cameraPermission = CameraPermissionManager()
     @StateObject private var worldAnchorManager = WorldAnchorManager()
     @StateObject private var locationManager = LocationPermissionManager()
-    @StateObject private var contentService = ContentService(environment: .current)
+    @StateObject private var contentService: ContentService
+
+    init() {
+        let environment = AppEnvironment.current
+        self.environment = environment
+        _contentService = StateObject(wrappedValue: ContentService(environment: environment))
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -23,12 +30,16 @@ struct HensonDayApp: App {
                 .task {
                     await contentService.loadContent()
                     // Apply remote campus config when available
-                    if let remoteConfig = contentService.remoteCampusConfig {
+                    if environment.featureFlags.enableRemoteCampusConfig,
+                       let remoteConfig = contentService.remoteCampusConfig {
                         CampusConfigProvider.applyRemoteConfig(remoteConfig)
                     }
                     // Overlay remote events, pins, and collectibles onto ModelController
-                    if contentService.syncState == .synced {
+                    switch contentService.syncState {
+                    case .synced, .stale:
                         modelController.applyRemoteContent(from: contentService)
+                    default:
+                        break
                     }
                 }
                 .preferredColorScheme(.light)

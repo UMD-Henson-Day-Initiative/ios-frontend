@@ -3,6 +3,7 @@
 import Foundation
 import Combine
 import os
+import SwiftData
 
 /// Central content repository. Loads from bundle JSON as fallback, prefers remote
 /// content when the environment has `useRemoteContent` enabled. Views observe
@@ -20,6 +21,7 @@ final class ContentService: ObservableObject {
     @Published private(set) var remoteCollectibles: [CollectibleDTO] = []
     @Published private(set) var announcements: [AnnouncementDTO] = []
     @Published private(set) var remoteCampusConfig: CampusConfigDTO?
+    @Published private(set) var currentSeason: SeasonDTO?
 
     // MARK: - Sync metadata
     @Published private(set) var lastSuccessfulSyncAt: Date?
@@ -31,31 +33,43 @@ final class ContentService: ObservableObject {
         case loadingBundle
         case syncingRemote
         case synced
-        case bundleOnly
+        case bundleOnly(String?)
         case failed(String)
         case stale
     }
 
     private let apiClient: APIClient?
     private let environment: AppEnvironment
-    private let logger = Logger(subsystem: "HensonDay", category: "ContentSync")
+    private let logger = AppLogger.make(.contentSync)
+    private let isoFormatter = ISO8601DateFormatter()
+    private let cacheContainer: ModelContainer?
+    private let cacheContext: ModelContext?
 
-    init(environment: AppEnvironment = .current) {
+    init(environment: AppEnvironment) {
         self.environment = environment
-        if environment.featureFlags.useRemoteContent {
+        if environment.usesRemoteContent {
             self.apiClient = APIClient(environment: environment)
         } else {
             self.apiClient = nil
         }
+        let cacheStore = Self.makeCacheStore(logger: logger)
+        self.cacheContainer = cacheStore.container
+        self.cacheContext = cacheStore.context
+    }
+
+    var startupNotice: String? {
+        environment.remoteContentDisabledReason
     }
 
     /// Full startup load: bundle first, then remote overlay if enabled.
     func loadContent() async {
+        logger.info("Loading content for environment \(self.environment.name.rawValue, privacy: .public)")
         await loadFromBundle()
-        if environment.featureFlags.useRemoteContent {
+        loadCachedRemoteContentIfAvailable()
+        if environment.usesRemoteContent {
             await refreshFromRemote()
         } else {
-            syncState = .bundleOnly
+            syncState = .bundleOnly(environment.remoteContentDisabledReason)
         }
     }
 
@@ -84,8 +98,8 @@ final class ContentService: ObservableObject {
             self.narrativeNodes = []
         }
 
-        if !environment.featureFlags.useRemoteContent {
-            syncState = .bundleOnly
+        if !environment.usesRemoteContent {
+            syncState = .bundleOnly(environment.remoteContentDisabledReason)
         }
     }
 
@@ -93,7 +107,7 @@ final class ContentService: ObservableObject {
     func refreshFromRemote() async {
         guard let apiClient else {
             logger.info("Remote content disabled for \(self.environment.name.rawValue, privacy: .public)")
-            syncState = .bundleOnly
+            syncState = .bundleOnly(environment.remoteContentDisabledReason)
             return
         }
 
@@ -103,26 +117,36 @@ final class ContentService: ObservableObject {
         do {
             let bootstrap: BootstrapDTO = try await apiClient.get("/bootstrap")
             remoteCampusConfig = bootstrap.campusConfig
+            currentSeason = bootstrap.currentSeason
             contentVersion = bootstrap.contentVersion
             announcements = bootstrap.announcements
 
             var deltaQuery: [URLQueryItem]? = nil
             if let lastSync = lastSuccessfulSyncAt {
-                deltaQuery = [URLQueryItem(name: "updatedAfter", value: ISO8601DateFormatter().string(from: lastSync))]
+                deltaQuery = [URLQueryItem(name: "updatedAfter", value: isoFormatter.string(from: lastSync))]
             }
 
-            let events: [EventDTO] = try await apiClient.get("/events", queryItems: deltaQuery)
-            remoteEvents = events
+            let fetchedEvents: [EventDTO] = try await apiClient.get("/events", queryItems: deltaQuery)
+            let mergedEvents = merge(existing: remoteEvents, updates: fetchedEvents, id: \.id)
+            remoteEvents = mergedEvents
 
-            let pins: [PinDTO] = try await apiClient.get("/pins", queryItems: deltaQuery)
-            remotePins = pins
+            let fetchedPins: [PinDTO] = try await apiClient.get("/pins", queryItems: deltaQuery)
+            let mergedPins = merge(existing: remotePins, updates: fetchedPins, id: \.id)
+            remotePins = mergedPins
 
-            let collectibles: [CollectibleDTO] = try await apiClient.get("/collectibles", queryItems: deltaQuery)
-            remoteCollectibles = collectibles
+            let fetchedCollectibles: [CollectibleDTO] = try await apiClient.get("/collectibles", queryItems: deltaQuery)
+            let mergedCollectibles = merge(existing: remoteCollectibles, updates: fetchedCollectibles, id: \.id)
+            remoteCollectibles = mergedCollectibles
 
             lastSuccessfulSyncAt = Date()
+            persistRemoteContentCache(
+                bootstrap: bootstrap,
+                events: mergedEvents,
+                pins: mergedPins,
+                collectibles: mergedCollectibles
+            )
             syncState = .synced
-            logger.info("Content sync complete. Version: \(bootstrap.contentVersion, privacy: .public), events: \(events.count), pins: \(pins.count), collectibles: \(collectibles.count)")
+            logger.info("Content sync complete. Version: \(bootstrap.contentVersion, privacy: .public), events: \(mergedEvents.count), pins: \(mergedPins.count), collectibles: \(mergedCollectibles.count)")
         } catch {
             let message = error.localizedDescription
             if lastSuccessfulSyncAt != nil {
@@ -144,14 +168,173 @@ final class ContentService: ObservableObject {
     /// Whether the service has any usable content (bundle or remote).
     var hasUsableContent: Bool {
         switch syncState {
-        case .synced, .bundleOnly, .stale, .failed:
+        case .synced, .bundleOnly(_), .stale, .failed:
             return true
         case .idle, .loadingBundle, .syncingRemote:
             return false
         }
     }
 
+    var hasRemoteOverlayContent: Bool {
+        remoteCampusConfig != nil || currentSeason != nil || !remoteEvents.isEmpty || !remotePins.isEmpty || !remoteCollectibles.isEmpty || !announcements.isEmpty
+    }
+
     // MARK: - Private
+
+    private static func makeCacheStore(logger: Logger) -> (container: ModelContainer?, context: ModelContext?) {
+        let schema = Schema([
+            CachedContentMetadataEntity.self,
+            CachedCampusConfigEntity.self,
+            CachedSeasonEntity.self,
+            CachedEventEntity.self,
+            CachedPinEntity.self,
+            CachedCollectibleEntity.self,
+            CachedAnnouncementEntity.self,
+        ])
+
+        let config = ModelConfiguration("HensonDayRemoteCache", schema: schema, isStoredInMemoryOnly: false)
+
+        do {
+            let container = try ModelContainer(for: schema, configurations: [config])
+            return (container, ModelContext(container))
+        } catch {
+            logger.error("Failed to initialize remote cache store: \(error.localizedDescription, privacy: .public)")
+            return (nil, nil)
+        }
+    }
+
+    private func loadCachedRemoteContentIfAvailable() {
+        guard let cacheContext else { return }
+
+        do {
+            let metadata = try cacheContext.fetch(FetchDescriptor<CachedContentMetadataEntity>()).first
+            let campusConfigEntity = try cacheContext.fetch(FetchDescriptor<CachedCampusConfigEntity>()).first
+            let seasonEntity = try cacheContext.fetch(FetchDescriptor<CachedSeasonEntity>()).first
+            let eventEntities = try cacheContext.fetch(FetchDescriptor<CachedEventEntity>())
+            let pinEntities = try cacheContext.fetch(FetchDescriptor<CachedPinEntity>())
+            let collectibleEntities = try cacheContext.fetch(FetchDescriptor<CachedCollectibleEntity>())
+            let announcementEntities = try cacheContext.fetch(FetchDescriptor<CachedAnnouncementEntity>())
+
+            if let metadata {
+                contentVersion = metadata.contentVersion
+                lastSuccessfulSyncAt = metadata.lastSuccessfulSyncAt == .distantPast ? nil : metadata.lastSuccessfulSyncAt
+            }
+            remoteCampusConfig = campusConfigEntity.map(CampusConfigDTO.init)
+            currentSeason = seasonEntity.map(SeasonDTO.init)
+            remoteEvents = eventEntities.map(EventDTO.init)
+            remotePins = pinEntities.map(PinDTO.init)
+            remoteCollectibles = collectibleEntities.map(CollectibleDTO.init)
+            announcements = announcementEntities.map(AnnouncementDTO.init)
+
+            if metadata != nil || campusConfigEntity != nil || !eventEntities.isEmpty || !pinEntities.isEmpty || !collectibleEntities.isEmpty || !announcementEntities.isEmpty {
+                logger.info("Loaded cached remote content. Events: \(eventEntities.count), pins: \(pinEntities.count), collectibles: \(collectibleEntities.count), announcements: \(announcementEntities.count)")
+            }
+        } catch {
+            logger.warning("Failed to load cached remote content: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func persistRemoteContentCache(
+        bootstrap: BootstrapDTO,
+        events: [EventDTO],
+        pins: [PinDTO],
+        collectibles: [CollectibleDTO]
+    ) {
+        guard let cacheContext else { return }
+
+        do {
+            let metadata = try cacheContext.fetch(FetchDescriptor<CachedContentMetadataEntity>()).first ?? CachedContentMetadataEntity()
+            metadata.contentVersion = bootstrap.contentVersion
+            metadata.lastSuccessfulSyncAt = lastSuccessfulSyncAt ?? .now
+            if metadata.modelContext == nil {
+                cacheContext.insert(metadata)
+            }
+
+            let cachedCampusConfig = try cacheContext.fetch(FetchDescriptor<CachedCampusConfigEntity>()).first ?? CachedCampusConfigEntity()
+            cachedCampusConfig.apply(bootstrap.campusConfig)
+            if cachedCampusConfig.modelContext == nil {
+                cacheContext.insert(cachedCampusConfig)
+            }
+
+            let existingSeasonEntities = try cacheContext.fetch(FetchDescriptor<CachedSeasonEntity>())
+            if let currentSeason = bootstrap.currentSeason {
+                if let cachedSeason = existingSeasonEntities.first(where: { $0.id == currentSeason.id }) {
+                    cachedSeason.apply(currentSeason)
+                } else {
+                    cacheContext.insert(CachedSeasonEntity(dto: currentSeason))
+                }
+                for staleSeason in existingSeasonEntities where staleSeason.id != currentSeason.id {
+                    cacheContext.delete(staleSeason)
+                }
+            } else {
+                for season in existingSeasonEntities {
+                    cacheContext.delete(season)
+                }
+            }
+
+            upsert(events, existing: try cacheContext.fetch(FetchDescriptor<CachedEventEntity>()), context: cacheContext)
+            upsert(pins, existing: try cacheContext.fetch(FetchDescriptor<CachedPinEntity>()), context: cacheContext)
+            upsert(collectibles, existing: try cacheContext.fetch(FetchDescriptor<CachedCollectibleEntity>()), context: cacheContext)
+            upsert(bootstrap.announcements, existing: try cacheContext.fetch(FetchDescriptor<CachedAnnouncementEntity>()), context: cacheContext)
+
+            try cacheContext.save()
+        } catch {
+            logger.warning("Failed to persist remote content cache: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func merge<T>(existing: [T], updates: [T], id: KeyPath<T, String>) -> [T] {
+        guard !updates.isEmpty else { return existing }
+        var mergedByID = Dictionary(uniqueKeysWithValues: existing.map { ($0[keyPath: id], $0) })
+        for update in updates {
+            mergedByID[update[keyPath: id]] = update
+        }
+        return mergedByID.values.sorted { $0[keyPath: id] < $1[keyPath: id] }
+    }
+
+    private func upsert(_ items: [EventDTO], existing: [CachedEventEntity], context: ModelContext) {
+        let existingByID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
+        for item in items {
+            if let existingEntity = existingByID[item.id] {
+                existingEntity.apply(item)
+            } else {
+                context.insert(CachedEventEntity(dto: item))
+            }
+        }
+    }
+
+    private func upsert(_ items: [PinDTO], existing: [CachedPinEntity], context: ModelContext) {
+        let existingByID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
+        for item in items {
+            if let existingEntity = existingByID[item.id] {
+                existingEntity.apply(item)
+            } else {
+                context.insert(CachedPinEntity(dto: item))
+            }
+        }
+    }
+
+    private func upsert(_ items: [CollectibleDTO], existing: [CachedCollectibleEntity], context: ModelContext) {
+        let existingByID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
+        for item in items {
+            if let existingEntity = existingByID[item.id] {
+                existingEntity.apply(item)
+            } else {
+                context.insert(CachedCollectibleEntity(dto: item))
+            }
+        }
+    }
+
+    private func upsert(_ items: [AnnouncementDTO], existing: [CachedAnnouncementEntity], context: ModelContext) {
+        let existingByID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
+        for item in items {
+            if let existingEntity = existingByID[item.id] {
+                existingEntity.apply(item)
+            } else {
+                context.insert(CachedAnnouncementEntity(dto: item))
+            }
+        }
+    }
 
     private func loadJSON<T: Decodable>(_ fileName: String) async throws -> T {
         try await Task.detached(priority: .userInitiated) {

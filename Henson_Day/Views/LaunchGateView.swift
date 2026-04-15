@@ -14,7 +14,7 @@ struct LaunchGateView: View {
     @StateObject private var permissionState = LaunchPermissionState()
     @State private var hasEnteredApp = false
 
-    private let logger = Logger(subsystem: "HensonDay", category: "Launch")
+    private let logger = AppLogger.make(.startup)
 
     /// True when both local seed and content service have finished their initial work.
     private var isStartupComplete: Bool {
@@ -140,11 +140,19 @@ struct LaunchGateView: View {
                 .font(.caption)
                 .foregroundStyle(.green)
                 .padding(.top, 4)
-        case .bundleOnly:
-            Label("Using offline content", systemImage: "internaldrive.fill")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.top, 4)
+        case .bundleOnly(let reason):
+            VStack(spacing: 6) {
+                Label("Using offline content", systemImage: "internaldrive.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if let reason, !reason.isEmpty {
+                    Text(reason)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+            }
+            .padding(.top, 4)
         case .stale:
             VStack(spacing: 6) {
                 Label("Content may be outdated", systemImage: "clock.arrow.circlepath")

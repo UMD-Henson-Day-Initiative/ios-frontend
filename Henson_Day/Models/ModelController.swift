@@ -36,7 +36,7 @@ final class ModelController: ObservableObject {
 
     private(set) var modelContainer: ModelContainer?
     private var context: ModelContext?
-    private let logger = Logger(subsystem: "HensonDay", category: "ModelController")
+    private let logger = AppLogger.make(.model)
     private let campusConfigProvider: CampusConfigProviding
 
     convenience init() {
@@ -418,10 +418,7 @@ final class ModelController: ObservableObject {
     /// remote data is available. Remote pins are upserted into SwiftData by title;
     /// events and collectibles replace the in-memory arrays directly.
     func applyRemoteContent(from contentService: ContentService) {
-        let seasonStart = contentService.remoteCampusConfig.flatMap { _ in
-            // Use the season start from bootstrap if available, else weekStart
-            AppConstants.Schedule.weekStart as Date?
-        }
+        let seasonStart = contentService.currentSeason?.startsAt ?? AppConstants.Schedule.weekStart
 
         // Events: replace schedule if remote events are available
         if !contentService.remoteEvents.isEmpty {
