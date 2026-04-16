@@ -3,6 +3,7 @@ import RealityKit
 import ARKit
 import CoreLocation
 import Combine
+import UIKit
 
 /// Full-screen AR experience for finding and collecting a muppet at a map pin.
 ///
@@ -65,6 +66,10 @@ struct ARCollectibleExperienceView: View {
 
     private var collectiblePoints: Int {
         activeCollectible?.points ?? AppConstants.AR.defaultCollectiblePoints
+    }
+
+    private var currentTotalPoints: Int {
+        modelController.currentUser?.totalPoints ?? 0
     }
 
     private var formattedDistance: String {
@@ -277,7 +282,7 @@ struct ARCollectibleExperienceView: View {
         case .captured:
             promptCard(
                 title: "You collected \(collectibleName)! +\(collectiblePoints) pts",
-                subtitle: "Sending you to your gallery now."
+                subtitle: "Unlocked in the UMD Index. Total points: \(currentTotalPoints)."
             ) {
                 EmptyView()
             }
@@ -441,6 +446,7 @@ struct ARPlacementView: UIViewRepresentable {
         private weak var arView: ARView?
         private var collectibleAnchor: AnchorEntity?
         private var collectibleEntity: Entity?
+        private var tapTargetEntity: ModelEntity?
         private var currentModelAssetName: String?
         private var loadCancellable: AnyCancellable?
         private var horizontalPlaneAnchorCount = 0
@@ -548,7 +554,7 @@ struct ARPlacementView: UIViewRepresentable {
                     let targetDimension = self.targetMaxDimension(for: modelAssetName)
                     entity.scale = self.normalizedScale(for: entity, targetMaxDimension: targetDimension)
                     entity.generateCollisionShapes(recursive: true)
-                    entity.components.set(InputTargetComponent())
+                    self.installTapTarget(for: entity)
 
                     self.collectibleAnchor?.addChild(entity)
                     self.collectibleEntity = entity
@@ -574,9 +580,29 @@ struct ARPlacementView: UIViewRepresentable {
             fallbackEntity.name = collectibleEntityName
             fallbackEntity.scale = SIMD3<Float>(repeating: 0.6)
             fallbackEntity.generateCollisionShapes(recursive: true)
-            fallbackEntity.components.set(InputTargetComponent())
+            installTapTarget(for: fallbackEntity)
             collectibleAnchor?.addChild(fallbackEntity)
             collectibleEntity = fallbackEntity
+        }
+
+        private func installTapTarget(for entity: Entity) {
+            tapTargetEntity?.removeFromParent()
+
+            entity.components.set(InputTargetComponent())
+
+            let tapTargetMesh = MeshResource.generateSphere(radius: AppConstants.AR.collectibleTapTargetRadius)
+            let transparentMaterial = SimpleMaterial(
+                color: UIColor.white.withAlphaComponent(0.001),
+                roughness: 1.0,
+                isMetallic: false
+            )
+            let tapTarget = ModelEntity(mesh: tapTargetMesh, materials: [transparentMaterial])
+            tapTarget.name = collectibleEntityName
+            tapTarget.generateCollisionShapes(recursive: true)
+            tapTarget.components.set(InputTargetComponent())
+
+            entity.addChild(tapTarget)
+            tapTargetEntity = tapTarget
         }
 
         private func normalizedScale(for entity: Entity, targetMaxDimension: Float) -> SIMD3<Float> {
@@ -587,7 +613,7 @@ struct ARPlacementView: UIViewRepresentable {
                 return SIMD3<Float>(repeating: AppConstants.AR.fallbackUniformScale)
             }
 
-            let uniformScale = targetMaxDimension / maxDimension
+            let uniformScale = (targetMaxDimension / maxDimension) * AppConstants.AR.collectibleVisualScaleMultiplier
             let clampedScale = min(max(uniformScale, AppConstants.AR.minScale), AppConstants.AR.maxScale)
             return SIMD3<Float>(repeating: clampedScale)
         }
@@ -610,6 +636,7 @@ struct ARPlacementView: UIViewRepresentable {
 
         private func removeCollectibleIfNeeded() {
             collectibleEntity = nil
+            tapTargetEntity = nil
             currentModelAssetName = nil
             loadCancellable?.cancel()
             loadCancellable = nil

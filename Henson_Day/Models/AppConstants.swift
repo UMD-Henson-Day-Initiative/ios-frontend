@@ -48,10 +48,12 @@ enum AppConstants {
 
         static let forcedSpawnDistanceMeters: Float = 0.9
         static let fallbackSphereRadius: Float = 0.12
+        static let collectibleVisualScaleMultiplier: Float = 0.01
+        static let collectibleTapTargetRadius: Float = 0.12
 
-        static let minScale: Float = 0.03
-        static let maxScale: Float = 0.35
-        static let fallbackUniformScale: Float = 0.12
+        static let minScale: Float = 0.0003
+        static let maxScale: Float = 0.0035
+        static let fallbackUniformScale: Float = 0.0012
 
         enum ModelSizing {
             static let defaultTargetMaxDimension: Float = 0.10

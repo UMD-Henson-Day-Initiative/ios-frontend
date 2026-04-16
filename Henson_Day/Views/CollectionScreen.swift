@@ -110,6 +110,17 @@ struct CollectionScreen: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.hidden)
             }
+            .onChange(of: modelController.lastCapturedCollectibleID) { _, collectibleID in
+                guard let collectibleID else { return }
+                guard let collectible = modelController.collectibleCatalog.first(where: { $0.id == collectibleID }) else {
+                    modelController.consumeLastCapturedCollectibleID()
+                    return
+                }
+
+                selectedRarity = nil
+                selectedCollectible = collectible
+                modelController.consumeLastCapturedCollectibleID()
+            }
         }
     }
 }

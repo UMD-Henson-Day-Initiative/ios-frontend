@@ -69,6 +69,7 @@ final class ModelController: ObservableObject {
     @Published private(set) var startupNoticeMessage: String?
     @Published private(set) var storeMode: StoreMode = .persistent
     @Published private(set) var userFacingError: UserFacingErrorState?
+    @Published private(set) var lastCapturedCollectibleID: String?
 
     private(set) var modelContainer: ModelContainer?
     private var context: ModelContext?
@@ -101,6 +102,7 @@ final class ModelController: ObservableObject {
         startupNoticeMessage = nil
         storeMode = .persistent
         userFacingError = nil
+        lastCapturedCollectibleID = nil
         currentUser = nil
         pins = []
         leaderboardUsers = []
@@ -291,6 +293,7 @@ final class ModelController: ObservableObject {
 
             user.totalPoints += points
             user.collectedCount += 1
+            lastCapturedCollectibleID = collectibleCatalog.first(where: { $0.name == collectibleName })?.id
 
             try context.save()
             refreshPublishedData()
@@ -391,6 +394,10 @@ final class ModelController: ObservableObject {
 
         let collectedNames = Set(collectionItemsForCurrentUser().map(\.collectibleName))
         return candidates.first(where: { !collectedNames.contains($0.name) }) ?? candidates.first
+    }
+
+    func consumeLastCapturedCollectibleID() {
+        lastCapturedCollectibleID = nil
     }
 
     func pin(for event: DatabaseEvent) -> PinEntity? {
