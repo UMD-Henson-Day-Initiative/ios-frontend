@@ -53,6 +53,10 @@ struct LaunchGateView: View {
                 } else if let startupErrorMessage = modelController.startupErrorMessage {
                     startupErrorView(message: startupErrorMessage)
                 } else {
+                    if let startupNoticeMessage = modelController.startupNoticeMessage {
+                        startupNoticeView(message: startupNoticeMessage)
+                    }
+
                     // Permissions
                     VStack(spacing: 10) {
                         permissionRow(
@@ -113,6 +117,20 @@ struct LaunchGateView: View {
             .buttonStyle(.borderedProminent)
             .tint(Color("UMDRed"))
             .padding(.top, 4)
+        }
+        .padding(.top, 6)
+    }
+
+    private func startupNoticeView(message: String) -> some View {
+        VStack(spacing: 8) {
+            Label("Demo mode active", systemImage: "internaldrive.fill")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color("UMDRed"))
+
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         }
         .padding(.top, 6)
     }

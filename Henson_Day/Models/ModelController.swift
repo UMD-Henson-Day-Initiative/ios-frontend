@@ -45,6 +45,11 @@ struct ScheduleEventSection: Identifiable {
 // ModelContext via ModelContext(container) on a detached task.
 @MainActor
 final class ModelController: ObservableObject {
+    enum StoreMode {
+        case persistent
+        case demoInMemory
+    }
+
     /// Current local user profile loaded from SwiftData.
     @Published private(set) var currentUser: PlayerEntity?
     /// Campus pins used by map and AR entry points.
@@ -61,6 +66,8 @@ final class ModelController: ObservableObject {
 
     @Published private(set) var isSeedLoading = true
     @Published private(set) var startupErrorMessage: String?
+    @Published private(set) var startupNoticeMessage: String?
+    @Published private(set) var storeMode: StoreMode = .persistent
     @Published private(set) var userFacingError: UserFacingErrorState?
 
     private(set) var modelContainer: ModelContainer?
@@ -91,6 +98,8 @@ final class ModelController: ObservableObject {
     private func initializeStore() {
         isSeedLoading = true
         startupErrorMessage = nil
+        startupNoticeMessage = nil
+        storeMode = .persistent
         userFacingError = nil
         currentUser = nil
         pins = []
@@ -108,26 +117,46 @@ final class ModelController: ObservableObject {
             ,SavedScheduleEventEntity.self
         ])
 
-        let config = ModelConfiguration("HensonDayOffline", schema: schema, isStoredInMemoryOnly: false)
         do {
-            let container = try ModelContainer(for: schema, configurations: [config])
-            modelContainer = container
-            context = ModelContext(container)
+            try openStore(schema: schema, mode: .persistent)
         } catch {
-            modelContainer = nil
-            context = nil
-            isSeedLoading = false
-            publishStartupError(
-                message: "Couldn't load offline data. Check device storage and try again.",
-                context: "SwiftData container initialization",
-                error: error
-            )
-            return
+            logger.error("Persistent SwiftData store unavailable: \(error.localizedDescription, privacy: .public)")
+
+            do {
+                try openStore(schema: schema, mode: .demoInMemory)
+                startupNoticeMessage = "Stored offline data is unavailable on this device. Running in demo mode for this session."
+                logger.notice("Fell back to in-memory demo store for this session")
+            } catch {
+                modelContainer = nil
+                context = nil
+                isSeedLoading = false
+                publishStartupError(
+                    message: "Couldn't load offline data or start demo mode. Check device storage and try again.",
+                    context: "SwiftData container initialization",
+                    error: error
+                )
+                return
+            }
         }
 
         Task {
             await loadAndSeedIfNeeded()
         }
+    }
+
+    private func openStore(schema: Schema, mode: StoreMode) throws {
+        let configuration: ModelConfiguration
+        switch mode {
+        case .persistent:
+            configuration = ModelConfiguration("HensonDayOffline", schema: schema, isStoredInMemoryOnly: false)
+        case .demoInMemory:
+            configuration = ModelConfiguration("HensonDayDemo", schema: schema, isStoredInMemoryOnly: true)
+        }
+
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        modelContainer = container
+        context = ModelContext(container)
+        storeMode = mode
     }
 
     func loadAndSeedIfNeeded() async {
