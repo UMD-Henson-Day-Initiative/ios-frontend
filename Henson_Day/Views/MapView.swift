@@ -9,6 +9,7 @@ import CoreLocation
 
 struct MapView: View {
     let pins: [PinEntity]
+    let collectedPinIDs: Set<UUID>
     var onPinTapped: (PinEntity) -> Void = { _ in }
 
     static let minLat = AppConstants.Map.campusBoundsMinLat
@@ -62,7 +63,11 @@ struct MapView: View {
                 ForEach(pins) { pin in
                     let coord = CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)
                     Annotation("", coordinate: coord, anchor: .bottom) {
-                        WaypointMarkerView(pin: pin, isSelected: selectedPinID == pin.id)
+                        WaypointMarkerView(
+                            pin: pin,
+                            isSelected: selectedPinID == pin.id,
+                            isCollected: collectedPinIDs.contains(pin.id)
+                        )
                             .onTapGesture {
                                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                                     selectedPinID = selectedPinID == pin.id ? nil : pin.id
@@ -207,6 +212,7 @@ struct Triangle: Shape {
 struct WaypointMarkerView: View {
     let pin: PinEntity
     let isSelected: Bool
+    let isCollected: Bool
     @State private var isPulsing = false
     @State private var appeared = false
 
@@ -287,6 +293,20 @@ struct WaypointMarkerView: View {
                         .clipShape(Circle())
                         .offset(x: 16, y: -16)
                 }
+
+                if pin.hasARCollectible && isCollected {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(Color("UMDGold"), .white)
+                        .padding(4)
+                        .background(Color.black.opacity(0.65))
+                        .clipShape(Circle())
+                        .overlay(
+                            Circle()
+                                .stroke(Color("UMDGold").opacity(0.7), lineWidth: 1)
+                        )
+                        .offset(x: -16, y: -16)
+                }
             }
             .scaleEffect(appeared ? 1.0 : 0.3)
             .scaleEffect(isSelected ? 1.15 : 1.0)
@@ -314,5 +334,5 @@ struct WaypointMarkerView: View {
 }
 
 #Preview(){
-    MapView(pins: [])
+    MapView(pins: [], collectedPinIDs: [])
 }

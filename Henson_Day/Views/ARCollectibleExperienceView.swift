@@ -3,6 +3,7 @@ import RealityKit
 import ARKit
 import CoreLocation
 import Combine
+import AudioToolbox
 import UIKit
 
 /// Full-screen AR experience for finding and collecting a muppet at a map pin.
@@ -46,6 +47,7 @@ struct ARCollectibleExperienceView: View {
     @State private var activeCollectible: DatabaseCollectible?
     @State private var secondHorizontalSurfaceDetected = false
     @State private var teleportFallbackReady = false
+    @State private var pointsBurstProgress: CGFloat = 1
     @State private var teleportFallbackTask: Task<Void, Never>?
     @State private var collectFlowTask: Task<Void, Never>?
 
@@ -292,20 +294,30 @@ struct ARCollectibleExperienceView: View {
     private var captureAnimationOverlay: some View {
         ZStack {
             Color.black.opacity(0.4).ignoresSafeArea()
-            VStack(spacing: 14) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 54, weight: .bold))
+            VStack(spacing: 20) {
+                Text("+\(collectiblePoints)")
+                    .font(.system(size: 36, weight: .black, design: .rounded))
                     .foregroundStyle(Color("UMDGold"))
-                    .scaleEffect(flowState == .collecting ? 1.15 : 1.0)
-                    .animation(.easeInOut(duration: 0.6).repeatCount(2, autoreverses: true), value: flowState)
+                    .shadow(color: Color("UMDGold").opacity(0.45), radius: 14, x: 0, y: 4)
+                    .scaleEffect(0.72 + (0.48 * pointsBurstProgress))
+                    .offset(y: -18 - (72 * pointsBurstProgress))
+                    .opacity(1 - pointsBurstProgress)
 
-                Text("Collected!")
-                    .font(.title2.weight(.bold))
-                    .foregroundStyle(.white)
+                VStack(spacing: 14) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 54, weight: .bold))
+                        .foregroundStyle(Color("UMDGold"))
+                        .scaleEffect(flowState == .collecting ? 1.15 : 1.0)
+                        .animation(.easeInOut(duration: 0.6).repeatCount(2, autoreverses: true), value: flowState)
 
-                Text(collectibleName)
-                    .font(.headline)
-                    .foregroundStyle(.white.opacity(0.9))
+                    Text("Collected!")
+                        .font(.title2.weight(.bold))
+                        .foregroundStyle(.white)
+
+                    Text(collectibleName)
+                        .font(.headline)
+                        .foregroundStyle(.white.opacity(0.9))
+                }
             }
             .padding(26)
             .background(.ultraThinMaterial)
@@ -374,6 +386,8 @@ struct ARCollectibleExperienceView: View {
     /// switches to the collection tab, and dismisses after a short delay.
     private func handleCollectTapped() {
         flowState = .collecting
+        playCaptureSuccessFeedback()
+        runPointsBurstAnimation()
 
         modelController.captureCollectible(
             collectibleName: collectibleName,
@@ -390,6 +404,18 @@ struct ARCollectibleExperienceView: View {
             try? await Task.sleep(nanoseconds: UInt64(AppConstants.AR.collectDismissDelaySeconds * 1_000_000_000))
             dismiss()
         }
+    }
+
+    private func runPointsBurstAnimation() {
+        pointsBurstProgress = 0
+        withAnimation(.easeOut(duration: AppConstants.AR.pointsBurstAnimationSeconds)) {
+            pointsBurstProgress = 1
+        }
+    }
+
+    private func playCaptureSuccessFeedback() {
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.success)
     }
 
     private func promptCard<Content: View>(title: String, subtitle: String, @ViewBuilder actions: () -> Content) -> some View {
@@ -668,6 +694,7 @@ struct ARPlacementView: UIViewRepresentable {
             }
 
             isCollectAnimationRunning = true
+            playTapFeedback()
 
             let cameraMatrix = arView.cameraTransform.matrix
             let cameraPosition = SIMD3<Float>(
@@ -710,6 +737,12 @@ struct ARPlacementView: UIViewRepresentable {
                 self.didTapCollectible?()
                 self.isCollectAnimationRunning = false
             }
+        }
+
+        private func playTapFeedback() {
+            let generator = UIImpactFeedbackGenerator(style: .rigid)
+            generator.impactOccurred(intensity: 0.95)
+            AudioServicesPlaySystemSound(SystemSoundID(AppConstants.AR.collectTapSoundID))
         }
     }
 }

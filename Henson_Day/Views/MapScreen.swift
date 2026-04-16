@@ -39,6 +39,19 @@ struct MapScreen: View {
     @State private var teleportLaunchTask: Task<Void, Never>?
     @State private var teleportResetTask: Task<Void, Never>?
 
+    private var collectedCollectibleNames: Set<String> {
+        Set(modelController.collectionItemsForCurrentUser().map(\.collectibleName))
+    }
+
+    private var collectedPinIDs: Set<UUID> {
+        Set(
+            modelController.pins.compactMap { pin in
+                let pinCollectibles = modelController.collectibles(for: pin)
+                return pinCollectibles.contains(where: { collectedCollectibleNames.contains($0.name) }) ? pin.id : nil
+            }
+        )
+    }
+
     private var selectedPin: PinEntity? {
         modelController.pins.first(where: { $0.id == selectedPinID })
     }
@@ -129,7 +142,7 @@ struct MapScreen: View {
     }
 
     private var mapView: some View {
-        MapView(pins: modelController.pins) { pin in
+        MapView(pins: modelController.pins, collectedPinIDs: collectedPinIDs) { pin in
             selectedPinID = pin.id
             isDetailPresented = true
         }

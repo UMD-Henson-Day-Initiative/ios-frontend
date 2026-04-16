@@ -41,10 +41,12 @@ enum AppConstants {
         static let collectRevealDelaySeconds: TimeInterval = 0.9
         static let collectDismissDelaySeconds: TimeInterval = 0.55
         static let collectibleAnimationCompletionDelaySeconds: TimeInterval = 0.48
+        static let pointsBurstAnimationSeconds: TimeInterval = 0.8
 
         static let proximityRadiusMeters: CLLocationDistance = 10
         static let proximityDebounceMilliseconds: Int = 500
         static let defaultCollectiblePoints: Int = 50
+        static let collectTapSoundID: UInt32 = 1104
 
         static let forcedSpawnDistanceMeters: Float = 0.9
         static let fallbackSphereRadius: Float = 0.12
