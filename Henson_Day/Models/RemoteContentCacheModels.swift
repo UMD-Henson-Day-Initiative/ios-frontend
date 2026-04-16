@@ -6,15 +6,18 @@ final class CachedContentMetadataEntity {
     @Attribute(.unique) var key: String
     var contentVersion: String
     var lastSuccessfulSyncAt: Date
+    var lastSuccessfulFullSyncAt: Date
 
     init(
         key: String = "current",
         contentVersion: String = "1",
-        lastSuccessfulSyncAt: Date = .distantPast
+        lastSuccessfulSyncAt: Date = .distantPast,
+        lastSuccessfulFullSyncAt: Date = .distantPast
     ) {
         self.key = key
         self.contentVersion = contentVersion
         self.lastSuccessfulSyncAt = lastSuccessfulSyncAt
+        self.lastSuccessfulFullSyncAt = lastSuccessfulFullSyncAt
     }
 }
 

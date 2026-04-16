@@ -10,6 +10,11 @@ import SwiftData
 /// published properties; sync state is exposed so LaunchGateView can show progress.
 @MainActor
 final class ContentService: ObservableObject {
+    private enum SyncFetchMode {
+        case full
+        case delta
+    }
+
     // MARK: - Bundle content (always available)
     @Published private(set) var locationAssets: [LocationAsset] = []
     @Published private(set) var characters: [Character] = []
@@ -44,6 +49,8 @@ final class ContentService: ObservableObject {
     private let isoFormatter = ISO8601DateFormatter()
     private let cacheContainer: ModelContainer?
     private let cacheContext: ModelContext?
+    private var lastSuccessfulFullSyncAt: Date?
+    private let fullRefreshInterval: TimeInterval = 60 * 60 * 6
 
     init(environment: AppEnvironment) {
         self.environment = environment
@@ -122,37 +129,66 @@ final class ContentService: ObservableObject {
 
         do {
             let bootstrap: BootstrapDTO = try await apiClient.get("/bootstrap")
+            let previousContentVersion = contentVersion
+            let contentVersionChanged = previousContentVersion != nil && previousContentVersion != bootstrap.contentVersion
+            let fetchMode = determineFetchMode(contentVersionChanged: contentVersionChanged)
+
+            if contentVersionChanged {
+                logger.info("Content version changed from \(previousContentVersion ?? "unknown", privacy: .public) to \(bootstrap.contentVersion, privacy: .public). Forcing full refresh.")
+            }
+
             remoteCampusConfig = bootstrap.campusConfig
             currentSeason = bootstrap.currentSeason
             contentVersion = bootstrap.contentVersion
             announcements = bootstrap.announcements
 
             var deltaQuery: [URLQueryItem]? = nil
-            if let lastSync = lastSuccessfulSyncAt {
+            if fetchMode == .delta, let lastSync = lastSuccessfulSyncAt {
                 deltaQuery = [URLQueryItem(name: "updatedAfter", value: isoFormatter.string(from: lastSync))]
             }
 
             let fetchedEvents: [EventDTO] = try await apiClient.get("/events", queryItems: deltaQuery)
-            let mergedEvents = merge(existing: remoteEvents, updates: fetchedEvents, id: \.id)
-            remoteEvents = mergedEvents
+            let resolvedEvents: [EventDTO]
+            if fetchMode == .full {
+                resolvedEvents = fetchedEvents.sorted { $0.id < $1.id }
+            } else {
+                resolvedEvents = merge(existing: remoteEvents, updates: fetchedEvents, id: \.id)
+            }
+            remoteEvents = resolvedEvents
 
             let fetchedPins: [PinDTO] = try await apiClient.get("/pins", queryItems: deltaQuery)
-            let mergedPins = merge(existing: remotePins, updates: fetchedPins, id: \.id)
-            remotePins = mergedPins
+            let resolvedPins: [PinDTO]
+            if fetchMode == .full {
+                resolvedPins = fetchedPins.sorted { $0.id < $1.id }
+            } else {
+                resolvedPins = merge(existing: remotePins, updates: fetchedPins, id: \.id)
+            }
+            remotePins = resolvedPins
 
             let fetchedCollectibles: [CollectibleDTO] = try await apiClient.get("/collectibles", queryItems: deltaQuery)
-            let mergedCollectibles = merge(existing: remoteCollectibles, updates: fetchedCollectibles, id: \.id)
-            remoteCollectibles = mergedCollectibles
+            let resolvedCollectibles: [CollectibleDTO]
+            if fetchMode == .full {
+                resolvedCollectibles = fetchedCollectibles.sorted { $0.id < $1.id }
+            } else {
+                resolvedCollectibles = merge(existing: remoteCollectibles, updates: fetchedCollectibles, id: \.id)
+            }
+            remoteCollectibles = resolvedCollectibles
 
-            lastSuccessfulSyncAt = Date()
+            let syncDate = Date()
+            lastSuccessfulSyncAt = syncDate
+            if fetchMode == .full {
+                lastSuccessfulFullSyncAt = syncDate
+            }
             persistRemoteContentCache(
                 bootstrap: bootstrap,
-                events: mergedEvents,
-                pins: mergedPins,
-                collectibles: mergedCollectibles
+                events: resolvedEvents,
+                pins: resolvedPins,
+                collectibles: resolvedCollectibles,
+                mode: fetchMode,
+                syncDate: syncDate
             )
             syncState = .synced
-            logger.info("Content sync complete. Version: \(bootstrap.contentVersion, privacy: .public), events: \(mergedEvents.count), pins: \(mergedPins.count), collectibles: \(mergedCollectibles.count)")
+            logger.info("Content sync complete using \(fetchMode == .full ? "full" : "delta", privacy: .public) refresh. Version: \(bootstrap.contentVersion, privacy: .public), events: \(resolvedEvents.count), pins: \(resolvedPins.count), collectibles: \(resolvedCollectibles.count)")
         } catch {
             let message = error.localizedDescription
             if lastSuccessfulSyncAt != nil {
@@ -226,6 +262,7 @@ final class ContentService: ObservableObject {
             if let metadata {
                 contentVersion = metadata.contentVersion
                 lastSuccessfulSyncAt = metadata.lastSuccessfulSyncAt == .distantPast ? nil : metadata.lastSuccessfulSyncAt
+                lastSuccessfulFullSyncAt = metadata.lastSuccessfulFullSyncAt == .distantPast ? nil : metadata.lastSuccessfulFullSyncAt
             }
             remoteCampusConfig = campusConfigEntity.map(CampusConfigDTO.init)
             currentSeason = seasonEntity.map(SeasonDTO.init)
@@ -246,14 +283,19 @@ final class ContentService: ObservableObject {
         bootstrap: BootstrapDTO,
         events: [EventDTO],
         pins: [PinDTO],
-        collectibles: [CollectibleDTO]
+        collectibles: [CollectibleDTO],
+        mode: SyncFetchMode,
+        syncDate: Date
     ) {
         guard let cacheContext else { return }
 
         do {
             let metadata = try cacheContext.fetch(FetchDescriptor<CachedContentMetadataEntity>()).first ?? CachedContentMetadataEntity()
             metadata.contentVersion = bootstrap.contentVersion
-            metadata.lastSuccessfulSyncAt = lastSuccessfulSyncAt ?? .now
+            metadata.lastSuccessfulSyncAt = syncDate
+            if mode == .full {
+                metadata.lastSuccessfulFullSyncAt = syncDate
+            }
             if metadata.modelContext == nil {
                 cacheContext.insert(metadata)
             }
@@ -280,15 +322,37 @@ final class ContentService: ObservableObject {
                 }
             }
 
-            upsert(events, existing: try cacheContext.fetch(FetchDescriptor<CachedEventEntity>()), context: cacheContext)
-            upsert(pins, existing: try cacheContext.fetch(FetchDescriptor<CachedPinEntity>()), context: cacheContext)
-            upsert(collectibles, existing: try cacheContext.fetch(FetchDescriptor<CachedCollectibleEntity>()), context: cacheContext)
-            upsert(bootstrap.announcements, existing: try cacheContext.fetch(FetchDescriptor<CachedAnnouncementEntity>()), context: cacheContext)
+            if mode == .full {
+                replace(events, existing: try cacheContext.fetch(FetchDescriptor<CachedEventEntity>()), context: cacheContext)
+                replace(pins, existing: try cacheContext.fetch(FetchDescriptor<CachedPinEntity>()), context: cacheContext)
+                replace(collectibles, existing: try cacheContext.fetch(FetchDescriptor<CachedCollectibleEntity>()), context: cacheContext)
+            } else {
+                upsert(events, existing: try cacheContext.fetch(FetchDescriptor<CachedEventEntity>()), context: cacheContext)
+                upsert(pins, existing: try cacheContext.fetch(FetchDescriptor<CachedPinEntity>()), context: cacheContext)
+                upsert(collectibles, existing: try cacheContext.fetch(FetchDescriptor<CachedCollectibleEntity>()), context: cacheContext)
+            }
+            replace(bootstrap.announcements, existing: try cacheContext.fetch(FetchDescriptor<CachedAnnouncementEntity>()), context: cacheContext)
 
             try cacheContext.save()
         } catch {
             logger.warning("Failed to persist remote content cache: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    private func determineFetchMode(contentVersionChanged: Bool) -> SyncFetchMode {
+        if contentVersionChanged {
+            return .full
+        }
+        if !hasRemoteOverlayContent {
+            return .full
+        }
+        guard let lastSuccessfulFullSyncAt else {
+            return .full
+        }
+        if Date().timeIntervalSince(lastSuccessfulFullSyncAt) >= fullRefreshInterval {
+            return .full
+        }
+        return .delta
     }
 
     private func merge<T>(existing: [T], updates: [T], id: KeyPath<T, String>) -> [T] {
@@ -342,6 +406,38 @@ final class ContentService: ObservableObject {
                 context.insert(CachedAnnouncementEntity(dto: item))
             }
         }
+    }
+
+    private func replace(_ items: [EventDTO], existing: [CachedEventEntity], context: ModelContext) {
+        let incomingIDs = Set(items.map(\.id))
+        for entity in existing where !incomingIDs.contains(entity.id) {
+            context.delete(entity)
+        }
+        upsert(items, existing: existing.filter { incomingIDs.contains($0.id) }, context: context)
+    }
+
+    private func replace(_ items: [PinDTO], existing: [CachedPinEntity], context: ModelContext) {
+        let incomingIDs = Set(items.map(\.id))
+        for entity in existing where !incomingIDs.contains(entity.id) {
+            context.delete(entity)
+        }
+        upsert(items, existing: existing.filter { incomingIDs.contains($0.id) }, context: context)
+    }
+
+    private func replace(_ items: [CollectibleDTO], existing: [CachedCollectibleEntity], context: ModelContext) {
+        let incomingIDs = Set(items.map(\.id))
+        for entity in existing where !incomingIDs.contains(entity.id) {
+            context.delete(entity)
+        }
+        upsert(items, existing: existing.filter { incomingIDs.contains($0.id) }, context: context)
+    }
+
+    private func replace(_ items: [AnnouncementDTO], existing: [CachedAnnouncementEntity], context: ModelContext) {
+        let incomingIDs = Set(items.map(\.id))
+        for entity in existing where !incomingIDs.contains(entity.id) {
+            context.delete(entity)
+        }
+        upsert(items, existing: existing.filter { incomingIDs.contains($0.id) }, context: context)
     }
 
     private func loadJSON<T: Decodable>(_ fileName: String) async throws -> T {
