@@ -189,9 +189,10 @@ final class ModelController: ObservableObject {
             self.leaderboardUsers = players.sorted { $0.totalPoints > $1.totalPoints }
 
             if let currentUser {
+                let currentUserID = currentUser.id
                 let savedDescriptor = FetchDescriptor<SavedScheduleEventEntity>(
                     predicate: #Predicate { item in
-                        item.playerID == currentUser.id
+                        item.playerID == currentUserID
                     }
                 )
                 let savedEvents = try context.fetch(savedDescriptor)

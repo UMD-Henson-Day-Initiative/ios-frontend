@@ -61,6 +61,17 @@ struct DatabaseEvent: Identifiable {
         case .homebase:    return "Check-In"
         }
     }
+
+    var derivedRarity: String {
+        switch pinType {
+        case .concert, .homebase:
+            return "Legendary"
+        case .event, .battle:
+            return "Rare"
+        default:
+            return "Common"
+        }
+    }
 }
 
 struct DatabaseCollectible: Identifiable {
