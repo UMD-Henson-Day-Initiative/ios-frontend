@@ -8,11 +8,12 @@ struct ScheduleScreen: View {
     @EnvironmentObject private var modelController: ModelController
     @EnvironmentObject private var tabRouter: TabRouter
     @Environment(\.openURL) private var openURL
+    @State private var viewingAddedOnly = false
     @State private var selectedDay: Int = 1
     @State private var selectedEvent: DatabaseEvent?
 
-    private var dayEvents: [DatabaseEvent] {
-        modelController.scheduleEvents.filter { $0.dayNumber == selectedDay }
+    private var daySections: [ScheduleEventSection] {
+        modelController.groupedScheduleSections(forDay: selectedDay, addedOnly: viewingAddedOnly)
     }
 
     private var days: [Int] {
@@ -20,13 +21,25 @@ struct ScheduleScreen: View {
         return Array(available).sorted()
     }
 
+    private var totalVisibleEvents: Int {
+        let allEvents = modelController.scheduleEvents
+        if viewingAddedOnly {
+            return allEvents.filter { modelController.addedScheduleEventIDs.contains($0.id) }.count
+        }
+        return allEvents.count
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 ScheduleHeaderSection(
                     selectedDay: selectedDay,
-                    totalEvents: modelController.scheduleEvents.count
+                    totalEvents: totalVisibleEvents,
+                    viewingAddedOnly: viewingAddedOnly
                 )
+                ScheduleScopeToggle(viewingAddedOnly: $viewingAddedOnly)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 8)
                 DayPillStrip(
                     days: days.isEmpty ? Array(1...7) : days,
                     selectedDay: selectedDay,
@@ -38,8 +51,7 @@ struct ScheduleScreen: View {
                 }
                 Divider().background(Color(hex: "#EAEAEE"))
                 TimelineEventList(
-                    events: dayEvents,
-                    catalog: modelController.collectibleCatalog,
+                    sections: daySections,
                     onTap: { selectedEvent = $0 }
                 )
             }
@@ -85,6 +97,7 @@ struct ScheduleScreen: View {
 private struct ScheduleHeaderSection: View {
     let selectedDay: Int
     let totalEvents: Int
+    let viewingAddedOnly: Bool
 
     private var weekProgress: Double { Double(selectedDay - 1) / 6.0 }
     private var eventsToday: Int { max(1, totalEvents / 7) }
@@ -97,7 +110,7 @@ private struct ScheduleHeaderSection: View {
                     Text("Day \(selectedDay) of 7")
                         .font(.system(size: 13, weight: .bold))
                         .foregroundStyle(Color(hex: "#3D3D42"))
-                    Text("\(eventsToday) events today")
+                    Text(viewingAddedOnly ? "\(totalEvents) saved events" : "\(eventsToday) events today")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(Color(hex: "#8A8A92"))
                 }
@@ -111,6 +124,40 @@ private struct ScheduleHeaderSection: View {
                 .padding(.bottom, 14)
         }
         .background(Color(hex: "#F2F2F0"))
+    }
+}
+
+private struct ScheduleScopeToggle: View {
+    @Binding var viewingAddedOnly: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            scopeButton(title: "All events", isSelected: !viewingAddedOnly) {
+                viewingAddedOnly = false
+            }
+            scopeButton(title: "My plan", isSelected: viewingAddedOnly) {
+                viewingAddedOnly = true
+            }
+            Spacer()
+        }
+    }
+
+    private func scopeButton(title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(isSelected ? .white : Color(hex: "#3D3D42"))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule()
+                        .fill(isSelected ? DS.Color.primary : .white)
+                        .overlay(
+                            Capsule().strokeBorder(isSelected ? Color.clear : Color(hex: "#EAEAEE"), lineWidth: 1.5)
+                        )
+                )
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -244,86 +291,14 @@ private struct DayPill: View {
     }
 }
 
-// MARK: - Event status
-
-private enum EventStatus { case ended, active, upcoming, unavailable, featured }
-
-private extension DatabaseEvent {
-    // Friendly type name based on pinType
-    // (eventTypeName already added to DatabaseEvent in Database.swift)
-
-    // Rarity string derived from pinType for status coloring
-    var derivedRarity: String {
-        switch pinType {
-        case .concert, .homebase: return "Legendary"
-        case .event, .battle:     return "Rare"
-        default:                  return "Common"
-        }
-    }
-
-    func status(availability: PinAvailabilityState, collectible: DatabaseCollectible?) -> EventStatus {
-        if collectible?.rarity == "Legendary", availability.isActive {
-            return .featured
-        }
-
-        switch availability {
-        case .active:
-            return .active
-        case .upcoming:
-            return .upcoming
-        case .ended:
-            return .ended
-        case .unavailable:
-            return .unavailable
-        }
-    }
-}
-
 // MARK: - Timeline event list
 
 private struct TimelineEventList: View {
-    @EnvironmentObject private var modelController: ModelController
-    let events: [DatabaseEvent]
-    let catalog: [DatabaseCollectible]
+    let sections: [ScheduleEventSection]
     let onTap: (DatabaseEvent) -> Void
 
-    private func collectible(for event: DatabaseEvent) -> DatabaseCollectible? {
-        modelController.collectible(for: event)
-    }
-
-    private func availability(for event: DatabaseEvent) -> PinAvailabilityState {
-        modelController.availabilityState(for: event)
-    }
-
-    private var groups: [(label: String, labelColor: Color, items: [DatabaseEvent])] {
-        var ended: [DatabaseEvent] = []
-        var active: [DatabaseEvent] = []
-        var upcoming: [DatabaseEvent] = []
-        var unavailable: [DatabaseEvent] = []
-        for e in events {
-            let collectible = collectible(for: e)
-            switch e.status(availability: availability(for: e), collectible: collectible) {
-            case .ended:
-                ended.append(e)
-            case .active, .featured:
-                active.append(e)
-            case .upcoming:
-                upcoming.append(e)
-            case .unavailable:
-                unavailable.append(e)
-            }
-        }
-        var result: [(String, Color, [DatabaseEvent])] = []
-        if !active.isEmpty      { result.append(("Available now", Color(hex: "#2DB37A"), active)) }
-        if !upcoming.isEmpty    { result.append(("Available later", Color(hex: "#FF6B00"), upcoming)) }
-        if !unavailable.isEmpty { result.append(("Unavailable", Color(hex: "#8A8A92"), unavailable)) }
-        if !ended.isEmpty       { result.append(("Ended", Color(hex: "#8A8A92"), ended)) }
-        if result.isEmpty    { result.append(("Events",         Color(hex: "#8A8A92"), events)) }
-        return result
-    }
-
     var body: some View {
-        if events.isEmpty {
+        if sections.allSatisfy({ $0.items.isEmpty }) {
             VStack(spacing: 12) {
                 Image(systemName: "calendar.badge.exclamationmark")
                     .font(.system(size: 36)).foregroundStyle(DS.Color.primary.opacity(0.4))
@@ -335,29 +310,26 @@ private struct TimelineEventList: View {
         } else {
             ScrollView {
                 VStack(spacing: 0) {
-                    ForEach(groups, id: \.label) { group in
+                    ForEach(sections) { section in
                         HStack(spacing: 8) {
-                            if group.label == "Available now" { LiveDot(color: Color(hex: "#2DB37A")) }
-                            Text(group.label)
+                            if section.showsPulse { LiveDot(color: section.labelColor) }
+                            Text(section.label)
                                 .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                .foregroundStyle(group.labelColor)
+                                .foregroundStyle(section.labelColor)
                                 .tracking(1.0).textCase(.uppercase)
                             Rectangle()
-                                .fill(group.label == "Available now"
-                                      ? Color(hex: "#2DB37A").opacity(0.2)
+                                .fill(section.showsPulse
+                                      ? section.labelColor.opacity(0.2)
                                       : Color(hex: "#EAEAEE"))
                                 .frame(height: 1)
                         }
                         .padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 4)
 
-                        ForEach(Array(group.items.enumerated()), id: \.element.id) { idx, event in
+                        ForEach(Array(section.items.enumerated()), id: \.element.id) { idx, presentation in
                             ScheduleTimelineRow(
-                                event: event,
-                                collectible: collectible(for: event),
-                                isLast: idx == group.items.count - 1,
-                                availability: availability(for: event),
-                                status: event.status(availability: availability(for: event), collectible: collectible(for: event)),
-                                onTap: { onTap(event) }
+                                presentation: presentation,
+                                isLast: idx == section.items.count - 1,
+                                onTap: { onTap(presentation.event) }
                             )
                         }
                     }
@@ -382,15 +354,13 @@ private struct LiveDot: View {
 // MARK: - Timeline row
 
 private struct ScheduleTimelineRow: View {
-    let event: DatabaseEvent
-    let collectible: DatabaseCollectible?
+    @EnvironmentObject private var modelController: ModelController
+    let presentation: ScheduleEventPresentation
     let isLast: Bool
-    let availability: PinAvailabilityState
-    let status: EventStatus
     let onTap: () -> Void
 
     private var timeComponents: (hour: String, rest: String) {
-        let parts = event.timeRange.components(separatedBy: " – ")
+        let parts = presentation.event.timeRange.components(separatedBy: " – ")
         guard let start = parts.first else { return ("?", ":00") }
         let tp = start.components(separatedBy: ":")
         let hour = tp.first ?? "?"
@@ -399,7 +369,7 @@ private struct ScheduleTimelineRow: View {
     }
 
     private var dotColor: Color {
-        switch status {
+        switch presentation.status {
         case .active:   return Color(hex: "#2DB37A")
         case .ended:    return Color(hex: "#8A8A92")
         case .featured: return Color(hex: "#E8A800")
@@ -431,17 +401,20 @@ private struct ScheduleTimelineRow: View {
                     .padding(.top, 14)
                     if !isLast {
                         Rectangle()
-                            .fill(status == .active ? Color(hex: "#2DB37A").opacity(0.2) : Color(hex: "#EAEAEE"))
+                            .fill(presentation.status == .active ? Color(hex: "#2DB37A").opacity(0.2) : Color(hex: "#EAEAEE"))
                             .frame(width: 1.5).frame(maxHeight: .infinity)
                     }
                 }
                 .frame(width: 20)
 
                 // Card
-                EventTimelineCard(event: event, collectible: collectible, availability: availability, status: status)
+                EventTimelineCard(
+                    presentation: presentation,
+                    onToggleAdded: { modelController.toggleEventAddedToSchedule(presentation.event) }
+                )
                     .padding(.leading, 8).padding(.vertical, 4).padding(.trailing, 20)
             }
-            .opacity(status == .ended || status == .unavailable ? 0.6 : 1.0)
+            .opacity(presentation.status == .ended || presentation.status == .unavailable ? 0.6 : 1.0)
         }
         .buttonStyle(.plain)
     }
@@ -450,13 +423,11 @@ private struct ScheduleTimelineRow: View {
 // MARK: - Event timeline card
 
 private struct EventTimelineCard: View {
-    let event: DatabaseEvent
-    let collectible: DatabaseCollectible?
-    let availability: PinAvailabilityState
-    let status: EventStatus
+    let presentation: ScheduleEventPresentation
+    let onToggleAdded: () -> Void
 
     @ViewBuilder private var bg: some View {
-        if status == .featured {
+        if presentation.status == .featured {
             LinearGradient(colors: [Color(hex: "#FFFCF0"), Color(hex: "#FFF7DC")],
                            startPoint: .topLeading, endPoint: .bottomTrailing)
         } else {
@@ -465,7 +436,7 @@ private struct EventTimelineCard: View {
     }
 
     private var borderColor: Color {
-        switch status {
+        switch presentation.status {
         case .active:   return Color(hex: "#2DB37A").opacity(0.25)
         case .featured: return Color(hex: "#E8A800").opacity(0.25)
         case .upcoming: return Color(hex: "#FF6B00").opacity(0.18)
@@ -477,13 +448,13 @@ private struct EventTimelineCard: View {
         HStack(spacing: 0) {
             // Rarity stripe
             Rectangle()
-                .fill(collectible != nil ? collectible!.rarity.rarityColor() : Color(hex: "#C8C8D0"))
+                .fill(presentation.collectible != nil ? presentation.collectible!.rarity.rarityColor() : Color(hex: "#C8C8D0"))
                 .frame(width: 3)
                 .clipShape(.rect(topLeadingRadius: 14, bottomLeadingRadius: 14))
 
-            EventCardInner(event: event, collectible: collectible, availability: availability, status: status)
+            EventCardInner(presentation: presentation, onToggleAdded: onToggleAdded)
 
-            if let c = collectible {
+            if let c = presentation.collectible {
                 CollectibleEventPreview(collectible: c)
             }
         }
@@ -495,42 +466,40 @@ private struct EventTimelineCard: View {
 }
 
 private struct EventCardInner: View {
-    let event: DatabaseEvent
-    let collectible: DatabaseCollectible?
-    let availability: PinAvailabilityState
-    let status: EventStatus
+    let presentation: ScheduleEventPresentation
+    let onToggleAdded: () -> Void
 
-    private var rarityStr: String { collectible?.rarity ?? event.derivedRarity }
-    private var pts: Int { collectible?.points ?? 0 }
+    private var rarityStr: String { presentation.collectible?.rarity ?? presentation.event.derivedRarity }
+    private var pts: Int { presentation.collectible?.points ?? 0 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 5) {
-                if status == .active {
+                if presentation.status == .active {
                     HStack(spacing: 4) {
                         LiveDot(color: Color(hex: "#2DB37A"))
                         Text("Available now").font(.system(size: 10, weight: .bold))
                             .foregroundStyle(Color(hex: "#2DB37A")).tracking(0.4).textCase(.uppercase)
                     }
                 } else {
-                    AvailabilityChip(availability: availability)
-                    if status == .featured {
+                    AvailabilityChip(availability: presentation.availability)
+                    if presentation.status == .featured {
                         RarityBadge(rarity: rarityStr)
                     } else {
-                        Text(event.eventTypeName)
+                        Text(presentation.event.eventTypeName)
                             .font(.system(size: 10, weight: .semibold)).foregroundStyle(Color(hex: "#8A8A92"))
                             .padding(.horizontal, 7).padding(.vertical, 3)
                             .background(Color(hex: "#F0F0F3")).clipShape(RoundedRectangle(cornerRadius: 6))
                     }
                 }
                 Spacer(minLength: 0)
-                ScheduleAddButton()
+                ScheduleAddButton(isAdded: presentation.isAdded, onTap: onToggleAdded)
             }
-            Text(event.title)
+            Text(presentation.event.title)
                 .font(.system(size: 14, weight: .bold)).foregroundStyle(Color(hex: "#141418"))
                 .lineLimit(2).multilineTextAlignment(.leading)
             HStack(spacing: 10) {
-                Label(event.locationName, systemImage: "mappin")
+                Label(presentation.event.locationName, systemImage: "mappin")
                     .font(.system(size: 11, weight: .medium)).foregroundStyle(Color(hex: "#8A8A92")).lineLimit(1)
                 if pts > 0 {
                     Text("+\(pts) pts")
@@ -540,13 +509,13 @@ private struct EventCardInner: View {
                         .background(Color.black.opacity(0.04)).clipShape(RoundedRectangle(cornerRadius: 6))
                 }
             }
-            if let message = availability.message {
+            if let message = presentation.availability.message {
                 Text(message)
                     .font(.system(size: 11))
                     .foregroundStyle(Color(hex: "#8A8A92"))
                     .lineLimit(2)
-            } else if status == .active || status == .featured {
-                Text(event.description)
+            } else if presentation.status == .active || presentation.status == .featured {
+                Text(presentation.event.description)
                     .font(.system(size: 11)).foregroundStyle(Color(hex: "#8A8A92")).lineLimit(2)
             }
         }
@@ -556,9 +525,10 @@ private struct EventCardInner: View {
 }
 
 private struct ScheduleAddButton: View {
-    @State private var isAdded = false
+    let isAdded: Bool
+    let onTap: () -> Void
     var body: some View {
-        Button { withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { isAdded.toggle() } } label: {
+        Button { withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { onTap() } } label: {
             Text(isAdded ? "✓ Added" : "+ Add")
                 .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(isAdded ? .white : DS.Color.primary)

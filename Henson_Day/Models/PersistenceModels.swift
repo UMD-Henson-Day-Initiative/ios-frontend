@@ -221,3 +221,24 @@ final class CollectedItemEntity {
         self.player = player
     }
 }
+
+/// A locally saved schedule event that the current player has added to their plan.
+@Model
+final class SavedScheduleEventEntity {
+    @Attribute(.unique) var id: UUID
+    var eventID: String
+    var playerID: UUID
+    var addedAt: Date
+
+    init(
+        id: UUID = UUID(),
+        eventID: String,
+        playerID: UUID,
+        addedAt: Date = .now
+    ) {
+        self.id = id
+        self.eventID = eventID
+        self.playerID = playerID
+        self.addedAt = addedAt
+    }
+}

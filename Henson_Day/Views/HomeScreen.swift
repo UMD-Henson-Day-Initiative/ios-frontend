@@ -12,24 +12,7 @@ struct HomeScreen: View {
     @State private var cardsAppeared = false
 
     private var nextEvent: DatabaseEvent? {
-        let events = modelController.scheduleEvents
-
-        if let activeEvent = events.first(where: {
-            modelController.availabilityState(for: $0).isActive
-        }) {
-            return activeEvent
-        }
-
-        if let upcomingEvent = events.first(where: {
-            if case .upcoming = modelController.availabilityState(for: $0) {
-                return true
-            }
-            return false
-        }) {
-            return upcomingEvent
-        }
-
-        return events.first
+        modelController.featuredEventForHome()
     }
 
     private var nextEventAvailability: PinAvailabilityState {

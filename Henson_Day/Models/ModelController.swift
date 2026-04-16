@@ -3,11 +3,39 @@ import SwiftData
 import CoreLocation
 import Combine
 import os
+import SwiftUI
 
 struct UserFacingErrorState: Identifiable, Equatable {
     let id = UUID()
     let title: String
     let message: String
+}
+
+enum ScheduleEventStatus {
+    case ended
+    case active
+    case upcoming
+    case unavailable
+    case featured
+}
+
+struct ScheduleEventPresentation: Identifiable {
+    let event: DatabaseEvent
+    let collectible: DatabaseCollectible?
+    let availability: PinAvailabilityState
+    let status: ScheduleEventStatus
+    let isAdded: Bool
+
+    var id: String { event.id }
+}
+
+struct ScheduleEventSection: Identifiable {
+    let label: String
+    let labelColor: Color
+    let showsPulse: Bool
+    let items: [ScheduleEventPresentation]
+
+    var id: String { label }
 }
 
 // NOTE: @MainActor is intentional. SwiftData's ModelContext is not thread-safe
@@ -29,6 +57,7 @@ final class ModelController: ObservableObject {
     @Published private(set) var collectibleCatalog: [DatabaseCollectible] = []
     /// Primary map center resolved from config provider (backend-ready abstraction).
     @Published private(set) var campusCenter: CLLocationCoordinate2D
+    @Published private(set) var addedScheduleEventIDs: Set<String> = []
 
     @Published private(set) var isSeedLoading = true
     @Published private(set) var startupErrorMessage: String?
@@ -68,6 +97,7 @@ final class ModelController: ObservableObject {
         leaderboardUsers = []
         scheduleEvents = []
         collectibleCatalog = []
+        addedScheduleEventIDs = []
         campusCenter = campusConfigProvider.campusCenter
 
         let schema = Schema([
@@ -75,6 +105,7 @@ final class ModelController: ObservableObject {
             PinEntity.self,
             BadgeEntity.self,
             CollectedItemEntity.self
+            ,SavedScheduleEventEntity.self
         ])
 
         let config = ModelConfiguration("HensonDayOffline", schema: schema, isStoredInMemoryOnly: false)
@@ -156,6 +187,18 @@ final class ModelController: ObservableObject {
             self.currentUser = players.first(where: { $0.isLocalUser })
             self.pins = pins
             self.leaderboardUsers = players.sorted { $0.totalPoints > $1.totalPoints }
+
+            if let currentUser {
+                let savedDescriptor = FetchDescriptor<SavedScheduleEventEntity>(
+                    predicate: #Predicate { item in
+                        item.playerID == currentUser.id
+                    }
+                )
+                let savedEvents = try context.fetch(savedDescriptor)
+                self.addedScheduleEventIDs = Set(savedEvents.map(\.eventID))
+            } else {
+                self.addedScheduleEventIDs = []
+            }
         } catch {
             publishRuntimeError(
                 title: "Couldn't refresh data",
@@ -348,8 +391,162 @@ final class ModelController: ObservableObject {
         return collectibleCatalog.first { $0.name == collectibleName }
     }
 
+    func scheduleStatus(for event: DatabaseEvent, now: Date = .now) -> ScheduleEventStatus {
+        let availability = availabilityState(for: event, now: now)
+        let collectible = collectible(for: event)
+
+        if collectible?.rarity == "Legendary", availability.isActive {
+            return .featured
+        }
+
+        switch availability {
+        case .active:
+            return .active
+        case .upcoming:
+            return .upcoming
+        case .ended:
+            return .ended
+        case .unavailable:
+            return .unavailable
+        }
+    }
+
+    func schedulePresentation(for event: DatabaseEvent, now: Date = .now) -> ScheduleEventPresentation {
+        ScheduleEventPresentation(
+            event: event,
+            collectible: collectible(for: event),
+            availability: availabilityState(for: event, now: now),
+            status: scheduleStatus(for: event, now: now),
+            isAdded: addedScheduleEventIDs.contains(event.id)
+        )
+    }
+
+    func groupedScheduleSections(forDay day: Int, addedOnly: Bool, now: Date = .now) -> [ScheduleEventSection] {
+        let baseEvents = scheduleEvents.filter { $0.dayNumber == day }
+        let filteredEvents = addedOnly ? baseEvents.filter { addedScheduleEventIDs.contains($0.id) } : baseEvents
+        let presentations = filteredEvents.map { schedulePresentation(for: $0, now: now) }
+
+        var active: [ScheduleEventPresentation] = []
+        var upcoming: [ScheduleEventPresentation] = []
+        var unavailable: [ScheduleEventPresentation] = []
+        var ended: [ScheduleEventPresentation] = []
+
+        for presentation in presentations {
+            switch presentation.status {
+            case .active, .featured:
+                active.append(presentation)
+            case .upcoming:
+                upcoming.append(presentation)
+            case .unavailable:
+                unavailable.append(presentation)
+            case .ended:
+                ended.append(presentation)
+            }
+        }
+
+        var sections: [ScheduleEventSection] = []
+        if !active.isEmpty {
+            sections.append(ScheduleEventSection(label: "Available now", labelColor: .green, showsPulse: true, items: active))
+        }
+        if !upcoming.isEmpty {
+            sections.append(ScheduleEventSection(label: "Available later", labelColor: .orange, showsPulse: false, items: upcoming))
+        }
+        if !unavailable.isEmpty {
+            sections.append(ScheduleEventSection(label: "Unavailable", labelColor: .secondary, showsPulse: false, items: unavailable))
+        }
+        if !ended.isEmpty {
+            sections.append(ScheduleEventSection(label: "Ended", labelColor: .secondary, showsPulse: false, items: ended))
+        }
+        if sections.isEmpty {
+            sections.append(ScheduleEventSection(label: "Events", labelColor: .secondary, showsPulse: false, items: presentations))
+        }
+        return sections
+    }
+
+    func toggleEventAddedToSchedule(_ event: DatabaseEvent) {
+        guard let currentUser else {
+            publishRuntimeError(
+                title: "Schedule unavailable",
+                message: "Sign in to save events to your plan.",
+                context: "Toggle saved schedule event without current user"
+            )
+            return
+        }
+        guard let context else {
+            publishRuntimeError(
+                title: "Schedule unavailable",
+                message: "Offline data is unavailable right now.",
+                context: "Toggle saved schedule event without context"
+            )
+            return
+        }
+
+        do {
+            let currentUserID = currentUser.id
+            let targetEventID = event.id
+            let descriptor = FetchDescriptor<SavedScheduleEventEntity>(
+                predicate: #Predicate { item in
+                    item.playerID == currentUserID && item.eventID == targetEventID
+                }
+            )
+            let existing = try context.fetch(descriptor)
+
+            if existing.isEmpty {
+                context.insert(SavedScheduleEventEntity(eventID: targetEventID, playerID: currentUserID))
+            } else {
+                existing.forEach(context.delete)
+            }
+
+            try context.save()
+            refreshPublishedData()
+        } catch {
+            publishRuntimeError(
+                title: "Couldn't update your plan",
+                message: "The selected event could not be saved right now.",
+                context: "Toggle saved schedule event",
+                error: error
+            )
+        }
+    }
+
+    func featuredEventForHome(now: Date = .now) -> DatabaseEvent? {
+        scheduleEvents.min { lhs, rhs in
+            homeEventSortKey(for: lhs, now: now) < homeEventSortKey(for: rhs, now: now)
+        }
+    }
+
     func isPinCurrentlyAvailable(_ pin: PinEntity, now: Date = .now) -> Bool {
         pin.availabilityState(now: now).isActive
+    }
+
+    private func homeEventSortKey(for event: DatabaseEvent, now: Date) -> (Int, Int, Int, String) {
+        let availabilityRank: Int
+        switch availabilityState(for: event, now: now) {
+        case .active:
+            availabilityRank = 0
+        case .upcoming:
+            availabilityRank = 1
+        case .unavailable:
+            availabilityRank = 2
+        case .ended:
+            availabilityRank = 3
+        }
+
+        let rarityRank: Int
+        switch collectible(for: event)?.rarity.lowercased() {
+        case "legendary":
+            rarityRank = 0
+        case "epic":
+            rarityRank = 1
+        case "rare":
+            rarityRank = 2
+        case "common":
+            rarityRank = 3
+        default:
+            rarityRank = 4
+        }
+
+        return (availabilityRank, rarityRank, event.dayNumber, event.id)
     }
 
     func updateCurrentUserAvatar(type: AvatarType, colorHex: String) {
