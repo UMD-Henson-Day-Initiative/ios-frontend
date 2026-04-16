@@ -50,7 +50,9 @@ final class ProximityMonitor: ObservableObject {
         let collectedNames = Set(modelController.collectionItemsForCurrentUser().map(\.collectibleName))
 
         // Clear dismissed pins that are now beyond radius
-        let arPins = modelController.pins.filter { $0.hasARCollectible }
+        let arPins = modelController.pins.filter {
+            $0.hasARCollectible && modelController.isPinCurrentlyAvailable($0)
+        }
         for dismissedID in dismissedPinIDs {
             if let pin = arPins.first(where: { $0.id == dismissedID }) {
                 let pinLocation = CLLocation(latitude: pin.latitude, longitude: pin.longitude)
@@ -73,12 +75,7 @@ final class ProximityMonitor: ObservableObject {
             guard distance <= proximityRadius else { continue }
 
             // Resolve collectible for this pin
-            let pinCollectibleIDs = Database.pins.first(where: { $0.title == pin.title })?.collectibleIDs ?? []
-            var candidates = Database.collectibleCatalog.filter { pinCollectibleIDs.contains($0.id) }
-
-            if candidates.isEmpty, let fallbackName = pin.collectibleName {
-                candidates = Database.collectibleCatalog.filter { $0.name == fallbackName }
-            }
+            let candidates = modelController.collectibles(for: pin)
 
             let uncollected = candidates.filter { !collectedNames.contains($0.name) }
             guard let collectible = uncollected.first else { continue }

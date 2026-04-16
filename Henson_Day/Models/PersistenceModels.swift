@@ -114,43 +114,76 @@ final class PinEntity {
     @Attribute(.unique) var id: UUID
     /// Backing storage for `pinType`. Do not read or write this directly in UI code.
     var pinTypeRaw: String
+    var remoteID: String?
+    var remoteEventID: String?
     var title: String
     var subtitle: String?
     var latitude: Double
     var longitude: Double
     var pinDescription: String
+    var status: String
     var hasARCollectible: Bool
+    var activationStartsAt: Date?
+    var activationEndsAt: Date?
     var collectibleName: String?
     var collectibleRarity: String?
+    var collectibleIDsRaw: String
 
     init(
         id: UUID = UUID(),
         pinType: PinType,
+        remoteID: String? = nil,
+        remoteEventID: String? = nil,
         title: String,
         subtitle: String? = nil,
         latitude: Double,
         longitude: Double,
         pinDescription: String,
+        status: String = "active",
         hasARCollectible: Bool = false,
+        activationStartsAt: Date? = nil,
+        activationEndsAt: Date? = nil,
         collectibleName: String? = nil,
-        collectibleRarity: String? = nil
+        collectibleRarity: String? = nil,
+        collectibleIDs: [String] = []
     ) {
         self.id = id
         self.pinTypeRaw = pinType.rawValue
+        self.remoteID = remoteID
+        self.remoteEventID = remoteEventID
         self.title = title
         self.subtitle = subtitle
         self.latitude = latitude
         self.longitude = longitude
         self.pinDescription = pinDescription
+        self.status = status
         self.hasARCollectible = hasARCollectible
+        self.activationStartsAt = activationStartsAt
+        self.activationEndsAt = activationEndsAt
         self.collectibleName = collectibleName
         self.collectibleRarity = collectibleRarity
+        self.collectibleIDsRaw = collectibleIDs.joined(separator: ",")
     }
 
     /// Type-safe accessor for the pin category. Falls back to `.site` for unrecognized values.
     var pinType: PinType {
         get { PinType(rawValue: pinTypeRaw) ?? .site }
         set { pinTypeRaw = newValue.rawValue }
+    }
+
+    var collectibleIDs: [String] {
+        get {
+            collectibleIDsRaw
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        }
+        set {
+            collectibleIDsRaw = newValue
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .joined(separator: ",")
+        }
     }
 }
 

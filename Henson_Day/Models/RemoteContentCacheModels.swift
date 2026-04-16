@@ -199,6 +199,9 @@ final class CachedPinEntity {
     var hasArCollectible: Bool
     var activationStartsAt: Date?
     var activationEndsAt: Date?
+    var collectibleName: String?
+    var collectibleRarity: String?
+    var collectibleIDsRaw: String
 
     init(
         id: String,
@@ -213,7 +216,10 @@ final class CachedPinEntity {
         isHidden: Bool,
         hasArCollectible: Bool,
         activationStartsAt: Date?,
-        activationEndsAt: Date?
+        activationEndsAt: Date?,
+        collectibleName: String?,
+        collectibleRarity: String?,
+        collectibleIDsRaw: String
     ) {
         self.id = id
         self.eventId = eventId
@@ -228,6 +234,9 @@ final class CachedPinEntity {
         self.hasArCollectible = hasArCollectible
         self.activationStartsAt = activationStartsAt
         self.activationEndsAt = activationEndsAt
+        self.collectibleName = collectibleName
+        self.collectibleRarity = collectibleRarity
+        self.collectibleIDsRaw = collectibleIDsRaw
     }
 
     convenience init(dto: PinDTO) {
@@ -244,7 +253,10 @@ final class CachedPinEntity {
             isHidden: dto.isHidden ?? false,
             hasArCollectible: dto.hasArCollectible ?? false,
             activationStartsAt: dto.activationStartsAt,
-            activationEndsAt: dto.activationEndsAt
+            activationEndsAt: dto.activationEndsAt,
+            collectibleName: dto.collectibleName,
+            collectibleRarity: dto.collectibleRarity,
+            collectibleIDsRaw: (dto.collectibleIds ?? []).joined(separator: ",")
         )
     }
 
@@ -261,6 +273,9 @@ final class CachedPinEntity {
         hasArCollectible = dto.hasArCollectible ?? false
         activationStartsAt = dto.activationStartsAt
         activationEndsAt = dto.activationEndsAt
+        collectibleName = dto.collectibleName
+        collectibleRarity = dto.collectibleRarity
+        collectibleIDsRaw = (dto.collectibleIds ?? []).joined(separator: ",")
     }
 }
 
@@ -425,7 +440,10 @@ extension PinDTO {
             isHidden: entity.isHidden,
             hasArCollectible: entity.hasArCollectible,
             activationStartsAt: entity.activationStartsAt,
-            activationEndsAt: entity.activationEndsAt
+            activationEndsAt: entity.activationEndsAt,
+            collectibleName: entity.collectibleName,
+            collectibleRarity: entity.collectibleRarity,
+            collectibleIds: entity.collectibleIDsRaw.isEmpty ? [] : entity.collectibleIDsRaw.split(separator: ",").map(String.init)
         )
     }
 }

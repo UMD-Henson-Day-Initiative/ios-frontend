@@ -167,6 +167,16 @@ final class ModelController: ObservableObject {
     }
 
     func captureCollectible(from pin: PinEntity, points: Int = 50) {
+        if let collectible = preferredCollectible(for: pin) {
+            captureCollectible(
+                collectibleName: collectible.name,
+                rarity: collectible.rarity,
+                foundAtTitle: pin.title,
+                points: collectible.points
+            )
+            return
+        }
+
         guard let collectibleName = pin.collectibleName else { return }
         captureCollectible(
             collectibleName: collectibleName,
@@ -282,6 +292,48 @@ final class ModelController: ObservableObject {
         }
     }
 
+    func collectibles(for pin: PinEntity) -> [DatabaseCollectible] {
+        let candidatesByID = pin.collectibleIDs.compactMap { collectibleID in
+            collectibleCatalog.first(where: { $0.id == collectibleID })
+        }
+
+        if !candidatesByID.isEmpty {
+            return candidatesByID
+        }
+
+        if let collectibleName = pin.collectibleName {
+            return collectibleCatalog.filter { $0.name == collectibleName }
+        }
+
+        return []
+    }
+
+    func preferredCollectible(for pin: PinEntity, preferringUncollected: Bool = false) -> DatabaseCollectible? {
+        let candidates = collectibles(for: pin)
+        guard !candidates.isEmpty else { return nil }
+
+        guard preferringUncollected else {
+            return candidates.first
+        }
+
+        let collectedNames = Set(collectionItemsForCurrentUser().map(\.collectibleName))
+        return candidates.first(where: { !collectedNames.contains($0.name) }) ?? candidates.first
+    }
+
+    func isPinCurrentlyAvailable(_ pin: PinEntity, now: Date = .now) -> Bool {
+        let normalizedStatus = pin.status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if ["cancelled", "disabled", "ended", "hidden", "inactive"].contains(normalizedStatus) {
+            return false
+        }
+        if let activationStartsAt = pin.activationStartsAt, activationStartsAt > now {
+            return false
+        }
+        if let activationEndsAt = pin.activationEndsAt, activationEndsAt < now {
+            return false
+        }
+        return true
+    }
+
     func updateCurrentUserAvatar(type: AvatarType, colorHex: String) {
         guard let user = currentUser else { return }
         guard let context else {
@@ -378,7 +430,8 @@ final class ModelController: ObservableObject {
                     pinDescription: pin.description,
                     hasARCollectible: pin.hasARCollectible,
                     collectibleName: pin.collectibleName,
-                    collectibleRarity: pin.collectibleRarity
+                    collectibleRarity: pin.collectibleRarity,
+                    collectibleIDs: pin.collectibleIDs
                 )
             )
         }
@@ -415,7 +468,7 @@ final class ModelController: ObservableObject {
     // MARK: - Remote content integration
 
     /// Apply remote content from ContentService, replacing seed/fallback data where
-    /// remote data is available. Remote pins are upserted into SwiftData by title;
+    /// remote data is available. Remote pins are reconciled by stable remote ID;
     /// events and collectibles replace the in-memory arrays directly.
     func applyRemoteContent(from contentService: ContentService) {
         let seasonStart = contentService.currentSeason?.startsAt ?? AppConstants.Schedule.weekStart
@@ -462,19 +515,33 @@ final class ModelController: ObservableObject {
 
         do {
             let existingPins = try context.fetch(FetchDescriptor<PinEntity>())
+            let existingByRemoteID = Dictionary(uniqueKeysWithValues: existingPins.compactMap { pin in
+                pin.remoteID.map { ($0, pin) }
+            })
             let existingByTitle = Dictionary(uniqueKeysWithValues: existingPins.map { ($0.title, $0) })
+            let latestRemoteIDs = Set(remotePins.map(\.id))
 
-            for dto in remotePins where !(dto.isHidden ?? false) {
-                if let existing = existingByTitle[dto.title] {
-                    existing.pinType = PinType(rawValue: dto.pinType) ?? .site
-                    existing.subtitle = dto.subtitle
-                    existing.latitude = dto.latitude
-                    existing.longitude = dto.longitude
-                    existing.pinDescription = dto.description
-                    existing.hasARCollectible = dto.hasArCollectible ?? false
+            for dto in remotePins {
+                let existing = existingByRemoteID[dto.id] ?? existingByTitle[dto.title]
+
+                if dto.isHidden ?? false {
+                    if let existing {
+                        context.delete(existing)
+                    }
+                    continue
+                }
+
+                if let existing {
+                    apply(dto, to: existing)
                 } else {
                     context.insert(dto.toPinEntity())
                 }
+            }
+
+            for stalePin in existingPins {
+                guard let remoteID = stalePin.remoteID else { continue }
+                guard !latestRemoteIDs.contains(remoteID) else { continue }
+                context.delete(stalePin)
             }
 
             try context.save()
@@ -488,5 +555,23 @@ final class ModelController: ObservableObject {
                 error: error
             )
         }
+    }
+
+    private func apply(_ dto: PinDTO, to pin: PinEntity) {
+        pin.remoteID = dto.id
+        pin.remoteEventID = dto.eventId
+        pin.pinType = PinType(rawValue: dto.pinType) ?? .site
+        pin.title = dto.title
+        pin.subtitle = dto.subtitle
+        pin.latitude = dto.latitude
+        pin.longitude = dto.longitude
+        pin.pinDescription = dto.description
+        pin.status = dto.status
+        pin.hasARCollectible = dto.hasArCollectible ?? false
+        pin.activationStartsAt = dto.activationStartsAt
+        pin.activationEndsAt = dto.activationEndsAt
+        pin.collectibleName = dto.collectibleName
+        pin.collectibleRarity = dto.collectibleRarity
+        pin.collectibleIDs = dto.collectibleIds ?? []
     }
 }

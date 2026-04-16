@@ -232,7 +232,7 @@ struct ARCollectibleExperienceView: View {
         case .noCollectiblesConfigured:
             promptCard(
                 title: "No collectibles configured for this pin",
-                subtitle: "Add collectible IDs to this pin in Database.pins to enable AR spawns."
+                subtitle: "This pin does not currently map to any active collectible content."
             ) {
                 EmptyView()
             }
@@ -315,13 +315,7 @@ struct ARCollectibleExperienceView: View {
     private func chooseCollectibleForCurrentPin() {
         let collectedNames = Set(modelController.collectionItemsForCurrentUser().map(\.collectibleName))
 
-        let pinCollectibleIDs = Database.pins.first(where: { $0.title == pin.title })?.collectibleIDs ?? []
-        var candidates = Database.collectibleCatalog.filter { pinCollectibleIDs.contains($0.id) }
-
-        // Backward-compatible fallback for pins still configured by `collectibleName` only.
-        if candidates.isEmpty, let fallbackName = pin.collectibleName {
-            candidates = Database.collectibleCatalog.filter { $0.name == fallbackName }
-        }
+        let candidates = modelController.collectibles(for: pin)
 
         let notCollected = candidates.filter { !collectedNames.contains($0.name) }
         activeCollectible = (notCollected.isEmpty ? candidates : notCollected).randomElement()

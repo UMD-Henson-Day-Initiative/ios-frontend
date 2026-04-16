@@ -60,6 +60,9 @@ struct PinDTO: Decodable {
     let hasArCollectible: Bool?
     let activationStartsAt: Date?
     let activationEndsAt: Date?
+    let collectibleName: String?
+    let collectibleRarity: String?
+    let collectibleIds: [String]?
 }
 
 struct CollectibleDTO: Decodable {
@@ -117,14 +120,20 @@ extension PinDTO {
     func toPinEntity() -> PinEntity {
         PinEntity(
             pinType: PinType(rawValue: pinType) ?? .site,
+            remoteID: id,
+            remoteEventID: eventId,
             title: title,
             subtitle: subtitle,
             latitude: latitude,
             longitude: longitude,
             pinDescription: description,
+            status: status,
             hasARCollectible: hasArCollectible ?? false,
-            collectibleName: nil,
-            collectibleRarity: nil
+            activationStartsAt: activationStartsAt,
+            activationEndsAt: activationEndsAt,
+            collectibleName: collectibleName,
+            collectibleRarity: collectibleRarity,
+            collectibleIDs: collectibleIds ?? []
         )
     }
 }

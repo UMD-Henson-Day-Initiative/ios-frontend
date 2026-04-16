@@ -249,6 +249,7 @@ struct MapScreen: View {
 
     private func detailForPin(_ pin: PinEntity) -> MapPinDetail {
         let parsed = parseSubtitle(pin.subtitle)
+        let collectible = modelController.preferredCollectible(for: pin)
 
         return MapPinDetail(
             id: pin.id.uuidString,
@@ -258,8 +259,8 @@ struct MapScreen: View {
             timeRange: parsed.time,
             locationName: parsed.location ?? pin.title,
             description: pin.pinDescription,
-            collectibleName: pin.collectibleName,
-            collectibleRarity: pin.collectibleRarity,
+            collectibleName: collectible?.name ?? pin.collectibleName,
+            collectibleRarity: collectible?.rarity ?? pin.collectibleRarity,
             hasARCollectible: pin.hasARCollectible
         )
     }
@@ -300,10 +301,9 @@ struct MapScreen: View {
         // Testing flow: always teleport to the Stadium Stomper pin and then
         // open the collectible experience after a short delay.
         let targetPin = modelController.pins.first { pin in
-            if pin.collectibleName == "Stadium Stomper" { return true }
-
-            let pinCollectibleIDs = Database.pins.first(where: { $0.title == pin.title })?.collectibleIDs ?? []
-            return pinCollectibleIDs.contains("c1")
+            modelController.collectibles(for: pin).contains {
+                $0.name == "Stadium Stomper" || $0.id == "c1"
+            }
         }
 
         guard let targetPin else {
@@ -348,18 +348,7 @@ struct MapScreen: View {
     }
 
     private func modelAssetNameForPin(_ pin: PinEntity) -> String? {
-        let pinCollectibleIDs = Database.pins.first(where: { $0.title == pin.title })?.collectibleIDs ?? []
-
-        if let byID = Database.collectibleCatalog.first(where: { pinCollectibleIDs.contains($0.id) }) {
-            return byID.modelFileName
-        }
-
-        if let collectibleName = pin.collectibleName,
-           let byName = Database.collectibleCatalog.first(where: { $0.name == collectibleName }) {
-            return byName.modelFileName
-        }
-
-        return nil
+        return modelController.preferredCollectible(for: pin)?.modelFileName
     }
 }
 
