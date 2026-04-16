@@ -32,6 +32,19 @@ final class ContentService: ObservableObject {
     @Published private(set) var lastSuccessfulSyncAt: Date?
     @Published private(set) var contentVersion: String?
     @Published private(set) var syncState: ContentSyncState = .idle
+    @Published private(set) var syncFeedback: ContentSyncFeedback?
+
+    struct ContentSyncFeedback: Equatable {
+        enum Kind: Equatable {
+            case info
+            case success
+            case warning
+        }
+
+        let kind: Kind
+        let title: String
+        let message: String?
+    }
 
     enum ContentSyncState: Equatable {
         case idle
@@ -124,6 +137,10 @@ final class ContentService: ObservableObject {
             return
         }
 
+        var didTriggerVersionReset = false
+        var didTriggerFullRefresh = false
+        var targetContentVersion: String?
+
         syncState = .syncingRemote
         logger.info("Starting remote content sync")
 
@@ -132,9 +149,25 @@ final class ContentService: ObservableObject {
             let previousContentVersion = contentVersion
             let contentVersionChanged = previousContentVersion != nil && previousContentVersion != bootstrap.contentVersion
             let fetchMode = determineFetchMode(contentVersionChanged: contentVersionChanged)
+            didTriggerVersionReset = contentVersionChanged
+            didTriggerFullRefresh = fetchMode == .full
+            targetContentVersion = bootstrap.contentVersion
 
             if contentVersionChanged {
                 logger.info("Content version changed from \(previousContentVersion ?? "unknown", privacy: .public) to \(bootstrap.contentVersion, privacy: .public). Forcing full refresh.")
+                syncFeedback = ContentSyncFeedback(
+                    kind: .info,
+                    title: "Content reset in progress",
+                    message: "Refreshing cached content for version \(bootstrap.contentVersion)."
+                )
+                logger.notice("Visible content reset started for version \(bootstrap.contentVersion, privacy: .public)")
+            } else if fetchMode == .full {
+                syncFeedback = ContentSyncFeedback(
+                    kind: .info,
+                    title: "Content refresh in progress",
+                    message: "Checking the full content catalog for updates."
+                )
+                logger.notice("Visible full content refresh started for version \(bootstrap.contentVersion, privacy: .public)")
             }
 
             remoteCampusConfig = bootstrap.campusConfig
@@ -188,14 +221,55 @@ final class ContentService: ObservableObject {
                 syncDate: syncDate
             )
             syncState = .synced
+            if contentVersionChanged {
+                syncFeedback = ContentSyncFeedback(
+                    kind: .success,
+                    title: "Content reset complete",
+                    message: "Loaded content version \(bootstrap.contentVersion) from the server."
+                )
+                logger.notice("Visible content reset completed for version \(bootstrap.contentVersion, privacy: .public)")
+            } else if fetchMode == .full {
+                syncFeedback = ContentSyncFeedback(
+                    kind: .success,
+                    title: "Content refreshed",
+                    message: "Downloaded the latest content from the server."
+                )
+                logger.notice("Visible full content refresh completed for version \(bootstrap.contentVersion, privacy: .public)")
+            }
             logger.info("Content sync complete using \(fetchMode == .full ? "full" : "delta", privacy: .public) refresh. Version: \(bootstrap.contentVersion, privacy: .public), events: \(resolvedEvents.count), pins: \(resolvedPins.count), collectibles: \(resolvedCollectibles.count)")
         } catch {
             let message = error.localizedDescription
             if lastSuccessfulSyncAt != nil {
                 syncState = .stale
+                if didTriggerVersionReset {
+                    syncFeedback = ContentSyncFeedback(
+                        kind: .warning,
+                        title: "Content reset pending",
+                        message: "Keeping cached content until version \(targetContentVersion ?? "unknown") finishes downloading."
+                    )
+                } else if didTriggerFullRefresh {
+                    syncFeedback = ContentSyncFeedback(
+                        kind: .warning,
+                        title: "Content refresh incomplete",
+                        message: "Using cached content until the next full refresh succeeds."
+                    )
+                }
                 logger.warning("Content sync failed, using stale data: \(message, privacy: .public)")
             } else {
                 syncState = .failed(message)
+                if didTriggerVersionReset {
+                    syncFeedback = ContentSyncFeedback(
+                        kind: .warning,
+                        title: "Content reset interrupted",
+                        message: "The refresh for version \(targetContentVersion ?? "unknown") did not complete."
+                    )
+                } else if didTriggerFullRefresh {
+                    syncFeedback = ContentSyncFeedback(
+                        kind: .warning,
+                        title: "Content refresh failed",
+                        message: "The app could not load the latest full content update."
+                    )
+                }
                 logger.error("Content sync failed with no prior data: \(message, privacy: .public)")
             }
         }

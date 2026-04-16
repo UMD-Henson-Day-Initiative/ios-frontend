@@ -141,13 +141,17 @@ struct LaunchGateView: View {
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                 }
+                contentSyncFeedbackView
             }
             .padding(.top, 4)
         case .synced:
-            Label("Content up to date", systemImage: "checkmark.circle.fill")
-                .font(.caption)
-                .foregroundStyle(.green)
-                .padding(.top, 4)
+            VStack(spacing: 6) {
+                Label("Content up to date", systemImage: "checkmark.circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.green)
+                contentSyncFeedbackView
+            }
+            .padding(.top, 4)
         case .bundleOnly(let reason):
             VStack(spacing: 6) {
                 Label("Using offline content", systemImage: "internaldrive.fill")
@@ -166,6 +170,7 @@ struct LaunchGateView: View {
                 Label("Content may be outdated", systemImage: "clock.arrow.circlepath")
                     .font(.caption)
                     .foregroundStyle(.orange)
+                contentSyncFeedbackView
                 Button("Retry Sync") {
                     Task { await contentService.refreshFromRemote() }
                 }
@@ -179,6 +184,7 @@ struct LaunchGateView: View {
                 Label("Content sync failed", systemImage: "wifi.exclamationmark")
                     .font(.caption)
                     .foregroundStyle(.orange)
+                contentSyncFeedbackView
                 Text(message)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -191,6 +197,46 @@ struct LaunchGateView: View {
                 .controlSize(.small)
             }
             .padding(.top, 4)
+        }
+    }
+
+    @ViewBuilder
+    private var contentSyncFeedbackView: some View {
+        if let feedback = contentService.syncFeedback {
+            VStack(spacing: 4) {
+                Label(feedback.title, systemImage: syncFeedbackIcon(for: feedback.kind))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(syncFeedbackColor(for: feedback.kind))
+
+                if let message = feedback.message, !message.isEmpty {
+                    Text(message)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+            }
+        }
+    }
+
+    private func syncFeedbackColor(for kind: ContentService.ContentSyncFeedback.Kind) -> Color {
+        switch kind {
+        case .info:
+            return Color("UMDRed")
+        case .success:
+            return .green
+        case .warning:
+            return .orange
+        }
+    }
+
+    private func syncFeedbackIcon(for kind: ContentService.ContentSyncFeedback.Kind) -> String {
+        switch kind {
+        case .info:
+            return "arrow.triangle.2.circlepath.circle.fill"
+        case .success:
+            return "checkmark.seal.fill"
+        case .warning:
+            return "exclamationmark.triangle.fill"
         }
     }
 
