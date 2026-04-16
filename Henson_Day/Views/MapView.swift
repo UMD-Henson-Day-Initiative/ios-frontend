@@ -211,6 +211,8 @@ struct WaypointMarkerView: View {
     @State private var appeared = false
 
     private var pinColor: Color { pin.pinType.mapMarkerColor }
+    private var availability: PinAvailabilityState { pin.availabilityState() }
+    private var markerOpacity: Double { availability.isActive ? 1.0 : 0.5 }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -221,6 +223,7 @@ struct WaypointMarkerView: View {
                     .frame(width: 36, height: 12)
                     .blur(radius: 4)
                     .offset(y: 24)
+                    .opacity(markerOpacity)
 
                 // Pulse ring
                 Circle()
@@ -228,6 +231,7 @@ struct WaypointMarkerView: View {
                     .frame(width: 48, height: 48)
                     .scaleEffect(isPulsing ? 1.4 : 1.0)
                     .opacity(isPulsing ? 0.0 : 0.5)
+                    .opacity(availability.isActive ? 1.0 : 0.0)
 
                 // Outer ring
                 Circle()
@@ -240,6 +244,7 @@ struct WaypointMarkerView: View {
                     )
                     .frame(width: isSelected ? 42 : 38, height: isSelected ? 42 : 38)
                     .shadow(color: .black.opacity(0.4), radius: 6, y: 4)
+                    .opacity(markerOpacity)
 
                 // Inner face
                 Circle()
@@ -272,6 +277,16 @@ struct WaypointMarkerView: View {
                         Circle()
                             .stroke(.white.opacity(0.6), lineWidth: 2)
                     )
+
+                if !availability.isActive {
+                    Image(systemName: availability.symbolName)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(4)
+                        .background(Color.black.opacity(0.65))
+                        .clipShape(Circle())
+                        .offset(x: 16, y: -16)
+                }
             }
             .scaleEffect(appeared ? 1.0 : 0.3)
             .scaleEffect(isSelected ? 1.15 : 1.0)
@@ -283,10 +298,13 @@ struct WaypointMarkerView: View {
                 .rotationEffect(.degrees(180))
                 .shadow(color: .black.opacity(0.3), radius: 2, y: 2)
                 .offset(y: -2)
+                .opacity(markerOpacity)
         }
         .onAppear {
-            withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: false)) {
-                isPulsing = true
+            if availability.isActive {
+                withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: false)) {
+                    isPulsing = true
+                }
             }
             withAnimation(.spring(response: 0.5, dampingFraction: 0.6)) {
                 appeared = true

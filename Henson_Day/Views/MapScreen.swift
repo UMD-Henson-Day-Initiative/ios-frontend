@@ -250,10 +250,12 @@ struct MapScreen: View {
     private func detailForPin(_ pin: PinEntity) -> MapPinDetail {
         let parsed = parseSubtitle(pin.subtitle)
         let collectible = modelController.preferredCollectible(for: pin)
+        let availability = pin.availabilityState()
 
         return MapPinDetail(
             id: pin.id.uuidString,
             pinType: pin.pinType,
+            availability: availability,
             title: pin.title,
             dayLabel: parsed.day,
             timeRange: parsed.time,
@@ -275,6 +277,8 @@ struct MapScreen: View {
     }
 
     private func handlePrimaryAction(for pin: PinEntity) {
+        guard modelController.isPinCurrentlyAvailable(pin) else { return }
+
         switch pin.pinType {
         case .event:
             if pin.hasARCollectible { arPin = pin }

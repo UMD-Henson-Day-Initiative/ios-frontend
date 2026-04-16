@@ -321,17 +321,7 @@ final class ModelController: ObservableObject {
     }
 
     func isPinCurrentlyAvailable(_ pin: PinEntity, now: Date = .now) -> Bool {
-        let normalizedStatus = pin.status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if ["cancelled", "disabled", "ended", "hidden", "inactive"].contains(normalizedStatus) {
-            return false
-        }
-        if let activationStartsAt = pin.activationStartsAt, activationStartsAt > now {
-            return false
-        }
-        if let activationEndsAt = pin.activationEndsAt, activationEndsAt < now {
-            return false
-        }
-        return true
+        pin.availabilityState(now: now).isActive
     }
 
     func updateCurrentUserAvatar(type: AvatarType, colorHex: String) {

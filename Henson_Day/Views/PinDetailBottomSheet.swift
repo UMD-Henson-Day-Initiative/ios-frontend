@@ -17,6 +17,8 @@ struct PinDetailBottomSheet: View {
     @State private var showProximityAlert = false
 
     private var primaryActionTitle: String? {
+        guard detail.availability.isActive else { return nil }
+
         switch detail.pinType {
         case .event:
             return detail.hasARCollectible ? "View in AR" : nil
@@ -78,10 +80,16 @@ struct PinDetailBottomSheet: View {
                         .foregroundStyle(.secondary)
                 }
 
+                availabilityChip
+
                 Text(detail.description)
                     .font(.body)
                     .foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
+
+                if let availabilityMessage = detail.availability.message {
+                    availabilityCard(message: availabilityMessage)
+                }
 
                 if detail.hasARCollectible {
                     collectibleCard
@@ -139,7 +147,7 @@ struct PinDetailBottomSheet: View {
 
     private var collectibleCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Available Collectible")
+            Text(detail.availability.isActive ? "Available Collectible" : "Collectible Status")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
 
@@ -160,6 +168,30 @@ struct PinDetailBottomSheet: View {
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.primary.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private var availabilityChip: some View {
+        Label(detail.availability.label, systemImage: detail.availability.symbolName)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(detail.availability.tint)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(detail.availability.tint.opacity(0.12))
+            .clipShape(Capsule())
+    }
+
+    private func availabilityCard(message: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: detail.availability.symbolName)
+                .foregroundStyle(detail.availability.tint)
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(0.05))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
@@ -231,6 +263,7 @@ struct PinDetailBottomSheet: View {
             detail: MapPinDetail(
                 id: "stadium-spirit-rally",
                 pinType: .event,
+                availability: .active,
                 title: "Stadium Spirit Rally",
                 dayLabel: "Day 1",
                 timeRange: "5:00 PM – 7:00 PM",
