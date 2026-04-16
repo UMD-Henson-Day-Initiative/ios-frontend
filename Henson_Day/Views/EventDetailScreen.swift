@@ -22,8 +22,13 @@ struct EventDetailScreen: View {
     }
 
     private var collectible: DatabaseCollectible? {
-        guard let collectibleName = event?.collectibleName else { return nil }
-        return modelController.collectibleCatalog.first { $0.name == collectibleName }
+        guard let event else { return nil }
+        return modelController.collectible(for: event)
+    }
+
+    private var availability: PinAvailabilityState {
+        guard let event else { return .active }
+        return modelController.availabilityState(for: event)
     }
 
     private var similarEvents: [DatabaseEvent] {
@@ -105,6 +110,7 @@ struct EventDetailScreen: View {
 
                                 HStack(spacing: 6) {
                                     EventTypeChip(pinType: event.pinType)
+                                    AvailabilityChip(availability: availability)
                                     Label("Day \(event.dayNumber)", systemImage: "calendar")
                                         .font(.caption)
                                         .padding(.horizontal, 8)
@@ -132,6 +138,10 @@ struct EventDetailScreen: View {
                         .foregroundStyle(.secondary)
 
                         Divider()
+
+                        if let availabilityMessage = availability.message {
+                            availabilityCard(message: availabilityMessage)
+                        }
 
                         // About
                         Text("About This Event")
@@ -234,6 +244,8 @@ struct EventDetailScreen: View {
                                 .buttonStyle(.borderedProminent)
                                 .tint(Color("UMDRed"))
                                 .frame(maxWidth: .infinity)
+                                .disabled(!availability.isActive)
+                                .opacity(availability.isActive ? 1.0 : 0.45)
                             }
                         }
                         .padding(.top, 4)
@@ -246,6 +258,20 @@ struct EventDetailScreen: View {
         } else {
             Text("Event not found")
         }
+    }
+
+    private func availabilityCard(message: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: availability.symbolName)
+                .foregroundStyle(availability.tint)
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 

@@ -320,6 +320,34 @@ final class ModelController: ObservableObject {
         return candidates.first(where: { !collectedNames.contains($0.name) }) ?? candidates.first
     }
 
+    func pin(for event: DatabaseEvent) -> PinEntity? {
+        if let directRemoteMatch = pins.first(where: { $0.remoteEventID == event.id }) {
+            return directRemoteMatch
+        }
+
+        if let exactTitleMatch = pins.first(where: { $0.title == event.title }) {
+            return exactTitleMatch
+        }
+
+        return pins.first(where: { scheduleEventID(matchingPinTitle: $0.title) == event.id })
+    }
+
+    func availabilityState(for event: DatabaseEvent, now: Date = .now) -> PinAvailabilityState {
+        guard let pin = pin(for: event) else {
+            return .active
+        }
+        return pin.availabilityState(now: now)
+    }
+
+    func collectible(for event: DatabaseEvent) -> DatabaseCollectible? {
+        if let pin = pin(for: event), let collectible = preferredCollectible(for: pin) {
+            return collectible
+        }
+
+        guard let collectibleName = event.collectibleName else { return nil }
+        return collectibleCatalog.first { $0.name == collectibleName }
+    }
+
     func isPinCurrentlyAvailable(_ pin: PinEntity, now: Date = .now) -> Bool {
         pin.availabilityState(now: now).isActive
     }

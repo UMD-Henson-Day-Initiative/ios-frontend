@@ -12,7 +12,29 @@ struct HomeScreen: View {
     @State private var cardsAppeared = false
 
     private var nextEvent: DatabaseEvent? {
-        modelController.scheduleEvents.first
+        let events = modelController.scheduleEvents
+
+        if let activeEvent = events.first(where: {
+            modelController.availabilityState(for: $0).isActive
+        }) {
+            return activeEvent
+        }
+
+        if let upcomingEvent = events.first(where: {
+            if case .upcoming = modelController.availabilityState(for: $0) {
+                return true
+            }
+            return false
+        }) {
+            return upcomingEvent
+        }
+
+        return events.first
+    }
+
+    private var nextEventAvailability: PinAvailabilityState {
+        guard let nextEvent else { return .active }
+        return modelController.availabilityState(for: nextEvent)
     }
 
     private var collectedCount: Int {
@@ -36,7 +58,7 @@ struct HomeScreen: View {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: DS.Spacing.section) {
                         // Hero stage card
-                        HeroStageCard(event: nextEvent)
+                        HeroStageCard(event: nextEvent, availability: nextEventAvailability)
                             .padding(.horizontal, DS.Spacing.screenH)
                             .offset(y: heroAppeared ? 0 : 20)
                             .opacity(heroAppeared ? 1 : 0)
@@ -143,6 +165,7 @@ struct HomeScreen: View {
 
 private struct HeroStageCard: View {
     let event: DatabaseEvent?
+    let availability: PinAvailabilityState
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
@@ -166,6 +189,8 @@ private struct HeroStageCard: View {
                     .clipShape(Capsule())
 
                 if let ev = event {
+                    AvailabilityChip(availability: availability)
+
                     Text(ev.title)
                         .font(DS.Typography.title1)
                         .foregroundStyle(.white)
@@ -174,6 +199,13 @@ private struct HeroStageCard: View {
                     Label("\(ev.timeRange) · \(ev.locationName)", systemImage: "clock")
                         .font(DS.Typography.caption)
                         .foregroundStyle(.white.opacity(0.8))
+
+                    if let message = availability.message {
+                        Text(message)
+                            .font(DS.Typography.caption)
+                            .foregroundStyle(.white.opacity(0.82))
+                            .lineLimit(2)
+                    }
                 } else {
                     Text("Campus comes alive this week.")
                         .font(DS.Typography.title1)

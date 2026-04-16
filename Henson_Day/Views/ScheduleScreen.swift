@@ -246,7 +246,7 @@ private struct DayPill: View {
 
 // MARK: - Event status
 
-private enum EventStatus { case done, live, upcoming, featured }
+private enum EventStatus { case ended, active, upcoming, unavailable, featured }
 
 private extension DatabaseEvent {
     // Friendly type name based on pinType
@@ -261,46 +261,63 @@ private extension DatabaseEvent {
         }
     }
 
-    func status(in catalog: [DatabaseCollectible]) -> EventStatus {
-        let c = catalog.first { $0.name == collectibleName }
-        if c?.rarity == "Legendary" { return .featured }
-        let eventDate = AppConstants.Schedule.weekStart.addingTimeInterval(Double(dayNumber - 1) * 86400)
-        let dayEnd = Calendar.current.startOfDay(for: eventDate).addingTimeInterval(86400)
-        let now = Date()
-        if now > dayEnd { return .done }
-        let dayStart = Calendar.current.startOfDay(for: eventDate)
-        if now >= dayStart && now <= dayEnd { return .live }
-        return .upcoming
+    func status(availability: PinAvailabilityState, collectible: DatabaseCollectible?) -> EventStatus {
+        if collectible?.rarity == "Legendary", availability.isActive {
+            return .featured
+        }
+
+        switch availability {
+        case .active:
+            return .active
+        case .upcoming:
+            return .upcoming
+        case .ended:
+            return .ended
+        case .unavailable:
+            return .unavailable
+        }
     }
 }
 
 // MARK: - Timeline event list
 
 private struct TimelineEventList: View {
+    @EnvironmentObject private var modelController: ModelController
     let events: [DatabaseEvent]
     let catalog: [DatabaseCollectible]
     let onTap: (DatabaseEvent) -> Void
 
     private func collectible(for event: DatabaseEvent) -> DatabaseCollectible? {
-        guard let name = event.collectibleName else { return nil }
-        return catalog.first { $0.name == name }
+        modelController.collectible(for: event)
+    }
+
+    private func availability(for event: DatabaseEvent) -> PinAvailabilityState {
+        modelController.availabilityState(for: event)
     }
 
     private var groups: [(label: String, labelColor: Color, items: [DatabaseEvent])] {
-        var done: [DatabaseEvent] = []
-        var live: [DatabaseEvent] = []
+        var ended: [DatabaseEvent] = []
+        var active: [DatabaseEvent] = []
         var upcoming: [DatabaseEvent] = []
+        var unavailable: [DatabaseEvent] = []
         for e in events {
-            switch e.status(in: catalog) {
-            case .done:              done.append(e)
-            case .live:              live.append(e)
-            case .upcoming, .featured: upcoming.append(e)
+            let collectible = collectible(for: e)
+            switch e.status(availability: availability(for: e), collectible: collectible) {
+            case .ended:
+                ended.append(e)
+            case .active, .featured:
+                active.append(e)
+            case .upcoming:
+                upcoming.append(e)
+            case .unavailable:
+                unavailable.append(e)
             }
         }
         var result: [(String, Color, [DatabaseEvent])] = []
-        if !done.isEmpty     { result.append(("Earlier",        Color(hex: "#8A8A92"), done)) }
-        if !live.isEmpty     { result.append(("Happening now",  Color(hex: "#FF6B00"), live)) }
-        if !upcoming.isEmpty { result.append(("Upcoming",       Color(hex: "#8A8A92"), upcoming)) }
+        if !active.isEmpty      { result.append(("Available now", Color(hex: "#2DB37A"), active)) }
+        if !upcoming.isEmpty    { result.append(("Available later", Color(hex: "#FF6B00"), upcoming)) }
+        if !unavailable.isEmpty { result.append(("Unavailable", Color(hex: "#8A8A92"), unavailable)) }
+        if !ended.isEmpty       { result.append(("Ended", Color(hex: "#8A8A92"), ended)) }
         if result.isEmpty    { result.append(("Events",         Color(hex: "#8A8A92"), events)) }
         return result
     }
@@ -320,14 +337,14 @@ private struct TimelineEventList: View {
                 VStack(spacing: 0) {
                     ForEach(groups, id: \.label) { group in
                         HStack(spacing: 8) {
-                            if group.label == "Happening now" { LiveDot() }
+                            if group.label == "Available now" { LiveDot(color: Color(hex: "#2DB37A")) }
                             Text(group.label)
                                 .font(.system(size: 10, weight: .medium, design: .monospaced))
                                 .foregroundStyle(group.labelColor)
                                 .tracking(1.0).textCase(.uppercase)
                             Rectangle()
-                                .fill(group.label == "Happening now"
-                                      ? Color(hex: "#FF6B00").opacity(0.2)
+                                .fill(group.label == "Available now"
+                                      ? Color(hex: "#2DB37A").opacity(0.2)
                                       : Color(hex: "#EAEAEE"))
                                 .frame(height: 1)
                         }
@@ -338,7 +355,8 @@ private struct TimelineEventList: View {
                                 event: event,
                                 collectible: collectible(for: event),
                                 isLast: idx == group.items.count - 1,
-                                status: event.status(in: catalog),
+                                availability: availability(for: event),
+                                status: event.status(availability: availability(for: event), collectible: collectible(for: event)),
                                 onTap: { onTap(event) }
                             )
                         }
@@ -352,9 +370,10 @@ private struct TimelineEventList: View {
 }
 
 private struct LiveDot: View {
+    let color: Color
     @State private var pulse = false
     var body: some View {
-        Circle().fill(Color(hex: "#FF6B00")).frame(width: 5, height: 5)
+        Circle().fill(color).frame(width: 5, height: 5)
             .opacity(pulse ? 0.25 : 1.0)
             .onAppear { withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) { pulse = true } }
     }
@@ -366,6 +385,7 @@ private struct ScheduleTimelineRow: View {
     let event: DatabaseEvent
     let collectible: DatabaseCollectible?
     let isLast: Bool
+    let availability: PinAvailabilityState
     let status: EventStatus
     let onTap: () -> Void
 
@@ -380,10 +400,11 @@ private struct ScheduleTimelineRow: View {
 
     private var dotColor: Color {
         switch status {
-        case .live:     return Color(hex: "#FF6B00")
-        case .done:     return Color(hex: "#2DB37A")
+        case .active:   return Color(hex: "#2DB37A")
+        case .ended:    return Color(hex: "#8A8A92")
         case .featured: return Color(hex: "#E8A800")
-        case .upcoming: return Color(hex: "#C8C8D0")
+        case .upcoming: return Color(hex: "#FF6B00")
+        case .unavailable: return Color(hex: "#C8C8D0")
         }
     }
 
@@ -410,17 +431,17 @@ private struct ScheduleTimelineRow: View {
                     .padding(.top, 14)
                     if !isLast {
                         Rectangle()
-                            .fill(status == .live ? Color(hex: "#FF6B00").opacity(0.2) : Color(hex: "#EAEAEE"))
+                            .fill(status == .active ? Color(hex: "#2DB37A").opacity(0.2) : Color(hex: "#EAEAEE"))
                             .frame(width: 1.5).frame(maxHeight: .infinity)
                     }
                 }
                 .frame(width: 20)
 
                 // Card
-                EventTimelineCard(event: event, collectible: collectible, status: status)
+                EventTimelineCard(event: event, collectible: collectible, availability: availability, status: status)
                     .padding(.leading, 8).padding(.vertical, 4).padding(.trailing, 20)
             }
-            .opacity(status == .done ? 0.55 : 1.0)
+            .opacity(status == .ended || status == .unavailable ? 0.6 : 1.0)
         }
         .buttonStyle(.plain)
     }
@@ -431,6 +452,7 @@ private struct ScheduleTimelineRow: View {
 private struct EventTimelineCard: View {
     let event: DatabaseEvent
     let collectible: DatabaseCollectible?
+    let availability: PinAvailabilityState
     let status: EventStatus
 
     @ViewBuilder private var bg: some View {
@@ -444,8 +466,9 @@ private struct EventTimelineCard: View {
 
     private var borderColor: Color {
         switch status {
-        case .live:     return Color(hex: "#FF6B00").opacity(0.25)
+        case .active:   return Color(hex: "#2DB37A").opacity(0.25)
         case .featured: return Color(hex: "#E8A800").opacity(0.25)
+        case .upcoming: return Color(hex: "#FF6B00").opacity(0.18)
         default:        return Color.clear
         }
     }
@@ -458,7 +481,7 @@ private struct EventTimelineCard: View {
                 .frame(width: 3)
                 .clipShape(.rect(topLeadingRadius: 14, bottomLeadingRadius: 14))
 
-            EventCardInner(event: event, collectible: collectible, status: status)
+            EventCardInner(event: event, collectible: collectible, availability: availability, status: status)
 
             if let c = collectible {
                 CollectibleEventPreview(collectible: c)
@@ -474,6 +497,7 @@ private struct EventTimelineCard: View {
 private struct EventCardInner: View {
     let event: DatabaseEvent
     let collectible: DatabaseCollectible?
+    let availability: PinAvailabilityState
     let status: EventStatus
 
     private var rarityStr: String { collectible?.rarity ?? event.derivedRarity }
@@ -482,18 +506,22 @@ private struct EventCardInner: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 5) {
-                if status == .live {
+                if status == .active {
                     HStack(spacing: 4) {
-                        LiveDot()
-                        Text("Live now").font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(Color(hex: "#FF6B00")).tracking(0.4).textCase(.uppercase)
+                        LiveDot(color: Color(hex: "#2DB37A"))
+                        Text("Available now").font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(Color(hex: "#2DB37A")).tracking(0.4).textCase(.uppercase)
                     }
                 } else {
-                    RarityBadge(rarity: rarityStr)
-                    Text(event.eventTypeName)
-                        .font(.system(size: 10, weight: .semibold)).foregroundStyle(Color(hex: "#8A8A92"))
-                        .padding(.horizontal, 7).padding(.vertical, 3)
-                        .background(Color(hex: "#F0F0F3")).clipShape(RoundedRectangle(cornerRadius: 6))
+                    AvailabilityChip(availability: availability)
+                    if status == .featured {
+                        RarityBadge(rarity: rarityStr)
+                    } else {
+                        Text(event.eventTypeName)
+                            .font(.system(size: 10, weight: .semibold)).foregroundStyle(Color(hex: "#8A8A92"))
+                            .padding(.horizontal, 7).padding(.vertical, 3)
+                            .background(Color(hex: "#F0F0F3")).clipShape(RoundedRectangle(cornerRadius: 6))
+                    }
                 }
                 Spacer(minLength: 0)
                 ScheduleAddButton()
@@ -512,7 +540,12 @@ private struct EventCardInner: View {
                         .background(Color.black.opacity(0.04)).clipShape(RoundedRectangle(cornerRadius: 6))
                 }
             }
-            if status == .live || status == .featured {
+            if let message = availability.message {
+                Text(message)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color(hex: "#8A8A92"))
+                    .lineLimit(2)
+            } else if status == .active || status == .featured {
                 Text(event.description)
                     .font(.system(size: 11)).foregroundStyle(Color(hex: "#8A8A92")).lineLimit(2)
             }
@@ -579,6 +612,20 @@ struct RarityBadge: View {
     }
 }
 
+struct AvailabilityChip: View {
+    let availability: PinAvailabilityState
+
+    var body: some View {
+        Label(availability.label, systemImage: availability.symbolName)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(availability.tint)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(availability.tint.opacity(0.12))
+            .clipShape(Capsule())
+    }
+}
+
 // MARK: - Event detail full-screen
 
 private struct ScheduleEventDetailFullScreen: View {
@@ -590,8 +637,11 @@ private struct ScheduleEventDetailFullScreen: View {
     let onOpenCollection: () -> Void
 
     private var collectible: DatabaseCollectible? {
-        guard let name = event.collectibleName else { return nil }
-        return modelController.collectibleCatalog.first { $0.name == name }
+        modelController.collectible(for: event)
+    }
+
+    private var availability: PinAvailabilityState {
+        modelController.availabilityState(for: event)
     }
 
     var body: some View {
@@ -615,6 +665,8 @@ private struct ScheduleEventDetailFullScreen: View {
                         }
 
                         VStack(alignment: .leading, spacing: 12) {
+                            AvailabilityChip(availability: availability)
+
                             Text(event.title)
                                 .font(DS.Typography.display)
                                 .foregroundStyle(DS.Color.campusNight)
@@ -631,6 +683,12 @@ private struct ScheduleEventDetailFullScreen: View {
                             Text(event.description)
                                 .font(DS.Typography.body)
                                 .foregroundStyle(DS.Color.campusNight.opacity(0.75))
+
+                            if let message = availability.message {
+                                Text(message)
+                                    .font(DS.Typography.body)
+                                    .foregroundStyle(DS.Color.neutral)
+                            }
                         }
                         .padding(DS.Spacing.cardPad)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -642,7 +700,12 @@ private struct ScheduleEventDetailFullScreen: View {
                             DetailActionButton(title: "Open on Map", systemImage: "map", action: onOpenMap)
                             DetailActionButton(title: "Visit UMD Website", systemImage: "safari", action: onOpenWebsite)
                             if collectible != nil {
-                                DetailActionButton(title: "Go to Collection", systemImage: "star.square.fill", action: onOpenCollection)
+                                DetailActionButton(
+                                    title: availability.isActive ? "Go to Collection" : "Collection Unavailable",
+                                    systemImage: availability.isActive ? "star.square.fill" : availability.symbolName,
+                                    isEnabled: availability.isActive,
+                                    action: onOpenCollection
+                                )
                             }
                         }
                     }
@@ -672,6 +735,7 @@ private struct ScheduleEventDetailFullScreen: View {
 private struct DetailActionButton: View {
     let title: String
     let systemImage: String
+    var isEnabled: Bool = true
     let action: () -> Void
 
     var body: some View {
@@ -685,6 +749,8 @@ private struct DetailActionButton: View {
                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.card, style: .continuous))
                 .shadow(color: DS.Shadow.cardColor, radius: 6, x: 0, y: 2)
         }
+            .disabled(!isEnabled)
+            .opacity(isEnabled ? 1.0 : 0.5)
     }
 }
 
