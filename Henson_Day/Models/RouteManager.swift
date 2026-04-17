@@ -9,13 +9,21 @@ import Foundation
 import MapKit
 import Combine
 
+// NOTE: @MainActor is acceptable here. MKDirections.calculate() is async and
+// properly suspends without blocking the main thread. All @Published properties
+// drive UI, so main-actor isolation simplifies state updates.
 @MainActor
 class RouteManager: ObservableObject {
     @Published var route: MKRoute?
     @Published var currentStepIndex: Int = 0
     @Published var distanceToNextStep: CLLocationDistance = 0
     @Published var isNavigating: Bool = false
-    
+    @Published var routeError: UserFacingErrorState?
+
+    func clearRouteError() {
+        routeError = nil
+    }
+
     var currentInstruction: String {
         guard let route, currentStepIndex < route.steps.count else {
             return ""
@@ -50,7 +58,10 @@ class RouteManager: ObservableObject {
             self.currentStepIndex = 0
             self.isNavigating = true
         } catch {
-            print("Route calculation failed: \(error)")
+            routeError = UserFacingErrorState(
+                title: "Directions unavailable",
+                message: "Couldn't calculate walking directions. Check your connection and try again."
+            )
         }
     }
     
@@ -69,13 +80,13 @@ class RouteManager: ObservableObject {
         
         distanceToNextStep = userLocation.distance(from: stepEndLocation)
         
-        // Advance to next step when within 15 meters
-        if distanceToNextStep < 15 && currentStepIndex < steps.count - 1 {
+        // Advance to next step when within stepAdvanceDistanceMeters
+        if distanceToNextStep < AppConstants.Route.stepAdvanceDistanceMeters && currentStepIndex < steps.count - 1 {
             currentStepIndex += 1
         }
-        
+
         // Check if arrived at destination
-        if currentStepIndex == steps.count - 1 && distanceToNextStep < 20 {
+        if currentStepIndex == steps.count - 1 && distanceToNextStep < AppConstants.Route.arrivalDistanceMeters {
             isNavigating = false
         }
     }

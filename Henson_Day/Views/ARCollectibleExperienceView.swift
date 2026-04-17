@@ -13,8 +13,24 @@ import RealityKit
 import ARKit
 import CoreLocation
 import Combine
+import AudioToolbox
+import UIKit
 
+/// Full-screen AR experience for finding and collecting a muppet at a map pin.
+///
+/// **State machine flow:**
+/// 1. `tooFar` — User is outside spawn radius; shows distance and direction.
+/// 2. `detectSurface` / `waitingForSecondSurface` — User is close enough; AR session
+///    searches for a horizontal surface to place the collectible.
+/// 3. `placed` — Model is placed in the scene; user taps it to collect.
+/// 4. `collecting` → `captured` — Capture animation plays, points are awarded via
+///    `ModelController.captureCollectible(...)`, and the user is returned to the map.
+/// 5. `alreadyCollected` — User already owns this collectible; shown a message.
+/// 6. `noCollectiblesConfigured` — Pin has no collectible data; error state.
+///
+/// Teleport mode (DEBUG only) bypasses GPS proximity checks for testing.
 struct ARCollectibleExperienceView: View {
+    /// Tracks the user's progression through the AR collectible flow.
     enum FlowState {
         case tooFar
         case waitingForSecondSurface
@@ -41,6 +57,7 @@ struct ARCollectibleExperienceView: View {
     @State private var activeCollectible: DatabaseCollectible?
     @State private var secondHorizontalSurfaceDetected = false
     @State private var teleportFallbackReady = false
+    @State private var pointsBurstProgress: CGFloat = 1
     @State private var teleportFallbackTask: Task<Void, Never>?
     @State private var collectFlowTask: Task<Void, Never>?
 
@@ -60,7 +77,11 @@ struct ARCollectibleExperienceView: View {
     }
 
     private var collectiblePoints: Int {
-        activeCollectible?.points ?? 50
+        activeCollectible?.points ?? AppConstants.AR.defaultCollectiblePoints
+    }
+
+    private var currentTotalPoints: Int {
+        modelController.currentUser?.totalPoints ?? 0
     }
 
     private var formattedDistance: String {
@@ -228,7 +249,7 @@ struct ARCollectibleExperienceView: View {
         case .noCollectiblesConfigured:
             promptCard(
                 title: "No collectibles configured for this pin",
-                subtitle: "Add collectible IDs to this pin in Database.pins to enable AR spawns."
+                subtitle: "This pin does not currently map to any active collectible content."
             ) {
                 EmptyView()
             }
@@ -273,7 +294,7 @@ struct ARCollectibleExperienceView: View {
         case .captured:
             promptCard(
                 title: "You collected \(collectibleName)! +\(collectiblePoints) pts",
-                subtitle: "Sending you to your gallery now."
+                subtitle: "Unlocked in the UMD Index. Total points: \(currentTotalPoints)."
             ) {
                 EmptyView()
             }
@@ -283,20 +304,30 @@ struct ARCollectibleExperienceView: View {
     private var captureAnimationOverlay: some View {
         ZStack {
             Color.black.opacity(0.4).ignoresSafeArea()
-            VStack(spacing: 14) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 54, weight: .bold))
+            VStack(spacing: 20) {
+                Text("+\(collectiblePoints)")
+                    .font(.system(size: 36, weight: .black, design: .rounded))
                     .foregroundStyle(Color("UMDGold"))
-                    .scaleEffect(flowState == .collecting ? 1.15 : 1.0)
-                    .animation(.easeInOut(duration: 0.6).repeatCount(2, autoreverses: true), value: flowState)
+                    .shadow(color: Color("UMDGold").opacity(0.45), radius: 14, x: 0, y: 4)
+                    .scaleEffect(0.72 + (0.48 * pointsBurstProgress))
+                    .offset(y: -18 - (72 * pointsBurstProgress))
+                    .opacity(1 - pointsBurstProgress)
 
-                Text("Collected!")
-                    .font(.title2.weight(.bold))
-                    .foregroundStyle(.white)
+                VStack(spacing: 14) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 54, weight: .bold))
+                        .foregroundStyle(Color("UMDGold"))
+                        .scaleEffect(flowState == .collecting ? 1.15 : 1.0)
+                        .animation(.easeInOut(duration: 0.6).repeatCount(2, autoreverses: true), value: flowState)
 
-                Text(collectibleName)
-                    .font(.headline)
-                    .foregroundStyle(.white.opacity(0.9))
+                    Text("Collected!")
+                        .font(.title2.weight(.bold))
+                        .foregroundStyle(.white)
+
+                    Text(collectibleName)
+                        .font(.headline)
+                        .foregroundStyle(.white.opacity(0.9))
+                }
             }
             .padding(26)
             .background(.ultraThinMaterial)
@@ -304,21 +335,23 @@ struct ARCollectibleExperienceView: View {
         }
     }
 
+    /// Selects which collectible to display for this pin. Prefers uncollected items
+    /// so the user always sees something new. Falls back to any matching item if all
+    /// have been collected. Uses `collectibleIDs` on the pin if available, otherwise
+    /// falls back to the legacy `collectibleName` field.
     private func chooseCollectibleForCurrentPin() {
         let collectedNames = Set(modelController.collectionItemsForCurrentUser().map(\.collectibleName))
 
-        let pinCollectibleIDs = Database.pins.first(where: { $0.title == pin.title })?.collectibleIDs ?? []
-        var candidates = Database.collectibleCatalog.filter { pinCollectibleIDs.contains($0.id) }
-
-        // Backward-compatible fallback for pins still configured by `collectibleName` only.
-        if candidates.isEmpty, let fallbackName = pin.collectibleName {
-            candidates = Database.collectibleCatalog.filter { $0.name == fallbackName }
-        }
+        let candidates = modelController.collectibles(for: pin)
 
         let notCollected = candidates.filter { !collectedNames.contains($0.name) }
         activeCollectible = (notCollected.isEmpty ? candidates : notCollected).randomElement()
     }
 
+    /// Recalculates the current flow state based on GPS proximity, surface detection,
+    /// and collection status. Called on every location update and AR state change.
+    /// The state machine guards are evaluated in priority order: no collectible →
+    /// already collected → too far → teleport gate → surface detected → placed.
     private func recalculateProximityAndFlow() {
         guard activeCollectible != nil else {
             flowState = .noCollectiblesConfigured
@@ -359,8 +392,12 @@ struct ARCollectibleExperienceView: View {
         }
     }
 
+    /// Saves the captured collectible to SwiftData, plays the capture animation,
+    /// switches to the collection tab, and dismisses after a short delay.
     private func handleCollectTapped() {
         flowState = .collecting
+        playCaptureSuccessFeedback()
+        runPointsBurstAnimation()
 
         modelController.captureCollectible(
             collectibleName: collectibleName,
@@ -377,6 +414,18 @@ struct ARCollectibleExperienceView: View {
             try? await Task.sleep(nanoseconds: UInt64(AppConstants.AR.collectDismissDelaySeconds * 1_000_000_000))
             dismiss()
         }
+    }
+
+    private func runPointsBurstAnimation() {
+        pointsBurstProgress = 0
+        withAnimation(.easeOut(duration: AppConstants.AR.pointsBurstAnimationSeconds)) {
+            pointsBurstProgress = 1
+        }
+    }
+
+    private func playCaptureSuccessFeedback() {
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.success)
     }
 
     private func promptCard<Content: View>(title: String, subtitle: String, @ViewBuilder actions: () -> Content) -> some View {
@@ -433,6 +482,7 @@ struct ARPlacementView: UIViewRepresentable {
         private weak var arView: ARView?
         private var collectibleAnchor: AnchorEntity?
         private var collectibleEntity: Entity?
+        private var tapTargetEntity: ModelEntity?
         private var currentModelAssetName: String?
         private var loadCancellable: AnyCancellable?
         private var horizontalPlaneAnchorCount = 0
@@ -540,7 +590,7 @@ struct ARPlacementView: UIViewRepresentable {
                     let targetDimension = self.targetMaxDimension(for: modelAssetName)
                     entity.scale = self.normalizedScale(for: entity, targetMaxDimension: targetDimension)
                     entity.generateCollisionShapes(recursive: true)
-                    entity.components.set(InputTargetComponent())
+                    self.installTapTarget(for: entity)
 
                     self.collectibleAnchor?.addChild(entity)
                     self.collectibleEntity = entity
@@ -566,9 +616,29 @@ struct ARPlacementView: UIViewRepresentable {
             fallbackEntity.name = collectibleEntityName
             fallbackEntity.scale = SIMD3<Float>(repeating: 0.6)
             fallbackEntity.generateCollisionShapes(recursive: true)
-            fallbackEntity.components.set(InputTargetComponent())
+            installTapTarget(for: fallbackEntity)
             collectibleAnchor?.addChild(fallbackEntity)
             collectibleEntity = fallbackEntity
+        }
+
+        private func installTapTarget(for entity: Entity) {
+            tapTargetEntity?.removeFromParent()
+
+            entity.components.set(InputTargetComponent())
+
+            let tapTargetMesh = MeshResource.generateSphere(radius: AppConstants.AR.collectibleTapTargetRadius)
+            let transparentMaterial = SimpleMaterial(
+                color: UIColor.white.withAlphaComponent(0.001),
+                roughness: 1.0,
+                isMetallic: false
+            )
+            let tapTarget = ModelEntity(mesh: tapTargetMesh, materials: [transparentMaterial])
+            tapTarget.name = collectibleEntityName
+            tapTarget.generateCollisionShapes(recursive: true)
+            tapTarget.components.set(InputTargetComponent())
+
+            entity.addChild(tapTarget)
+            tapTargetEntity = tapTarget
         }
 
         private func normalizedScale(for entity: Entity, targetMaxDimension: Float) -> SIMD3<Float> {
@@ -579,7 +649,7 @@ struct ARPlacementView: UIViewRepresentable {
                 return SIMD3<Float>(repeating: AppConstants.AR.fallbackUniformScale)
             }
 
-            let uniformScale = targetMaxDimension / maxDimension
+            let uniformScale = (targetMaxDimension / maxDimension) * AppConstants.AR.collectibleVisualScaleMultiplier
             let clampedScale = min(max(uniformScale, AppConstants.AR.minScale), AppConstants.AR.maxScale)
             return SIMD3<Float>(repeating: clampedScale)
         }
@@ -602,6 +672,7 @@ struct ARPlacementView: UIViewRepresentable {
 
         private func removeCollectibleIfNeeded() {
             collectibleEntity = nil
+            tapTargetEntity = nil
             currentModelAssetName = nil
             loadCancellable?.cancel()
             loadCancellable = nil
@@ -633,6 +704,7 @@ struct ARPlacementView: UIViewRepresentable {
             }
 
             isCollectAnimationRunning = true
+            playTapFeedback()
 
             let cameraMatrix = arView.cameraTransform.matrix
             let cameraPosition = SIMD3<Float>(
@@ -675,6 +747,12 @@ struct ARPlacementView: UIViewRepresentable {
                 self.didTapCollectible?()
                 self.isCollectAnimationRunning = false
             }
+        }
+
+        private func playTapFeedback() {
+            let generator = UIImpactFeedbackGenerator(style: .rigid)
+            generator.impactOccurred(intensity: 0.95)
+            AudioServicesPlaySystemSound(SystemSoundID(AppConstants.AR.collectTapSoundID))
         }
     }
 }

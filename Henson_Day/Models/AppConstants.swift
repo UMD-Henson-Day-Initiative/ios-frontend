@@ -17,13 +17,23 @@ enum AppConstants {
         static let mapRegionSpan = MKCoordinateSpan(latitudeDelta: 0.012, longitudeDelta: 0.012)
         static let locationFollowSpan = MKCoordinateSpan(latitudeDelta: 0.007, longitudeDelta: 0.007)
         static let primarySwapAnimationSeconds: TimeInterval = 0.2
+
+        static let campusBoundsMinLat = 38.981086
+        static let campusBoundsMaxLat = 38.994498
+        static let campusBoundsMinLon = -76.954429
+        static let campusBoundsMaxLon = -76.934774
+        static let cameraMinDistance: Double = 50
+        static let cameraMaxDistance: Double = 3000
+        static let defaultCameraDistance: Double = 350
+        static let defaultCameraPitch: Double = 55
+        static let followLossThreshold: Double = 0.0005
     }
 
     enum AR {
         static let spawnRadiusMeters: CLLocationDistance = 30
         static let maxPlacements = 3
         static let walkAwayDistanceMeters: Float = 12
-
+        static let collectibleProximityMeters: CLLocationDistance = 150
         // AR flow timing values
         static let teleportFallbackDelaySeconds: TimeInterval = 2.0
         static let teleportLaunchDelaySeconds: TimeInterval = 0.2
@@ -31,13 +41,21 @@ enum AppConstants {
         static let collectRevealDelaySeconds: TimeInterval = 0.9
         static let collectDismissDelaySeconds: TimeInterval = 0.55
         static let collectibleAnimationCompletionDelaySeconds: TimeInterval = 0.48
+        static let pointsBurstAnimationSeconds: TimeInterval = 0.8
+
+        static let proximityRadiusMeters: CLLocationDistance = 10
+        static let proximityDebounceMilliseconds: Int = 500
+        static let defaultCollectiblePoints: Int = 50
+        static let collectTapSoundID: UInt32 = 1104
 
         static let forcedSpawnDistanceMeters: Float = 0.9
         static let fallbackSphereRadius: Float = 0.12
+        static let collectibleVisualScaleMultiplier: Float = 0.01
+        static let collectibleTapTargetRadius: Float = 0.12
 
-        static let minScale: Float = 0.03
-        static let maxScale: Float = 0.35
-        static let fallbackUniformScale: Float = 0.12
+        static let minScale: Float = 0.0003
+        static let maxScale: Float = 0.0035
+        static let fallbackUniformScale: Float = 0.0012
 
         enum ModelSizing {
             static let defaultTargetMaxDimension: Float = 0.10
@@ -51,11 +69,27 @@ enum AppConstants {
                 "toy_biplane_realistic": 0.125,
                 "slide": 0.10
             ]
-
-            static let cameraPlacementToyDimension: Float = 0.14
-            static let cameraPlacementLargeDimension: Float = 0.25
-            static let cameraPlacementDefaultDimension: Float = 0.20
         }
+    }
+
+    enum Route {
+        static let stepAdvanceDistanceMeters: CLLocationDistance = 15
+        static let arrivalDistanceMeters: CLLocationDistance = 20
+    }
+
+    enum URLs {
+        static let universityHome = "https://umd.edu/"
+    }
+
+    enum Schedule {
+        /// Anchor date for Day 1 of the Henson Day event week.
+        static let weekStart: Date = {
+            var comps = DateComponents()
+            comps.year = 2026
+            comps.month = 4
+            comps.day = 14
+            return Calendar.current.startOfDay(for: Calendar.current.date(from: comps) ?? Date())
+        }()
     }
 
     enum SceneKitPortal { // playing around from tutorials that were sent to GroupChat

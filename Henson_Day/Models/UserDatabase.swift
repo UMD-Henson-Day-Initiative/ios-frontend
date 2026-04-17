@@ -1,5 +1,6 @@
 import Foundation
 
+/// Lightweight read-only snapshot of the current user's profile for display in views.
 struct UserProfileSnapshot {
     let displayName: String
     let totalPoints: Int
@@ -7,6 +8,8 @@ struct UserProfileSnapshot {
     let rank: Int
 }
 
+/// Convenience helpers that derive view-ready data from `ModelController`.
+/// Keeps view code thin by centralizing profile snapshot and collection lookups.
 enum UserDatabase {
     static func profileSnapshot(from modelController: ModelController) -> UserProfileSnapshot {
         guard let currentUser = modelController.currentUser else {

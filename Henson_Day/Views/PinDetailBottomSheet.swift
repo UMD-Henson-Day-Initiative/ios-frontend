@@ -10,17 +10,26 @@
 //
 
 import SwiftUI
+import CoreLocation
+import UIKit
 
+/// Bottom sheet shown when a map pin is tapped. Displays pin info (type, title,
+/// time, location, description) and offers contextual actions: navigate in Apple Maps,
+/// open AR collectible, view event details, etc. Supports drag-to-dismiss gesture.
 struct PinDetailBottomSheet: View {
     let detail: MapPinDetail
+    let pinCoordinate: CLLocationCoordinate2D
+    var userLocation: CLLocationCoordinate2D? = nil
     @Binding var isPresented: Bool
-    var onNavigate: () -> Void = {}
     var onPrimaryAction: () -> Void = {}
     var onDetails: (() -> Void)? = nil
 
     @GestureState private var dragOffset: CGFloat = 0
+    @State private var showProximityAlert = false
 
     private var primaryActionTitle: String? {
+        guard detail.availability.isActive else { return nil }
+
         switch detail.pinType {
         case .event:
             return detail.hasARCollectible ? "View in AR" : nil
@@ -32,15 +41,6 @@ struct PinDetailBottomSheet: View {
             return "View Perks"
         case .site, .concert:
             return nil
-        }
-    }
-
-    private var primaryActionFirst: Bool {
-        switch detail.pinType {
-        case .collectible, .battle, .homebase:
-            return true
-        case .event, .site, .concert:
-            return false
         }
     }
 
@@ -91,10 +91,16 @@ struct PinDetailBottomSheet: View {
                         .foregroundStyle(.secondary)
                 }
 
+                availabilityChip
+
                 Text(detail.description)
                     .font(.body)
                     .foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
+
+                if let availabilityMessage = detail.availability.message {
+                    availabilityCard(message: availabilityMessage)
+                }
 
                 if detail.hasARCollectible {
                     collectibleCard
@@ -102,26 +108,35 @@ struct PinDetailBottomSheet: View {
 
                 Spacer(minLength: 8)
 
-                HStack(spacing: 12) {
-                    if let primaryActionTitle, primaryActionFirst {
-                        actionButton(title: primaryActionTitle, fill: detail.pinType.headerColor, foreground: .white, action: onPrimaryAction)
-                        actionButton(title: "Navigate", fill: .gray.opacity(0.2), foreground: .primary, action: onNavigate)
-                    } else {
-                        actionButton(title: "Navigate", fill: .gray.opacity(0.2), foreground: .primary, action: onNavigate)
+                HStack(spacing: 10) {
+                    if let primaryActionTitle {
+                        actionButton(
+                            title: primaryActionTitle,
+                            fill: detail.pinType.headerColor,
+                            foreground: .white
+                        ) {
+                            if primaryActionTitle == "View in AR" {
+                                checkProximityAndLaunchAR()
+                            } else {
+                                onPrimaryAction()
+                            }
+                        }
+                    }
 
-                        if let primaryActionTitle {
-                            actionButton(title: primaryActionTitle, fill: detail.pinType.headerColor, foreground: .white, action: onPrimaryAction)
+                    actionButton(title: "Navigate", fill: Color(.systemGray5), foreground: .primary) {
+                        openInMaps()
+                    }
+
+                    if let onDetails {
+                        actionButton(title: "Details", fill: Color(.systemGray5), foreground: .primary) {
+                            onDetails()
                         }
                     }
                 }
-
-                if let onDetails {
-                    Button("Details") {
-                        onDetails()
-                    }
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
+                .alert("Not Close Enough", isPresented: $showProximityAlert) {
+                    Button("OK", role: .cancel) {}
+                } message: {
+                    Text("Please navigate to the location to collect the muppet.")
                 }
             }
             .padding(18)
@@ -143,7 +158,7 @@ struct PinDetailBottomSheet: View {
 
     private var collectibleCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Available Collectible")
+            Text(detail.availability.isActive ? "Available Collectible" : "Collectible Status")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
 
@@ -167,6 +182,30 @@ struct PinDetailBottomSheet: View {
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
+    private var availabilityChip: some View {
+        Label(detail.availability.label, systemImage: detail.availability.symbolName)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(detail.availability.tint)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(detail.availability.tint.opacity(0.12))
+            .clipShape(Capsule())
+    }
+
+    private func availabilityCard(message: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: detail.availability.symbolName)
+                .foregroundStyle(detail.availability.tint)
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
     private var dismissDragGesture: some Gesture {
         DragGesture(minimumDistance: 8)
             .updating($dragOffset) { value, state, _ in
@@ -185,7 +224,9 @@ struct PinDetailBottomSheet: View {
     private func actionButton(title: String, fill: Color, foreground: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.headline)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 13)
                 .background(fill)
@@ -193,6 +234,32 @@ struct PinDetailBottomSheet: View {
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
+    }
+
+    private func checkProximityAndLaunchAR() {
+        guard let userLoc = userLocation else {
+            onPrimaryAction()
+            return
+        }
+        let userCL = CLLocation(latitude: userLoc.latitude, longitude: userLoc.longitude)
+        let pinCL  = CLLocation(latitude: pinCoordinate.latitude, longitude: pinCoordinate.longitude)
+        if userCL.distance(from: pinCL) <= AppConstants.AR.collectibleProximityMeters {
+            onPrimaryAction()
+        } else {
+            showProximityAlert = true
+        }
+    }
+
+    private func openInMaps() {
+        let lat = pinCoordinate.latitude
+        let lng = pinCoordinate.longitude
+        let google = URL(string: "comgooglemaps://?daddr=\(lat),\(lng)&directionsmode=walking")
+        let apple  = URL(string: "http://maps.apple.com/?daddr=\(lat),\(lng)&dirflg=w")
+        if let url = google, UIApplication.shared.canOpenURL(url) {
+            UIApplication.shared.open(url)
+        } else if let url = apple {
+            UIApplication.shared.open(url)
+        }
     }
 }
 
@@ -207,6 +274,7 @@ struct PinDetailBottomSheet: View {
             detail: MapPinDetail(
                 id: "stadium-spirit-rally",
                 pinType: .event,
+                availability: .active,
                 title: "Stadium Spirit Rally",
                 dayLabel: "Day 1",
                 timeRange: "5:00 PM – 7:00 PM",
@@ -216,6 +284,8 @@ struct PinDetailBottomSheet: View {
                 collectibleRarity: "Rare",
                 hasARCollectible: true
             ),
+            pinCoordinate: CLLocationCoordinate2D(latitude: 38.9889, longitude: -76.9442),
+            userLocation: nil,
             isPresented: $isPresented
         )
     }

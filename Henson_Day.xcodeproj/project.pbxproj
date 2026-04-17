@@ -25,9 +25,7 @@
 
 /* Begin PBXFileReference section */
 		788F72702F622FFE004EE753 /* Henson_Day.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Henson_Day.xcodeproj; sourceTree = "<group>"; };
-		BF5E44812F805B7F00C720FD /* Henson_Day.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Henson_Day.xcodeproj; sourceTree = "<group>"; };
-		BFF6FC702F861D3C00B45E93 /* Henson_Day.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Henson_Day.xcodeproj; sourceTree = "<group>"; };
-		BFF6FDAB2F90485B00B45E93 /* Henson_Day.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Henson_Day.xcodeproj; sourceTree = "<group>"; };
+		DB43930D2F86EEE800948D85 /* Henson_Day.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Henson_Day.xcodeproj; sourceTree = "<group>"; };
 		DBB3AA5F2F52A0FD00F99705 /* Henson_Day.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Henson_Day.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DBB3AA6C2F52A0FE00F99705 /* Henson_DayTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = Henson_DayTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DBB3AA762F52A0FE00F99705 /* Henson_DayUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = Henson_DayUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -82,17 +80,7 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		BF5E44832F805B7F00C720FD /* Products */ = {
-			isa = PBXGroup;
-			name = Products;
-			sourceTree = "<group>";
-		};
-		BFF6FC722F861D3C00B45E93 /* Products */ = {
-			isa = PBXGroup;
-			name = Products;
-			sourceTree = "<group>";
-		};
-		BFF6FDAD2F90485B00B45E93 /* Products */ = {
+		DB43930F2F86EEE800948D85 /* Products */ = {
 			isa = PBXGroup;
 			name = Products;
 			sourceTree = "<group>";
@@ -234,20 +222,12 @@
 					ProjectRef = 788F72702F622FFE004EE753 /* Henson_Day.xcodeproj */;
 				},
 				{
-					ProductGroup = BFF6FDAD2F90485B00B45E93 /* Products */;
-					ProjectRef = BFF6FDAB2F90485B00B45E93 /* Henson_Day.xcodeproj */;
-				},
-				{
-					ProductGroup = BF5E44832F805B7F00C720FD /* Products */;
-					ProjectRef = BF5E44812F805B7F00C720FD /* Henson_Day.xcodeproj */;
+					ProductGroup = DB43930F2F86EEE800948D85 /* Products */;
+					ProjectRef = DB43930D2F86EEE800948D85 /* Henson_Day.xcodeproj */;
 				},
 				{
 					ProductGroup = DBEDE3E22F7DB472007BB55E /* Products */;
 					ProjectRef = DBEDE3E02F7DB472007BB55E /* Henson_Day.xcodeproj */;
-				},
-				{
-					ProductGroup = BFF6FC722F861D3C00B45E93 /* Products */;
-					ProjectRef = BFF6FC702F861D3C00B45E93 /* Henson_Day.xcodeproj */;
 				},
 			);
 			projectRoot = "";
@@ -449,9 +429,16 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = TW9V2QTH32;
+				DEVELOPMENT_TEAM = M2ZV7F454Z;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_HENSON_ANON_KEY = "";
+				INFOPLIST_KEY_HENSON_API_BASE_URL = "http://localhost:54321";
+				INFOPLIST_KEY_HENSON_CONTENT_VERSION = 1;
+				INFOPLIST_KEY_HENSON_ENABLE_ANALYTICS = NO;
+				INFOPLIST_KEY_HENSON_ENABLE_REMOTE_CAMPUS_CONFIG = NO;
+				INFOPLIST_KEY_HENSON_ENVIRONMENT = development;
+				INFOPLIST_KEY_HENSON_USE_REMOTE_CONTENT = NO;
 				INFOPLIST_KEY_NSCameraUsageDescription = CAMERA_USAGE_DESCRIPTION;
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Henson Day uses your location to center the minimap and support location-based AR collectibles.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -485,9 +472,16 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = TW9V2QTH32;
+				DEVELOPMENT_TEAM = M2ZV7F454Z;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_HENSON_ANON_KEY = "";
+				INFOPLIST_KEY_HENSON_API_BASE_URL = "https://api.hensonday.app";
+				INFOPLIST_KEY_HENSON_CONTENT_VERSION = 1;
+				INFOPLIST_KEY_HENSON_ENABLE_ANALYTICS = YES;
+				INFOPLIST_KEY_HENSON_ENABLE_REMOTE_CAMPUS_CONFIG = YES;
+				INFOPLIST_KEY_HENSON_ENVIRONMENT = production;
+				INFOPLIST_KEY_HENSON_USE_REMOTE_CONTENT = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = CAMERA_USAGE_DESCRIPTION;
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Henson Day uses your location to center the minimap and support location-based AR collectibles.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

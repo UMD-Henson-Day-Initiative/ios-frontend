@@ -2,6 +2,10 @@
 
 Henson Day is a SwiftUI + SwiftData + RealityKit app for a campus AR scavenger hunt. Users browse map pins, open event details, capture AR collectibles, and track leaderboard/collection progress.
 
+## Planning Docs
+
+- docs/real-functionality-roadmap.md
+
 ## Architecture Overview
 
 - App entry: HensonDayApp.swift
@@ -81,6 +85,59 @@ Use this checklist after major changes:
 6. Error surfaces:
    - startup failure shows retry UI
    - runtime failures show alert banner/dialog
+
+## File Reference
+
+### Henson_Day/ (App Root)
+| File | Description |
+|------|-------------|
+| `HensonDayApp.swift` | App entry point; creates and injects all environment objects into the view hierarchy |
+
+### Henson_Day/Models/
+| File | Description |
+|------|-------------|
+| `AppConstants.swift` | Centralized configuration constants for map, AR, routing, URLs, and debug flags |
+| `BadgeModel.swift` | Badge data model for the achievement/badge system |
+| `CampusConfigProvider.swift` | Protocol abstraction for campus coordinates; swap for backend implementation when ready |
+| `CollectibleModel.swift` | Data model for individual collectible items |
+| `Database.swift` | Static seed data (pins, events, collectibles, players) used for first-launch SwiftData seeding |
+| `EventModel.swift` | Data model for schedule events |
+| `Extensions.swift` | SceneKit and RealityKit utility extensions |
+| `FilterChip.swift` | Reusable filter chip UI model for schedule and collection filtering |
+| `LeaderboardModel.swift` | Data model for leaderboard entries |
+| `LocationManager.swift` | CLLocationManager wrapper publishing live GPS location and heading |
+| `MapPinDetail.swift` | View-model bridging PinEntity to PinDetailBottomSheet; also defines PinType enum with colors and icons |
+| `ModelController.swift` | Central data controller using SwiftData; owns all published app state and persistence |
+| `PersistenceModels.swift` | SwiftData @Model entities: PlayerEntity, PinEntity, BadgeEntity, CollectedItemEntity |
+| `ProximityMonitor.swift` | Monitors user's distance to collectible pins and publishes proximity alerts |
+| `RouteManager.swift` | Calculates and tracks in-app walking directions using MapKit |
+| `TabRouter.swift` | Cross-tab navigation state; supports deep-linking from map pins to schedule events |
+| `UserDatabase.swift` | Convenience helpers that derive view-ready snapshots from ModelController |
+| `UserModel.swift` | Plain user data model used before SwiftData seeding |
+
+### Henson_Day/Views/
+| File | Description |
+|------|-------------|
+| `ARCameraView.swift` | RealityKit AR camera view with tap-to-place collectibles and world anchor persistence |
+| `ARCanvasView.swift` | AR canvas for free-form placement experiments |
+| `ARCaptureScreen.swift` | UI screen shown during AR collectible capture sequence |
+| `ARCollectibleExperienceView.swift` | Full-screen AR state machine: approach → surface detect → place → tap → collect |
+| `ARMapContainerView.swift` | Container toggling between full-screen AR and map with overlay swap |
+| `CollectionScreen.swift` | Displays collected items and full collectible catalog with collected/uncollected status |
+| `EventDetailScreen.swift` | Detail view for a single schedule event with map navigation and collection links |
+| `HomeScreen.swift` | Home tab with summary stats, recent activity, and quick navigation |
+| `LaunchGateView.swift` | Startup permission gate for camera and location; blocks entry until both are granted |
+| `LeaderboardScreen.swift` | Campus-wide leaderboard sorted by total points |
+| `MapScreen.swift` | Primary map + camera split view; handles pin selection, AR launch, and teleport testing |
+| `MapView.swift` | MapKit map with 3D camera, animated pins, compass follow toggle, and campus bounds |
+| `MiniMapView.swift` | Compact map view used as the swap overlay in the AR/map split view |
+| `MinimalLeaderboardSheet.swift` | Compact leaderboard sheet presented from the map screen |
+| `MyCollectionSheet.swift` | Quick-view collection sheet presented from the map screen |
+| `PinDetailBottomSheet.swift` | Bottom sheet shown when a map pin is tapped; supports drag-to-dismiss and contextual actions |
+| `ProfileScreen.swift` | User profile with avatar customization, stats, and badge display |
+| `ProximityAlertBanner.swift` | Animated banner shown when the user is near a collectible pin |
+| `RootTabView.swift` | 5-tab root navigation: Home, Schedule, Map, Collection, Profile |
+| `ScheduleScreen.swift` | Day-filtered event schedule with deep-link support from map pins |
 
 ## Future Backend Integration
 

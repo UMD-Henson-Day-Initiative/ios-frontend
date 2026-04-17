@@ -4,12 +4,13 @@ import CoreLocation
 
 struct MapView: View {
     let pins: [PinEntity]
+    let collectedPinIDs: Set<UUID>
     var onPinTapped: (PinEntity) -> Void = { _ in }
 
-    static let minLat = 38.981086
-    static let maxLat = 38.994498
-    static let minLon = -76.954429
-    static let maxLon = -76.934774
+    static let minLat = AppConstants.Map.campusBoundsMinLat
+    static let maxLat = AppConstants.Map.campusBoundsMaxLat
+    static let minLon = AppConstants.Map.campusBoundsMinLon
+    static let maxLon = AppConstants.Map.campusBoundsMaxLon
 
     static let umdCenter = CLLocationCoordinate2D(
         latitude: (minLat + maxLat) / 2,
@@ -24,25 +25,23 @@ struct MapView: View {
                 longitudeDelta: maxLon - minLon
             )
         ),
-        minimumDistance: 50,
-        maximumDistance: 3000
+        minimumDistance: AppConstants.Map.cameraMinDistance,
+        maximumDistance: AppConstants.Map.cameraMaxDistance
     )
 
     @StateObject private var locationManager = LocationManager()
 
-    @State private var cameraDistance: Double = 350
+    @State private var cameraDistance: Double = AppConstants.Map.defaultCameraDistance
     @State private var cameraPosition: MapCameraPosition = .camera(
         MapCamera(
             centerCoordinate: umdCenter,
-            distance: 350,
+            distance: AppConstants.Map.defaultCameraDistance,
             heading: 0,
-            pitch: 55
+            pitch: AppConstants.Map.defaultCameraPitch
         )
     )
     @State private var isFollowingUser = true
-    @State private var isFollowingCompass = false
     @State private var playerHeading: Double = 0
-    @State private var cameraHeading: Double = 0
     @State private var selectedPinID: UUID?
 
     var body: some View {
@@ -59,7 +58,11 @@ struct MapView: View {
                 ForEach(pins) { pin in
                     let coord = CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)
                     Annotation("", coordinate: coord, anchor: .bottom) {
-                        WaypointMarkerView(pin: pin, isSelected: selectedPinID == pin.id)
+                        WaypointMarkerView(
+                            pin: pin,
+                            isSelected: selectedPinID == pin.id,
+                            isCollected: collectedPinIDs.contains(pin.id)
+                        )
                             .onTapGesture {
                                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                                     selectedPinID = selectedPinID == pin.id ? nil : pin.id
@@ -79,19 +82,18 @@ struct MapView: View {
             .ignoresSafeArea()
             .onChange(of: locationManager.location) { _, newLocation in
                 guard let location = newLocation, isFollowingUser else { return }
-                updateCamera(for: location, heading: isFollowingCompass ? playerHeading : 0)
+                updateCamera(for: location, heading: playerHeading)
             }
             .onChange(of: locationManager.heading) { _, newHeading in
                 guard let heading = newHeading else { return }
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                     playerHeading = heading.trueHeading
                 }
-                if isFollowingCompass, isFollowingUser, let location = locationManager.location {
+                if isFollowingUser, let location = locationManager.location {
                     updateCamera(for: location, heading: heading.trueHeading)
                 }
             }
             .onMapCameraChange { context in
-                cameraHeading = context.camera.heading
                 if isFollowingUser {
                     cameraDistance = context.camera.distance
                     if let location = locationManager.location {
@@ -99,104 +101,46 @@ struct MapView: View {
                         let camLon = context.camera.centerCoordinate.longitude
                         let latDiff = abs(camLat - location.coordinate.latitude)
                         let lonDiff = abs(camLon - location.coordinate.longitude)
-                        if latDiff > 0.0005 || lonDiff > 0.0005 {
+                        if latDiff > AppConstants.Map.followLossThreshold || lonDiff > AppConstants.Map.followLossThreshold {
                             isFollowingUser = false
                         }
                     }
                 }
             }
 
-            // Map controls — top left, below the avatar strip
-            VStack(alignment: .leading, spacing: 10) {
-                // Compass follow toggle
-                Button {
-                    isFollowingCompass.toggle()
-                    if isFollowingCompass, isFollowingUser, let location = locationManager.location {
-                        updateCamera(for: location, heading: playerHeading)
+            // Recenter button — top left, below the avatar strip
+            Button {
+                cameraDistance = AppConstants.Map.defaultCameraDistance
+                isFollowingUser = true
+                if let location = locationManager.location {
+                    let camera = MapCamera(
+                        centerCoordinate: location.coordinate,
+                        distance: AppConstants.Map.defaultCameraDistance,
+                        heading: playerHeading,
+                        pitch: AppConstants.Map.defaultCameraPitch
+                    )
+                    withAnimation(.easeOut(duration: 0.4)) {
+                        cameraPosition = .camera(camera)
                     }
-                } label: {
-                    Image(systemName: isFollowingCompass ? "safari.fill" : "safari")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(isFollowingCompass ? .white : .primary)
-                        .frame(width: 40, height: 40)
-                        .background {
-                            if isFollowingCompass {
-                                Color.orange
-                            } else {
-                                Rectangle().fill(.ultraThinMaterial)
-                            }
-                        }
-                        .clipShape(Circle())
-                        .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
                 }
-
-                // North-up button — only shown when camera is rotated
-                if abs(cameraHeading) > 1 {
-                    Button {
-                        let center: CLLocationCoordinate2D
-                        if isFollowingUser, let loc = locationManager.location {
-                            center = loc.coordinate
+            } label: {
+                Image(systemName: isFollowingUser ? "location.fill" : "location")
+                    .font(.title3)
+                    .fontWeight(.medium)
+                    .foregroundStyle(isFollowingUser ? .white : .secondary)
+                    .frame(width: 40, height: 40)
+                    .background {
+                        if isFollowingUser {
+                            Color.blue
                         } else {
-                            center = cameraPosition.camera?.centerCoordinate ?? MapView.umdCenter
-                        }
-                        let camera = MapCamera(
-                            centerCoordinate: center,
-                            distance: cameraDistance,
-                            heading: 0,
-                            pitch: cameraPosition.camera?.pitch ?? 55
-                        )
-                        withAnimation(.easeOut(duration: 0.3)) {
-                            cameraPosition = .camera(camera)
-                        }
-                    } label: {
-                        Image(systemName: "location.north.fill")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.red)
-                            .rotationEffect(.degrees(-cameraHeading))
-                            .frame(width: 40, height: 40)
-                            .background(Rectangle().fill(.ultraThinMaterial))
-                            .clipShape(Circle())
-                            .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
-                    }
-                    .transition(.scale.combined(with: .opacity))
-                }
-
-                // Recenter button
-                Button {
-                    cameraDistance = 350
-                    isFollowingUser = true
-                    if let location = locationManager.location {
-                        let heading = isFollowingCompass ? playerHeading : 0.0
-                        let camera = MapCamera(
-                            centerCoordinate: location.coordinate,
-                            distance: 350,
-                            heading: heading,
-                            pitch: 55
-                        )
-                        withAnimation(.easeOut(duration: 0.4)) {
-                            cameraPosition = .camera(camera)
+                            Rectangle().fill(.ultraThinMaterial)
                         }
                     }
-                } label: {
-                    Image(systemName: isFollowingUser ? "location.fill" : "location")
-                        .font(.title3)
-                        .fontWeight(.medium)
-                        .foregroundStyle(isFollowingUser ? .white : .secondary)
-                        .frame(width: 40, height: 40)
-                        .background {
-                            if isFollowingUser {
-                                Color.blue
-                            } else {
-                                Rectangle().fill(.ultraThinMaterial)
-                            }
-                        }
-                        .clipShape(Circle())
-                        .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
-                }
+                    .clipShape(Circle())
+                    .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
             }
             .padding(.leading, 14)
-            // top padding clears MapScreen's status strip (day label + avatar + points + camera toggle)
-            .padding(.top, 220)
+            .padding(.top, 170)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .onAppear {
@@ -209,7 +153,7 @@ struct MapView: View {
             centerCoordinate: location.coordinate,
             distance: cameraDistance,
             heading: heading,
-            pitch: 55
+            pitch: AppConstants.Map.defaultCameraPitch
         )
         withAnimation(.easeInOut(duration: 0.3)) {
             cameraPosition = .camera(camera)
@@ -263,10 +207,13 @@ struct Triangle: Shape {
 struct WaypointMarkerView: View {
     let pin: PinEntity
     let isSelected: Bool
+    let isCollected: Bool
     @State private var isPulsing = false
     @State private var appeared = false
 
     private var pinColor: Color { pin.pinType.mapMarkerColor }
+    private var availability: PinAvailabilityState { pin.availabilityState() }
+    private var markerOpacity: Double { availability.isActive ? 1.0 : 0.5 }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -277,6 +224,7 @@ struct WaypointMarkerView: View {
                     .frame(width: 36, height: 12)
                     .blur(radius: 4)
                     .offset(y: 24)
+                    .opacity(markerOpacity)
 
                 // Pulse ring
                 Circle()
@@ -284,6 +232,7 @@ struct WaypointMarkerView: View {
                     .frame(width: 48, height: 48)
                     .scaleEffect(isPulsing ? 1.4 : 1.0)
                     .opacity(isPulsing ? 0.0 : 0.5)
+                    .opacity(availability.isActive ? 1.0 : 0.0)
 
                 // Outer ring
                 Circle()
@@ -296,6 +245,7 @@ struct WaypointMarkerView: View {
                     )
                     .frame(width: isSelected ? 42 : 38, height: isSelected ? 42 : 38)
                     .shadow(color: .black.opacity(0.4), radius: 6, y: 4)
+                    .opacity(markerOpacity)
 
                 // Inner face
                 Circle()
@@ -328,6 +278,30 @@ struct WaypointMarkerView: View {
                         Circle()
                             .stroke(.white.opacity(0.6), lineWidth: 2)
                     )
+
+                if !availability.isActive {
+                    Image(systemName: availability.symbolName)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(4)
+                        .background(Color.black.opacity(0.65))
+                        .clipShape(Circle())
+                        .offset(x: 16, y: -16)
+                }
+
+                if pin.hasARCollectible && isCollected {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(Color("UMDGold"), .white)
+                        .padding(4)
+                        .background(Color.black.opacity(0.65))
+                        .clipShape(Circle())
+                        .overlay(
+                            Circle()
+                                .stroke(Color("UMDGold").opacity(0.7), lineWidth: 1)
+                        )
+                        .offset(x: -16, y: -16)
+                }
             }
             .scaleEffect(appeared ? 1.0 : 0.3)
             .scaleEffect(isSelected ? 1.15 : 1.0)
@@ -339,14 +313,21 @@ struct WaypointMarkerView: View {
                 .rotationEffect(.degrees(180))
                 .shadow(color: .black.opacity(0.3), radius: 2, y: 2)
                 .offset(y: -2)
+                .opacity(markerOpacity)
         }
         .onAppear {
-            withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: false)) {
-                isPulsing = true
+            if availability.isActive {
+                withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: false)) {
+                    isPulsing = true
+                }
             }
             withAnimation(.spring(response: 0.5, dampingFraction: 0.6)) {
                 appeared = true
             }
         }
     }
+}
+
+#Preview(){
+    MapView(pins: [], collectedPinIDs: [])
 }
