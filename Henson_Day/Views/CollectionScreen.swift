@@ -35,7 +35,7 @@ struct CollectionScreen: View {
     }
 
     private var collectedNames: Set<String> {
-        Set(collectedItems.map(\.collectibleName))
+        modelController.unlockedCollectibleNames
     }
 
     private var collectedIDs: Set<String> {

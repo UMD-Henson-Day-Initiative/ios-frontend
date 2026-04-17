@@ -72,6 +72,7 @@ final class ModelController: ObservableObject {
     @Published private(set) var lastCapturedCollectibleID: String?
     @Published private(set) var pendingCodexRevealCollectibleID: String?
     @Published private(set) var unlockedCollectibleIDs: Set<String> = []
+    @Published private(set) var unlockedCollectibleNames: Set<String> = []
 
     private(set) var modelContainer: ModelContainer?
     private var context: ModelContext?
@@ -108,6 +109,7 @@ final class ModelController: ObservableObject {
         lastCapturedCollectibleID = nil
         pendingCodexRevealCollectibleID = nil
         unlockedCollectibleIDs = []
+        unlockedCollectibleNames = []
         currentUser = nil
         pins = []
         leaderboardUsers = []
@@ -293,13 +295,15 @@ final class ModelController: ObservableObject {
     }
 
     func isCollectibleUnlocked(id: String?, name: String) -> Bool {
+        if unlockedCollectibleNames.contains(name) {
+            return true
+        }
+
         if let id, unlockedCollectibleIDs.contains(id) {
             return true
         }
 
-        return collectionItemsForCurrentUser().contains { item in
-            item.collectibleName == name
-        }
+        return false
     }
 
     private func captureCollectible(
@@ -345,6 +349,7 @@ final class ModelController: ObservableObject {
                 lastCapturedCollectibleID = collectibleID
                 enqueuePendingCodexReveal(collectibleID: collectibleID)
                 storeUnlockedCollectibleID(collectibleID)
+                unlockedCollectibleNames.insert(collectibleName)
             } else {
                 lastCapturedCollectibleID = collectibleCatalog.first(where: { $0.name == collectibleName })?.id
             }
@@ -504,13 +509,20 @@ final class ModelController: ObservableObject {
     }
 
     private func refreshUnlockedCollectibleIDs() {
+        let collectionItems = collectionItemsForCurrentUser()
         let idsFromCollection = Set(
-            collectionItemsForCurrentUser().compactMap { item in
+            collectionItems.compactMap { item in
                 collectibleCatalog.first(where: { $0.name == item.collectibleName })?.id
             }
         )
+        let namesFromCollection = Set(collectionItems.map(\.collectibleName))
         let mergedIDs = idsFromCollection.union(persistedUnlockedCollectibleIDs())
         unlockedCollectibleIDs = mergedIDs
+        unlockedCollectibleNames = namesFromCollection.union(
+            collectibleCatalog
+                .filter { mergedIDs.contains($0.id) }
+                .map(\.name)
+        )
 
         guard let userID = currentUser?.id else { return }
         userDefaults.set(Array(mergedIDs).sorted(), forKey: unlockedCollectibleIDsKey(for: userID))
