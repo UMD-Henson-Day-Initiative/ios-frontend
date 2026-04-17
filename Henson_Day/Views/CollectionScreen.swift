@@ -28,6 +28,7 @@ struct CollectionScreen: View {
     @EnvironmentObject private var modelController: ModelController
     @State private var selectedRarity: String? = nil
     @State private var selectedCollectible: DatabaseCollectible?
+    @State private var revealCollectible: DatabaseCollectible?
 
     private var collectedItems: [CollectedItemEntity] {
         UserDatabase.collectedItems(from: modelController)
@@ -99,6 +100,15 @@ struct CollectionScreen: View {
                         .padding(.bottom, 32)
                     }
                 }
+
+                if let revealCollectible {
+                    CodexUnlockRevealOverlay(collectible: revealCollectible) {
+                        self.revealCollectible = nil
+                        selectedCollectible = revealCollectible
+                        modelController.consumePendingCodexReveal(collectibleID: revealCollectible.id)
+                    }
+                    .zIndex(2)
+                }
             }
             .navigationBarHidden(true)
             .sheet(item: $selectedCollectible) { collectible in
@@ -110,18 +120,33 @@ struct CollectionScreen: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.hidden)
             }
-            .onChange(of: modelController.lastCapturedCollectibleID) { _, collectibleID in
-                guard let collectibleID else { return }
-                guard let collectible = modelController.collectibleCatalog.first(where: { $0.id == collectibleID }) else {
-                    modelController.consumeLastCapturedCollectibleID()
-                    return
+            .onAppear {
+                presentPendingCodexRevealIfNeeded()
+            }
+            .onChange(of: modelController.pendingCodexRevealCollectibleID) { _, _ in
+                presentPendingCodexRevealIfNeeded()
+            }
+            .onChange(of: selectedCollectible) { _, selectedCollectible in
+                if selectedCollectible == nil {
+                    presentPendingCodexRevealIfNeeded()
                 }
-
-                selectedRarity = nil
-                selectedCollectible = collectible
-                modelController.consumeLastCapturedCollectibleID()
             }
         }
+    }
+
+    private func presentPendingCodexRevealIfNeeded() {
+        guard revealCollectible == nil else { return }
+        guard selectedCollectible == nil else { return }
+        guard let collectibleID = modelController.pendingCodexRevealCollectibleID else { return }
+
+        guard let collectible = modelController.collectibleCatalog.first(where: { $0.id == collectibleID }) else {
+            modelController.consumePendingCodexReveal(collectibleID: collectibleID)
+            return
+        }
+
+        selectedRarity = nil
+        revealCollectible = collectible
+        modelController.consumeLastCapturedCollectibleID()
     }
 }
 
@@ -372,6 +397,107 @@ private struct PokeCell: View {
     }
 }
 
+private struct CodexUnlockRevealOverlay: View {
+    let collectible: DatabaseCollectible
+    let onComplete: () -> Void
+
+    @State private var glowScale: CGFloat = 0.72
+    @State private var glowOpacity = 0.2
+    @State private var lockOffsetY: CGFloat = -120
+    @State private var lockRotation: Double = -10
+    @State private var lockOpacity = 1.0
+    @State private var swirlRotation = 0.0
+
+    private var swirlColors: [Color] {
+        let mapped = collectible.types.map(typeAccentColor(for:))
+        return mapped.isEmpty ? [rarityColor(for: collectible.rarity), rarityColor(for: collectible.rarity).opacity(0.35)] : mapped
+    }
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.4)
+                .ignoresSafeArea()
+
+            VStack(spacing: 20) {
+                Text("New Codex Entry")
+                    .font(.system(size: 15, weight: .black))
+                    .foregroundStyle(.white.opacity(0.92))
+                    .tracking(0.8)
+
+                ZStack {
+                    Circle()
+                        .fill(rarityColor(for: collectible.rarity).opacity(0.18))
+                        .frame(width: 180, height: 180)
+                        .scaleEffect(glowScale)
+                        .opacity(glowOpacity)
+
+                    ForEach(0..<2, id: \.self) { index in
+                        Circle()
+                            .trim(from: 0.08, to: 0.62)
+                            .stroke(
+                                AngularGradient(colors: swirlColors, center: .center),
+                                style: StrokeStyle(lineWidth: 8, lineCap: .round)
+                            )
+                            .frame(width: 156 - CGFloat(index * 18), height: 156 - CGFloat(index * 18))
+                            .rotationEffect(.degrees(swirlRotation * (index == 0 ? 1 : -1)))
+                            .opacity(0.9 - Double(index) * 0.2)
+                    }
+
+                    Text(collectible.emoji)
+                        .font(.system(size: 66))
+
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 34, weight: .black))
+                        .foregroundStyle(.white)
+                        .padding(16)
+                        .background(.ultraThinMaterial, in: Circle())
+                        .offset(y: lockOffsetY)
+                        .rotationEffect(.degrees(lockRotation))
+                        .opacity(lockOpacity)
+                        .shadow(radius: 10, y: 5)
+                }
+                .frame(width: 200, height: 200)
+
+                VStack(spacing: 6) {
+                    Text(collectible.name)
+                        .font(.system(size: 22, weight: .black))
+                        .foregroundStyle(.white)
+                    Text(collectible.rarity.uppercased())
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(rarityColor(for: collectible.rarity))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(.white.opacity(0.08), in: Capsule())
+                }
+            }
+            .padding(28)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+            .padding(.horizontal, 28)
+        }
+        .task {
+            withAnimation(.easeOut(duration: 0.45)) {
+                glowScale = 1.0
+                glowOpacity = 1.0
+            }
+
+            withAnimation(.linear(duration: 1.15).repeatForever(autoreverses: false)) {
+                swirlRotation = 360
+            }
+
+            try? await Task.sleep(nanoseconds: 500_000_000)
+
+            withAnimation(.interpolatingSpring(stiffness: 180, damping: 13)) {
+                lockOffsetY = 124
+                lockRotation = 22
+                lockOpacity = 0
+            }
+
+            try? await Task.sleep(nanoseconds: 850_000_000)
+            onComplete()
+        }
+    }
+}
+
 // MARK: - Dex detail sheet
 
 private struct DexDetailSheet: View {
@@ -532,12 +658,20 @@ private struct DexDetailSheet: View {
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                         .padding(.horizontal, 20)
 
-                        Text(collectible.flavorText)
-                            .font(.system(size: 13))
-                            .italic()
-                            .foregroundStyle(textMid)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 28)
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("DESCRIPTION")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(textMid)
+                                .tracking(0.8)
+                            Text(collectible.flavorText)
+                                .font(.system(size: 14))
+                                .foregroundStyle(textHi)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(16)
+                        .background(bgCard)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .padding(.horizontal, 20)
 
                         if let item = collectedItem {
                             HStack(spacing: 8) {
@@ -568,6 +702,37 @@ private struct DexDetailSheet: View {
                 floatOffset = -4
             }
         }
+    }
+}
+
+private func rarityColor(for rarity: String) -> Color {
+    switch rarity {
+    case "Common":    return dkCommon
+    case "Rare":      return dkRare
+    case "Epic":      return dkEpic
+    case "Legendary": return dkLeg
+    default:          return dkCommon
+    }
+}
+
+private func typeAccentColor(for type: String) -> Color {
+    switch type.lowercased() {
+    case "fire", "sound", "mystic":
+        return Color(hex: "#FF7A45")
+    case "water", "shadow":
+        return Color(hex: "#3F8CFF")
+    case "electric", "tech", "smart":
+        return Color(hex: "#F5C542")
+    case "nature", "normal":
+        return Color(hex: "#57B65F")
+    case "psychic":
+        return Color(hex: "#B06CFF")
+    case "ground", "steel":
+        return Color(hex: "#8C6B52")
+    case "speed", "fighting":
+        return Color(hex: "#E44D5E")
+    default:
+        return dkRare
     }
 }
 

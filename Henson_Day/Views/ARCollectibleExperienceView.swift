@@ -389,12 +389,16 @@ struct ARCollectibleExperienceView: View {
         playCaptureSuccessFeedback()
         runPointsBurstAnimation()
 
-        modelController.captureCollectible(
-            collectibleName: collectibleName,
-            rarity: collectibleRarity,
-            foundAtTitle: pin.title,
-            points: collectiblePoints
-        )
+        if let activeCollectible {
+            modelController.captureCollectible(collectible: activeCollectible, foundAtTitle: pin.title)
+        } else {
+            modelController.captureCollectible(
+                collectibleName: collectibleName,
+                rarity: collectibleRarity,
+                foundAtTitle: pin.title,
+                points: collectiblePoints
+            )
+        }
 
         collectFlowTask?.cancel()
         collectFlowTask = Task { @MainActor in

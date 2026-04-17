@@ -70,11 +70,13 @@ final class ModelController: ObservableObject {
     @Published private(set) var storeMode: StoreMode = .persistent
     @Published private(set) var userFacingError: UserFacingErrorState?
     @Published private(set) var lastCapturedCollectibleID: String?
+    @Published private(set) var pendingCodexRevealCollectibleID: String?
 
     private(set) var modelContainer: ModelContainer?
     private var context: ModelContext?
     private let logger = AppLogger.make(.model)
     private let campusConfigProvider: CampusConfigProviding
+    private let userDefaults = UserDefaults.standard
 
     convenience init() {
         self.init(campusConfigProvider: CampusConfigProvider.active)
@@ -103,6 +105,7 @@ final class ModelController: ObservableObject {
         storeMode = .persistent
         userFacingError = nil
         lastCapturedCollectibleID = nil
+        pendingCodexRevealCollectibleID = nil
         currentUser = nil
         pins = []
         leaderboardUsers = []
@@ -189,6 +192,7 @@ final class ModelController: ObservableObject {
                 ($0.dayNumber, $0.timeRange) < ($1.dayNumber, $1.timeRange)
             }
             collectibleCatalog = Database.collectibleCatalog
+            refreshPendingCodexRevealState()
             isSeedLoading = false
             startupErrorMessage = nil
         } catch {
@@ -231,6 +235,8 @@ final class ModelController: ObservableObject {
             } else {
                 self.addedScheduleEventIDs = []
             }
+
+            refreshPendingCodexRevealState()
         } catch {
             publishRuntimeError(
                 title: "Couldn't refresh data",
@@ -243,12 +249,7 @@ final class ModelController: ObservableObject {
 
     func captureCollectible(from pin: PinEntity, points: Int = 50) {
         if let collectible = preferredCollectible(for: pin) {
-            captureCollectible(
-                collectibleName: collectible.name,
-                rarity: collectible.rarity,
-                foundAtTitle: pin.title,
-                points: collectible.points
-            )
+            captureCollectible(collectible: collectible, foundAtTitle: pin.title)
             return
         }
 
@@ -261,7 +262,39 @@ final class ModelController: ObservableObject {
         )
     }
 
+    func captureCollectible(collectible: DatabaseCollectible, foundAtTitle: String) {
+        captureCollectible(
+            collectibleID: collectible.id,
+            collectibleName: collectible.name,
+            rarity: collectible.rarity,
+            foundAtTitle: foundAtTitle,
+            points: collectible.points
+        )
+    }
+
     func captureCollectible(collectibleName: String, rarity: String, foundAtTitle: String, points: Int) {
+        let collectibleID = collectibleCatalog.first(where: { $0.name == collectibleName })?.id
+        captureCollectible(
+            collectibleID: collectibleID,
+            collectibleName: collectibleName,
+            rarity: rarity,
+            foundAtTitle: foundAtTitle,
+            points: points
+        )
+    }
+
+    func consumePendingCodexReveal(collectibleID: String) {
+        let queue = pendingCodexRevealQueue().filter { $0 != collectibleID }
+        storePendingCodexRevealQueue(queue)
+    }
+
+    private func captureCollectible(
+        collectibleID: String?,
+        collectibleName: String,
+        rarity: String,
+        foundAtTitle: String,
+        points: Int
+    ) {
         guard let user = currentUser else { return }
         guard let context else {
             publishRuntimeError(
@@ -293,7 +326,13 @@ final class ModelController: ObservableObject {
 
             user.totalPoints += points
             user.collectedCount += 1
-            lastCapturedCollectibleID = collectibleCatalog.first(where: { $0.name == collectibleName })?.id
+
+            if let collectibleID {
+                lastCapturedCollectibleID = collectibleID
+                enqueuePendingCodexReveal(collectibleID: collectibleID)
+            } else {
+                lastCapturedCollectibleID = collectibleCatalog.first(where: { $0.name == collectibleName })?.id
+            }
 
             try context.save()
             refreshPublishedData()
@@ -398,6 +437,36 @@ final class ModelController: ObservableObject {
 
     func consumeLastCapturedCollectibleID() {
         lastCapturedCollectibleID = nil
+    }
+
+    private func pendingCodexRevealQueueKey(for userID: UUID) -> String {
+        "codex.pendingRevealCollectibleIDs.\(userID.uuidString)"
+    }
+
+    private func pendingCodexRevealQueue() -> [String] {
+        guard let userID = currentUser?.id else { return [] }
+        return userDefaults.stringArray(forKey: pendingCodexRevealQueueKey(for: userID)) ?? []
+    }
+
+    private func storePendingCodexRevealQueue(_ queue: [String]) {
+        guard let userID = currentUser?.id else {
+            pendingCodexRevealCollectibleID = nil
+            return
+        }
+
+        userDefaults.set(queue, forKey: pendingCodexRevealQueueKey(for: userID))
+        pendingCodexRevealCollectibleID = queue.first
+    }
+
+    private func enqueuePendingCodexReveal(collectibleID: String) {
+        var queue = pendingCodexRevealQueue()
+        queue.removeAll { $0 == collectibleID }
+        queue.append(collectibleID)
+        storePendingCodexRevealQueue(queue)
+    }
+
+    private func refreshPendingCodexRevealState() {
+        pendingCodexRevealCollectibleID = pendingCodexRevealQueue().first
     }
 
     func pin(for event: DatabaseEvent) -> PinEntity? {
