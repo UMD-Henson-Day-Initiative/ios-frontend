@@ -327,13 +327,21 @@ final class ModelController: ObservableObject {
         do {
             let itemDescriptor = FetchDescriptor<CollectedItemEntity>(
                 predicate: #Predicate { item in
-                    item.collectibleName == collectibleName && item.playerID == userID
+                    item.playerID == userID
                 }
             )
             let existing = try context.fetch(itemDescriptor)
-            guard existing.isEmpty else { return }
+            let duplicate = existing.contains { item in
+                if let collectibleID {
+                    return item.collectibleID == collectibleID || item.collectibleName == collectibleName
+                }
+
+                return item.collectibleName == collectibleName
+            }
+            guard !duplicate else { return }
 
             let collected = CollectedItemEntity(
+                collectibleID: collectibleID,
                 collectibleName: collectibleName,
                 rarity: rarity,
                 foundAtTitle: foundAtTitle,
@@ -510,12 +518,21 @@ final class ModelController: ObservableObject {
 
     private func refreshUnlockedCollectibleIDs() {
         let collectionItems = collectionItemsForCurrentUser()
-        let idsFromCollection = Set(
-            collectionItems.compactMap { item in
-                collectibleCatalog.first(where: { $0.name == item.collectibleName })?.id
+        let idsFromCollection = Set(collectionItems.compactMap { item in
+            if let collectibleID = item.collectibleID, !collectibleID.isEmpty {
+                return collectibleID
             }
-        )
-        let namesFromCollection = Set(collectionItems.map(\.collectibleName))
+
+            return collectibleCatalog.first(where: { $0.name == item.collectibleName })?.id
+        })
+        let namesFromCollection = Set(collectionItems.compactMap { item in
+            if let collectibleID = item.collectibleID,
+               let collectible = collectibleCatalog.first(where: { $0.id == collectibleID }) {
+                return collectible.name
+            }
+
+            return item.collectibleName
+        })
         let mergedIDs = idsFromCollection.union(persistedUnlockedCollectibleIDs())
         unlockedCollectibleIDs = mergedIDs
         unlockedCollectibleNames = namesFromCollection.union(

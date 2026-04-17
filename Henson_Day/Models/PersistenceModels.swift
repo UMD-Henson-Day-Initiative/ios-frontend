@@ -195,6 +195,7 @@ final class PinEntity {
 @Model
 final class CollectedItemEntity {
     @Attribute(.unique) var id: UUID
+    var collectibleID: String?
     var collectibleName: String
     var rarity: String
     var foundAtTitle: String
@@ -205,6 +206,7 @@ final class CollectedItemEntity {
 
     init(
         id: UUID = UUID(),
+        collectibleID: String? = nil,
         collectibleName: String,
         rarity: String,
         foundAtTitle: String,
@@ -213,6 +215,7 @@ final class CollectedItemEntity {
         player: PlayerEntity? = nil
     ) {
         self.id = id
+        self.collectibleID = collectibleID
         self.collectibleName = collectibleName
         self.rarity = rarity
         self.foundAtTitle = foundAtTitle

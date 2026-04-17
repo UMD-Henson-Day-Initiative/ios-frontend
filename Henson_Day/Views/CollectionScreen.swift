@@ -48,7 +48,12 @@ struct CollectionScreen: View {
 
     private var totalCP: Int {
         collectedItems.compactMap { item in
-            modelController.collectibleCatalog.first { $0.name == item.collectibleName }?.cp
+            if let collectibleID = item.collectibleID,
+               let collectible = modelController.collectibleCatalog.first(where: { $0.id == collectibleID }) {
+                return collectible.cp
+            }
+
+            return modelController.collectibleCatalog.first { $0.name == item.collectibleName }?.cp
         }.reduce(0, +)
     }
 
@@ -118,7 +123,9 @@ struct CollectionScreen: View {
             .sheet(item: $selectedCollectible) { collectible in
                 DexDetailSheet(
                     collectible: collectible,
-                    collectedItem: collectedItems.first { $0.collectibleName == collectible.name },
+                    collectedItem: collectedItems.first {
+                        $0.collectibleID == collectible.id || $0.collectibleName == collectible.name
+                    },
                     dexNumber: (modelController.collectibleCatalog.firstIndex(where: { $0.id == collectible.id }) ?? 0) + 1
                 )
                 .presentationDetents([.large])
