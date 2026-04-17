@@ -71,6 +71,7 @@ final class ModelController: ObservableObject {
     @Published private(set) var userFacingError: UserFacingErrorState?
     @Published private(set) var lastCapturedCollectibleID: String?
     @Published private(set) var pendingCodexRevealCollectibleID: String?
+    @Published private(set) var unlockedCollectibleIDs: Set<String> = []
 
     private(set) var modelContainer: ModelContainer?
     private var context: ModelContext?
@@ -106,6 +107,7 @@ final class ModelController: ObservableObject {
         userFacingError = nil
         lastCapturedCollectibleID = nil
         pendingCodexRevealCollectibleID = nil
+        unlockedCollectibleIDs = []
         currentUser = nil
         pins = []
         leaderboardUsers = []
@@ -192,6 +194,7 @@ final class ModelController: ObservableObject {
                 ($0.dayNumber, $0.timeRange) < ($1.dayNumber, $1.timeRange)
             }
             collectibleCatalog = Database.collectibleCatalog
+            refreshUnlockedCollectibleIDs()
             refreshPendingCodexRevealState()
             isSeedLoading = false
             startupErrorMessage = nil
@@ -237,6 +240,7 @@ final class ModelController: ObservableObject {
             }
 
             refreshPendingCodexRevealState()
+            refreshUnlockedCollectibleIDs()
         } catch {
             publishRuntimeError(
                 title: "Couldn't refresh data",
@@ -288,6 +292,16 @@ final class ModelController: ObservableObject {
         storePendingCodexRevealQueue(queue)
     }
 
+    func isCollectibleUnlocked(id: String?, name: String) -> Bool {
+        if let id, unlockedCollectibleIDs.contains(id) {
+            return true
+        }
+
+        return collectionItemsForCurrentUser().contains { item in
+            item.collectibleName == name
+        }
+    }
+
     private func captureCollectible(
         collectibleID: String?,
         collectibleName: String,
@@ -330,6 +344,7 @@ final class ModelController: ObservableObject {
             if let collectibleID {
                 lastCapturedCollectibleID = collectibleID
                 enqueuePendingCodexReveal(collectibleID: collectibleID)
+                storeUnlockedCollectibleID(collectibleID)
             } else {
                 lastCapturedCollectibleID = collectibleCatalog.first(where: { $0.name == collectibleName })?.id
             }
@@ -443,9 +458,18 @@ final class ModelController: ObservableObject {
         "codex.pendingRevealCollectibleIDs.\(userID.uuidString)"
     }
 
+    private func unlockedCollectibleIDsKey(for userID: UUID) -> String {
+        "codex.unlockedCollectibleIDs.\(userID.uuidString)"
+    }
+
     private func pendingCodexRevealQueue() -> [String] {
         guard let userID = currentUser?.id else { return [] }
         return userDefaults.stringArray(forKey: pendingCodexRevealQueueKey(for: userID)) ?? []
+    }
+
+    private func persistedUnlockedCollectibleIDs() -> Set<String> {
+        guard let userID = currentUser?.id else { return [] }
+        return Set(userDefaults.stringArray(forKey: unlockedCollectibleIDsKey(for: userID)) ?? [])
     }
 
     private func storePendingCodexRevealQueue(_ queue: [String]) {
@@ -467,6 +491,29 @@ final class ModelController: ObservableObject {
 
     private func refreshPendingCodexRevealState() {
         pendingCodexRevealCollectibleID = pendingCodexRevealQueue().first
+    }
+
+    private func storeUnlockedCollectibleID(_ collectibleID: String) {
+        guard let userID = currentUser?.id else { return }
+
+        var ids = persistedUnlockedCollectibleIDs()
+        ids.insert(collectibleID)
+        let sorted = Array(ids).sorted()
+        userDefaults.set(sorted, forKey: unlockedCollectibleIDsKey(for: userID))
+        unlockedCollectibleIDs = ids
+    }
+
+    private func refreshUnlockedCollectibleIDs() {
+        let idsFromCollection = Set(
+            collectionItemsForCurrentUser().compactMap { item in
+                collectibleCatalog.first(where: { $0.name == item.collectibleName })?.id
+            }
+        )
+        let mergedIDs = idsFromCollection.union(persistedUnlockedCollectibleIDs())
+        unlockedCollectibleIDs = mergedIDs
+
+        guard let userID = currentUser?.id else { return }
+        userDefaults.set(Array(mergedIDs).sorted(), forKey: unlockedCollectibleIDsKey(for: userID))
     }
 
     func pin(for event: DatabaseEvent) -> PinEntity? {

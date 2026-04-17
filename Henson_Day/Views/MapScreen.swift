@@ -46,7 +46,9 @@ struct MapScreen: View {
         Set(
             modelController.pins.compactMap { pin in
                 let pinCollectibles = modelController.collectibles(for: pin)
-                return pinCollectibles.contains(where: { collectedCollectibleNames.contains($0.name) }) ? pin.id : nil
+                return pinCollectibles.contains(where: {
+                    modelController.isCollectibleUnlocked(id: $0.id, name: $0.name) || collectedCollectibleNames.contains($0.name)
+                }) ? pin.id : nil
             }
         )
     }

@@ -38,6 +38,10 @@ struct CollectionScreen: View {
         Set(collectedItems.map(\.collectibleName))
     }
 
+    private var collectedIDs: Set<String> {
+        modelController.unlockedCollectibleIDs
+    }
+
     private var totalPoints: Int {
         modelController.currentUser?.totalPoints ?? 0
     }
@@ -90,7 +94,7 @@ struct CollectionScreen: View {
                                     collectible: item,
                                     index: index,
                                     dexNumber: dexIdx,
-                                    isCollected: collectedNames.contains(item.name)
+                                    isCollected: collectedIDs.contains(item.id) || collectedNames.contains(item.name)
                                 )
                                 .onTapGesture { selectedCollectible = item }
                             }

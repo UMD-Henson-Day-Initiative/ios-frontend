@@ -99,7 +99,11 @@ struct ARCollectibleExperienceView: View {
     }
 
     private var alreadyCollected: Bool {
-        modelController.hasCollectedCollectible(named: collectibleName)
+        if let activeCollectible {
+            return modelController.isCollectibleUnlocked(id: activeCollectible.id, name: activeCollectible.name)
+        }
+
+        return modelController.hasCollectedCollectible(named: collectibleName)
     }
 
     // Teleport flow: spawn only after second detected horizontal surface OR after 10 seconds.
@@ -330,11 +334,10 @@ struct ARCollectibleExperienceView: View {
     /// have been collected. Uses `collectibleIDs` on the pin if available, otherwise
     /// falls back to the legacy `collectibleName` field.
     private func chooseCollectibleForCurrentPin() {
-        let collectedNames = Set(modelController.collectionItemsForCurrentUser().map(\.collectibleName))
-
         let candidates = modelController.collectibles(for: pin)
-
-        let notCollected = candidates.filter { !collectedNames.contains($0.name) }
+        let notCollected = candidates.filter {
+            !modelController.isCollectibleUnlocked(id: $0.id, name: $0.name)
+        }
         activeCollectible = (notCollected.isEmpty ? candidates : notCollected).randomElement()
     }
 
