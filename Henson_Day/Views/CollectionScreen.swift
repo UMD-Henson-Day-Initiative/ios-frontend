@@ -126,8 +126,8 @@ struct CollectionScreen: View {
             .onChange(of: modelController.pendingCodexRevealCollectibleID) { _, _ in
                 presentPendingCodexRevealIfNeeded()
             }
-            .onChange(of: selectedCollectible) { _, selectedCollectible in
-                if selectedCollectible == nil {
+            .onChange(of: selectedCollectible?.id) { _, selectedCollectibleID in
+                if selectedCollectibleID == nil {
                     presentPendingCodexRevealIfNeeded()
                 }
             }
