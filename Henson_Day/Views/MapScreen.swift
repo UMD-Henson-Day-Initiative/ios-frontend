@@ -15,26 +15,16 @@ import RealityKit
 import Combine
 
 struct MapScreen: View {
-    // Toggle this to hide all location-teleport testing controls in camera mode.
     private let isInTestingMode = AppConstants.Debug.isMapTeleportTestingEnabled
 
     @EnvironmentObject private var modelController: ModelController
     @EnvironmentObject private var tabRouter: TabRouter
-
     @EnvironmentObject private var cameraPermission: CameraPermissionManager
-    @EnvironmentObject private var worldAnchorManager: WorldAnchorManager
     @EnvironmentObject private var locationManager: LocationPermissionManager
 
-    @State private var region = MKCoordinateRegion(
-        center: CampusConfigProvider.campusCenter,
-        span: AppConstants.Map.mapRegionSpan
-    )
     @State private var selectedPinID: UUID?
     @State private var isDetailPresented = false
     @State private var arPin: PinEntity?
-    @State private var isCameraPrimary = false
-    @State private var suppressMiniCameraFeed = false
-    @State private var isPreparingTeleportLaunch = false
     @State private var teleportPreloadCancellable: AnyCancellable?
     @State private var arLaunchTask: Task<Void, Never>?
 
@@ -66,15 +56,13 @@ struct MapScreen: View {
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
-                primaryPanel
+                mapView
                     .ignoresSafeArea()
 
                 VStack(spacing: 0) {
                     topStatusStrip
                     Spacer()
                 }
-
-                miniSwapPanel
 
                 if let selectedPin, isDetailPresented {
                     let hasEventDetails = modelController.scheduleEventID(matchingPinTitle: selectedPin.title) != nil
@@ -118,28 +106,10 @@ struct MapScreen: View {
             modelController.refreshPublishedData()
             cameraPermission.requestIfNeeded()
             locationManager.requestWhenInUseAuthorizationIfNeeded()
-            region.center = modelController.campusCenter
         }
         .onDisappear {
             arLaunchTask?.cancel()
             teleportPreloadCancellable?.cancel()
-        }
-    }
-
-    @ViewBuilder
-    private var primaryPanel: some View {
-        if isCameraPrimary {
-            if cameraPermission.isDeniedOrRestricted {
-                CameraPermissionPlaceholderView()
-            } else {
-                ARCameraView(
-                    isCameraAuthorized: cameraPermission.isAuthorized,
-                    worldAnchorManager: worldAnchorManager,
-                    isPaused: arPin != nil || isPreparingTeleportLaunch
-                )
-            }
-        } else {
-            mapView
         }
     }
 
@@ -180,9 +150,8 @@ struct MapScreen: View {
             }
 
 
-            if isCameraPrimary && isInTestingMode {
+            if isInTestingMode {
                 HStack {
-                    // TESTING ONLY: This button spoofs the user's location to a not-yet-collected collectible pin.
                     Button("Teleport to a collectible location") {
                         teleportToUncollectedCollectiblePin()
                     }
@@ -197,69 +166,6 @@ struct MapScreen: View {
         }
         .padding(.horizontal, 14)
         .padding(.top, 6)
-    }
-
-    private var miniSwapPanel: some View {
-        GeometryReader { geometry in
-            VStack {
-                HStack {
-                    Spacer()
-                    Group {
-                        if isCameraPrimary {
-                            mapView
-                        } else {
-                            if suppressMiniCameraFeed {
-                                miniCameraPlaceholder
-                            } else if cameraPermission.isDeniedOrRestricted {
-                                CameraPermissionPlaceholderView()
-                            } else {
-                                ARCameraView(
-                                    isCameraAuthorized: cameraPermission.isAuthorized,
-                                    worldAnchorManager: worldAnchorManager,
-                                    isPaused: arPin != nil || isPreparingTeleportLaunch
-                                )
-                            }
-                        }
-                    }
-                    .frame(width: min(170, geometry.size.width * 0.4), height: 205)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(.white.opacity(0.85), lineWidth: 1)
-                    )
-                    .overlay {
-                        Rectangle()
-                            .fill(Color.clear)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                withAnimation(.easeInOut(duration: AppConstants.Map.primarySwapAnimationSeconds)) {
-                                    isCameraPrimary.toggle()
-                                }
-                            }
-                    }
-                    .shadow(radius: 6)
-                }
-                .padding(.top, 30)
-                .padding(.horizontal, 12)
-
-                Spacer()
-            }
-        }
-        .allowsHitTesting(true)
-    }
-
-    private var miniCameraPlaceholder: some View {
-        ZStack {
-            Color.black.opacity(0.75)
-            VStack(spacing: 6) {
-                Image(systemName: "camera")
-                    .font(.title3)
-                    .foregroundStyle(.white)
-                Text("Camera")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.9))
-            }
-        }
     }
 
     private func detailForPin(_ pin: PinEntity) -> MapPinDetail {
@@ -334,11 +240,6 @@ struct MapScreen: View {
             longitude: targetPin.longitude
         )
         locationManager.setTestingCoordinate(targetCoordinate)
-        region.center = targetCoordinate
-
-        // Temporarily suspend mini camera feed to avoid camera-session contention during AR launch.
-        suppressMiniCameraFeed = true
-        isPreparingTeleportLaunch = true
 
         let modelAssetName = modelAssetNameForPin(targetPin) ?? "robot"
 
@@ -362,16 +263,6 @@ struct MapScreen: View {
 
     private func launchARExperience(for pin: PinEntity) {
         arLaunchTask?.cancel()
-
-        if isCameraPrimary {
-            withAnimation(.easeInOut(duration: AppConstants.Map.primarySwapAnimationSeconds)) {
-                isCameraPrimary = false
-            }
-        }
-
-        suppressMiniCameraFeed = true
-        isPreparingTeleportLaunch = true
-
         arLaunchTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64(AppConstants.AR.teleportLaunchDelaySeconds * 1_000_000_000))
             guard !Task.isCancelled else { return }
@@ -383,8 +274,6 @@ struct MapScreen: View {
         arLaunchTask?.cancel()
         teleportPreloadCancellable?.cancel()
         teleportPreloadCancellable = nil
-        suppressMiniCameraFeed = false
-        isPreparingTeleportLaunch = false
     }
 }
 
@@ -393,7 +282,6 @@ struct MapScreen: View {
         .environmentObject(ModelController())
         .environmentObject(TabRouter())
         .environmentObject(CameraPermissionManager())
-        .environmentObject(WorldAnchorManager())
         .environmentObject(LocationPermissionManager())
 }
 
