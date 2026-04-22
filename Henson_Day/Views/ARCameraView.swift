@@ -47,6 +47,11 @@ private struct ARCameraRepresentable: UIViewRepresentable {
         context.coordinator.configureSessionIfPossible(on: uiView, isCameraAuthorized: isCameraAuthorized, isPaused: isPaused)
     }
 
+    static func dismantleUIView(_ uiView: ARView, coordinator: Coordinator) {
+        uiView.session.pause()
+        coordinator.reset()
+    }
+
     func makeCoordinator() -> Coordinator {
         Coordinator(worldAnchorManager: worldAnchorManager)
     }
@@ -57,6 +62,10 @@ private struct ARCameraRepresentable: UIViewRepresentable {
 
         init(worldAnchorManager: WorldAnchorManager) {
             self.worldAnchorManager = worldAnchorManager
+        }
+
+        func reset() {
+            hasConfigured = false
         }
 
         func configureSessionIfPossible(on arView: ARView, isCameraAuthorized: Bool, isPaused: Bool = false) {

@@ -37,8 +37,7 @@ struct MapScreen: View {
     @State private var suppressMiniCameraFeed = false
     @State private var isPreparingTeleportLaunch = false
     @State private var teleportPreloadCancellable: AnyCancellable?
-    @State private var teleportLaunchTask: Task<Void, Never>?
-    @State private var teleportResetTask: Task<Void, Never>?
+    @State private var arLaunchTask: Task<Void, Never>?
 
     private var collectedCollectibleNames: Set<String> {
         Set(modelController.collectionItemsForCurrentUser().map(\.collectibleName))
@@ -48,7 +47,9 @@ struct MapScreen: View {
         Set(
             modelController.pins.compactMap { pin in
                 let pinCollectibles = modelController.collectibles(for: pin)
-                return pinCollectibles.contains(where: { collectedCollectibleNames.contains($0.name) }) ? pin.id : nil
+                return pinCollectibles.contains(where: {
+                    modelController.isCollectibleUnlocked(id: $0.id, name: $0.name) || collectedCollectibleNames.contains($0.name)
+                }) ? pin.id : nil
             }
         )
     }
@@ -106,7 +107,9 @@ struct MapScreen: View {
             }
             .toolbar(.hidden, for: .navigationBar)
         }
-        .fullScreenCover(item: $arPin) { pin in
+        .fullScreenCover(item: $arPin, onDismiss: {
+            finishARLaunchCleanup()
+        }) { pin in
             ARCollectibleExperienceView(pin: pin)
                 .environmentObject(modelController)
                 .environmentObject(tabRouter)
@@ -119,8 +122,7 @@ struct MapScreen: View {
             region.center = modelController.campusCenter
         }
         .onDisappear {
-            teleportLaunchTask?.cancel()
-            teleportResetTask?.cancel()
+            arLaunchTask?.cancel()
             teleportPreloadCancellable?.cancel()
         }
     }
@@ -295,11 +297,11 @@ struct MapScreen: View {
 
         switch pin.pinType {
         case .event:
-            if pin.hasARCollectible { arPin = pin }
+            if pin.hasARCollectible { launchARExperience(for: pin) }
         case .collectible:
-            arPin = pin
+            launchARExperience(for: pin)
         case .battle:
-            arPin = pin
+            launchARExperience(for: pin)
         case .homebase:
             tabRouter.selectedTab = .collection
         case .site, .concert:
@@ -341,8 +343,7 @@ struct MapScreen: View {
 
         let modelAssetName = modelAssetNameForPin(targetPin) ?? "robot"
 
-        teleportLaunchTask?.cancel()
-        teleportResetTask?.cancel()
+        arLaunchTask?.cancel()
         teleportPreloadCancellable?.cancel()
 
         // Preload before launching AR so model decode doesn't block initial collectible screen.
@@ -351,22 +352,40 @@ struct MapScreen: View {
             .receive(on: DispatchQueue.main)
             .sink(receiveCompletion: { _ in
                 teleportPreloadCancellable = nil
-
-                teleportLaunchTask = Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: UInt64(AppConstants.AR.teleportLaunchDelaySeconds * 1_000_000_000))
-                    arPin = targetPin
-                }
             }, receiveValue: { _ in })
 
-        teleportResetTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64(AppConstants.AR.teleportFallbackDelaySeconds * 1_000_000_000))
-            suppressMiniCameraFeed = false
-            isPreparingTeleportLaunch = false
-        }
+        launchARExperience(for: targetPin)
     }
 
     private func modelAssetNameForPin(_ pin: PinEntity) -> String? {
         return modelController.preferredCollectible(for: pin)?.modelFileName
+    }
+
+    private func launchARExperience(for pin: PinEntity) {
+        arLaunchTask?.cancel()
+
+        if isCameraPrimary {
+            withAnimation(.easeInOut(duration: AppConstants.Map.primarySwapAnimationSeconds)) {
+                isCameraPrimary = false
+            }
+        }
+
+        suppressMiniCameraFeed = true
+        isPreparingTeleportLaunch = true
+
+        arLaunchTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(AppConstants.AR.teleportLaunchDelaySeconds * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            arPin = pin
+        }
+    }
+
+    private func finishARLaunchCleanup() {
+        arLaunchTask?.cancel()
+        teleportPreloadCancellable?.cancel()
+        teleportPreloadCancellable = nil
+        suppressMiniCameraFeed = false
+        isPreparingTeleportLaunch = false
     }
 }
 
@@ -393,4 +412,3 @@ private extension Color {
         )
     }
 }
-
