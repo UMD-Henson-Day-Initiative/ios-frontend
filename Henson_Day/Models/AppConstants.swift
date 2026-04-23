@@ -36,12 +36,16 @@ enum AppConstants {
         static let collectibleProximityMeters: CLLocationDistance = 150
         // AR flow timing values
         static let teleportFallbackDelaySeconds: TimeInterval = 2.0
+        static let livePlacementFallbackDelaySeconds: TimeInterval = 5.5
         static let teleportLaunchDelaySeconds: TimeInterval = 0.2
         static let captureDismissDelaySeconds: TimeInterval = 2.0
         static let collectRevealDelaySeconds: TimeInterval = 0.9
         static let collectDismissDelaySeconds: TimeInterval = 0.55
         static let collectibleAnimationCompletionDelaySeconds: TimeInterval = 0.48
         static let pointsBurstAnimationSeconds: TimeInterval = 0.8
+        static let stablePlacementHoldSeconds: TimeInterval = 0.45
+        static let placementCandidateDriftToleranceMeters: Float = 0.14
+        static let readyToSpawnConfidenceThreshold: Double = 0.72
 
         static let proximityRadiusMeters: CLLocationDistance = 10
         static let proximityDebounceMilliseconds: Int = 500
@@ -50,12 +54,12 @@ enum AppConstants {
 
         static let forcedSpawnDistanceMeters: Float = 0.9
         static let fallbackSphereRadius: Float = 0.12
-        static let collectibleVisualScaleMultiplier: Float = 0.01
+        static let collectibleVisualScaleMultiplier: Float = 0.018
         static let collectibleTapTargetRadius: Float = 0.12
 
         static let minScale: Float = 0.0003
-        static let maxScale: Float = 0.0035
-        static let fallbackUniformScale: Float = 0.0012
+        static let maxScale: Float = 0.006
+        static let fallbackUniformScale: Float = 0.0021
 
         enum ModelSizing {
             static let defaultTargetMaxDimension: Float = 0.10
