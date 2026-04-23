@@ -1,3 +1,13 @@
+//  ScheduleScreen.swift
+//  Henson_Day
+//
+//  File Description: This file defines the ScheduleScreen view for the Henson Day
+//  app. It displays the event schedule for each day of the program, allows
+//  users to filter events by day, view event details in a full-screen
+//  modal, and interact with events by opening their location on the map,
+//  visiting the UMD website, or accessing collectibles in the collection.
+
+
 import SwiftUI
 
 // MARK: - Schedule screen

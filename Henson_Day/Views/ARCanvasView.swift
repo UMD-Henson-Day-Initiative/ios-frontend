@@ -1,4 +1,10 @@
-// ARCanvasView.swift
+//  ARCanvasView.swift
+//  Henson_Day
+//
+//  File Description: This file defines the ARCanvasView, a simple augmented reality view that
+//  renders a metallic gray cube anchored to a detected horizontal surface in the real world.
+//  It serves as a demo canvas for RealityKit content, using spatial tracking for camera alignment.
+//
 
 import SwiftUI
 import RealityKit

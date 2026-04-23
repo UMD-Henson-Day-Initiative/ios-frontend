@@ -1,276 +1,249 @@
-// HomeScreen.swift
-// Henson_Day
+//  HomeScreen.swift
+//  Henson_Day
 
 import SwiftUI
+
+// MARK: - Home Screen
 
 struct HomeScreen: View {
     @EnvironmentObject private var modelController: ModelController
     @EnvironmentObject private var tabRouter: TabRouter
 
-    @State private var heroAppeared = false
-    @State private var statsAppeared = false
-    @State private var cardsAppeared = false
-
-    private var nextEvent: DatabaseEvent? {
-        modelController.featuredEventForHome()
-    }
-
-    private var nextEventAvailability: PinAvailabilityState {
-        guard let nextEvent else { return .active }
-        return modelController.availabilityState(for: nextEvent)
-    }
-
-    private var collectedCount: Int {
-        modelController.currentUser?.collectedCount ?? 0
-    }
-
-    private var totalPoints: Int {
-        modelController.currentUser?.totalPoints ?? 0
-    }
-
-    private var userRank: Int {
-        let sorted = modelController.leaderboardUsers.sorted { $0.totalPoints > $1.totalPoints }
-        return (sorted.firstIndex { $0.isLocalUser } ?? 0) + 1
+    var topThree: [PlayerEntity] {
+        Array(modelController.leaderboardUsers.prefix(3))
     }
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                DS.Color.surface.ignoresSafeArea()
+            ScrollView {
+                VStack(spacing: 20) {
 
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: DS.Spacing.section) {
-                        // Hero stage card
-                        HeroStageCard(event: nextEvent, availability: nextEventAvailability)
-                            .padding(.horizontal, DS.Spacing.screenH)
-                            .offset(y: heroAppeared ? 0 : 20)
-                            .opacity(heroAppeared ? 1 : 0)
-
-                        // Stat strip
-                        HomeStatStrip(
-                            collected: collectedCount,
-                            points: totalPoints,
-                            rank: userRank
-                        ) {
-                            tabRouter.selectedTab = .collection
-                        } onLeaderboard: {
-                            tabRouter.selectedTab = .leaderboard
+                    // Featured Event Card (now at top, replaces hero banner)
+                    FeaturedEventCardView(
+                        week: 1,
+                        day: 3,
+                        title: "McKeldin Time Capsule Hunt",
+                        timeRange: "2:30 – 4:00 PM",
+                        location: "McKeldin Mall",
+                        onViewEvent: {
+                            tabRouter.selectedTab = .map
                         }
-                        .padding(.horizontal, DS.Spacing.screenH)
-                        .opacity(statsAppeared ? 1 : 0)
-                        .offset(y: statsAppeared ? 0 : 12)
+                    )
 
-                        // How it works
-                        VStack(alignment: .leading, spacing: 14) {
-                            Text("How It Works")
-                                .font(DS.Typography.display)
-                                .foregroundStyle(DS.Color.campusNight)
-                                .padding(.horizontal, DS.Spacing.screenH)
+                    // Description
+                    Text("Join the AR scavenger hunt across UMD. Tap the Map icon to find events and AR characters. Collect creatures, earn points, and climb the leaderboard!")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
-                            VStack(spacing: DS.Spacing.card) {
-                                ForEach(Array(tutorialCards.enumerated()), id: \.offset) { index, card in
-                                    TutorialCard(card: card)
-                                        .opacity(cardsAppeared ? 1 : 0)
-                                        .offset(y: cardsAppeared ? 0 : 14)
-                                        .animation(
-                                            .easeOut(duration: 0.32).delay(Double(index) * 0.07),
-                                            value: cardsAppeared
-                                        )
-                                }
-                            }
-                            .padding(.horizontal, DS.Spacing.screenH)
-                        }
+                    // Top Collectors
+                    TopCollectorsView(topThree: topThree, tabRouter: tabRouter)
+
+                    // Stats
+                    HStack(spacing: 12) {
+                        StatChip(title: "Events",       value: "90+",                                                color: Color("UMDRed"))
+                        StatChip(title: "Collectibles", value: "\(modelController.currentUser?.collectedCount ?? 0)", color: Color("UMDGold"))
+                        StatChip(title: "Days",         value: "7",                                                  color: .orange)
                     }
-                    .padding(.top, DS.Spacing.card)
-                    .padding(.bottom, DS.Spacing.section)
                 }
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                .padding(.bottom, 24)
             }
+            .navigationTitle("Henson Week")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("HensonDay")
-                        .font(DS.Typography.title2)
-                        .foregroundStyle(DS.Color.primary)
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    ProfileToolbarButton()
-                }
-            }
-            .onAppear {
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.75)) {
-                    heroAppeared = true
-                }
-                withAnimation(.easeOut(duration: 0.35).delay(0.12)) {
-                    statsAppeared = true
-                }
-                withAnimation(.easeOut(duration: 0.3).delay(0.22)) {
-                    cardsAppeared = true
-                }
-            }
         }
-    }
-
-    private var tutorialCards: [TutorialCardModel] {
-        [
-            TutorialCardModel(
-                icon: "calendar",
-                color: DS.Color.primary,
-                tint: DS.Color.primaryTint,
-                title: "Schedule",
-                description: "Browse all Henson Week events, see what collectibles each one offers, and plan your week."
-            ),
-            TutorialCardModel(
-                icon: "map.fill",
-                color: DS.Color.Rarity.rare,
-                tint: DS.Color.Rarity.rareTint,
-                title: "Map",
-                description: "Explore campus, tap event pins to see what's happening nearby, and launch AR to capture muppets."
-            ),
-            TutorialCardModel(
-                icon: "star.square.fill",
-                color: DS.Color.gold,
-                tint: DS.Color.Rarity.legendaryTint,
-                title: "Collection",
-                description: "View every muppet you've collected, check their rarity, and track how many points you've earned."
-            ),
-            TutorialCardModel(
-                icon: "trophy.fill",
-                color: DS.Color.Rarity.epic,
-                tint: DS.Color.Rarity.epicTint,
-                title: "Leaderboard",
-                description: "See where you rank against the rest of campus across the full week."
-            ),
-        ]
     }
 }
 
-// MARK: - Hero stage card
+// MARK: - Featured Event Card
 
-private struct HeroStageCard: View {
-    let event: DatabaseEvent?
-    let availability: PinAvailabilityState
+private struct FeaturedEventCardView: View {
+    let week: Int
+    let day: Int
+    let title: String
+    let timeRange: String
+    let location: String
+    let onViewEvent: () -> Void
 
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            // Gradient background
-            LinearGradient(
-                colors: [DS.Color.primary, Color(red: 139/255, green: 0, blue: 0)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.heroCard, style: .continuous))
-            .frame(height: 200)
+        GeometryReader { geo in
+            ZStack(alignment: .topLeading) {
 
-            // Day badge top-left
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Henson Week")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.8))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(.white.opacity(0.2))
+                // Card background
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(Color("UMDRed"))
+
+                // Soft circle accent top-right
+                Circle()
+                    .fill(Color.white.opacity(0.07))
+                    .frame(width: 180, height: 180)
+                    .offset(x: geo.size.width - 70, y: -55)
+
+                // Content
+                VStack(alignment: .leading, spacing: 14) {
+
+                    // WEEK · DAY pill
+                    HStack(spacing: 5) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 9, weight: .black))
+                        Text("WEEK \(week) · DAY \(day)")
+                            .font(.system(size: 11, weight: .black, design: .rounded))
+                            .tracking(0.4)
+                    }
+                    .foregroundStyle(Color("UMDRed"))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color("UMDGold"))
                     .clipShape(Capsule())
 
-                if let ev = event {
-                    AvailabilityChip(availability: availability)
-
-                    Text(ev.title)
-                        .font(DS.Typography.title1)
+                    // Title
+                    Text(title)
+                        .font(.system(size: 21, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
-                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .lineSpacing(1)
 
-                    Label("\(ev.timeRange) · \(ev.locationName)", systemImage: "clock")
-                        .font(DS.Typography.caption)
-                        .foregroundStyle(.white.opacity(0.8))
+                    // Time & Location
+                    HStack(spacing: 14) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "clock")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.8))
+                            Text(timeRange)
+                                .font(.system(size: 13, weight: .medium, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.9))
+                                .lineLimit(1)
+                                .fixedSize()
+                        }
 
-                    if let message = availability.message {
-                        Text(message)
-                            .font(DS.Typography.caption)
-                            .foregroundStyle(.white.opacity(0.82))
-                            .lineLimit(2)
+                        HStack(spacing: 5) {
+                            Image(systemName: "mappin")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.8))
+                            Text(location)
+                                .font(.system(size: 13, weight: .medium, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.9))
+                                .lineLimit(1)
+                                .fixedSize()
+                        }
                     }
-                } else {
-                    Text("Campus comes alive this week.")
-                        .font(DS.Typography.title1)
+
+                    // CTA Button
+                    Button(action: onViewEvent) {
+                        HStack(spacing: 6) {
+                            Text("View event")
+                                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 13, weight: .semibold))
+                        }
                         .foregroundStyle(.white)
+                        .padding(.horizontal, 22)
+                        .padding(.vertical, 13)
+                        .background(Color.white.opacity(0.18))
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
                 }
+                .padding(20)
             }
-            .padding(DS.Spacing.cardPad)
+            .clipShape(RoundedRectangle(cornerRadius: 20))
+            .shadow(color: Color("UMDRed").opacity(0.4), radius: 14, x: 0, y: 7)
         }
-        .frame(maxWidth: .infinity)
-        .shadow(color: DS.Color.primary.opacity(0.3), radius: 16, x: 0, y: 6)
+        .frame(height: 210)
     }
 }
 
-// MARK: - Home stat strip
+// MARK: - Top Collectors
 
-private struct HomeStatStrip: View {
-    let collected: Int
-    let points: Int
-    let rank: Int
-    let onCollection: () -> Void
-    let onLeaderboard: () -> Void
+private struct TopCollectorsView: View {
+    let topThree: [PlayerEntity]
+    let tabRouter: TabRouter
 
     var body: some View {
-        HStack(spacing: DS.Spacing.card) {
-            Button(action: onCollection) {
-                StatTile(value: "\(collected)", label: "Collected", icon: "star.fill")
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Top 3 Collectors")
+                    .font(.headline)
+                Spacer()
+                Button("Open Leaderboard") {
+                    tabRouter.selectedTab = .map
+                }
+                .font(.caption)
             }
-            .buttonStyle(.plain)
 
-            StatTile(value: "\(points)", label: "Points", icon: "bolt.fill")
+            ForEach(Array(topThree.enumerated()), id: \.element.id) { index, user in
+                HStack(spacing: 12) {
+                    ZStack(alignment: .topTrailing) {
+                        Circle()
+                            .fill(Color(hex: user.avatarColorHex).opacity(0.85))
+                            .frame(width: 44, height: 44)
+                            .overlay(
+                                Image(systemName: user.avatarType.symbolName)
+                                    .foregroundStyle(.white)
+                            )
 
-            Button(action: onLeaderboard) {
-                StatTile(value: "#\(rank)", label: "Rank", icon: "chart.bar.fill")
+                        if index == 0 {
+                            Image(systemName: "crown.fill")
+                                .font(.system(size: 9))
+                                .foregroundStyle(Color("UMDRed"))
+                                .padding(4)
+                                .background(Color("UMDGold"))
+                                .clipShape(Circle())
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text("#\(index + 1)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(user.displayName)
+                                .font(.subheadline.weight(.medium))
+                        }
+                        Text("\(user.collectedCount) collected • \(user.totalPoints) pts")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Text(index == 0 ? "🥇" : index == 1 ? "🥈" : "🥉")
+                        .font(.title3)
+                }
+                .padding(10)
+                .background(Color(.systemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 18))
             }
-            .buttonStyle(.plain)
         }
+        .padding(16)
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 24))
+        .shadow(radius: 4)
     }
 }
 
-// MARK: - Tutorial card
-
-private struct TutorialCardModel {
-    let icon: String
-    let color: Color
-    let tint: Color
-    let title: String
-    let description: String
-}
-
-private struct TutorialCard: View {
-    let card: TutorialCardModel
-
-    var body: some View {
-        HStack(spacing: 16) {
-            Image(systemName: card.icon)
-                .font(.system(size: 24, weight: .semibold))
-                .foregroundStyle(card.color)
-                .frame(width: 52, height: 52)
-                .background(card.tint)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(card.title)
-                    .font(DS.Typography.title2)
-                    .foregroundStyle(DS.Color.campusNight)
-                Text(card.description)
-                    .font(DS.Typography.body)
-                    .foregroundStyle(DS.Color.neutral)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(DS.Spacing.cardPad)
-        .background(DS.Color.surfaceElevated)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.card, style: .continuous))
-        .shadow(color: DS.Shadow.cardColor, radius: DS.Shadow.cardRadius, x: DS.Shadow.cardX, y: DS.Shadow.cardY)
-    }
-}
+// MARK: - Preview
 
 #Preview {
     HomeScreen()
         .environmentObject(ModelController())
         .environmentObject(TabRouter())
+}
+
+// MARK: - Color + Hex
+
+private extension Color {
+    init(hex: String) {
+        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&int)
+        self.init(
+            .sRGB,
+            red:   Double((int >> 16) & 0xFF) / 255,
+            green: Double((int >> 8)  & 0xFF) / 255,
+            blue:  Double(int         & 0xFF) / 255,
+            opacity: 1
+        )
+    }
 }

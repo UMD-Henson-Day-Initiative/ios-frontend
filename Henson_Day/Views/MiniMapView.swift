@@ -1,3 +1,13 @@
+//  MiniMapView.swift
+//  Henson_Day
+//
+//  File Description: This file defines a lightweight minimap component used to display the user's
+//  current location within the app. It handles location permissions, displays
+//  a MapKit view centered on the user's position, and provides a fallback UI
+//  when location access is denied or restricted. The LocationPermissionManager
+//  class manages CoreLocation updates, authorization state, and supports a
+//  testing override for simulating user location.
+
 import SwiftUI
 import MapKit
 import CoreLocation

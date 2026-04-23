@@ -1,3 +1,13 @@
+//  MinimalLeaderboardScreen.swift
+//  Henson_Day
+//
+//  File Description: This file defines the MinimalLeaderboardSheet view, which displays a ranked
+//  leaderboard of players in a simple list format. Each row shows the player's
+//  rank, avatar, display name, and total points. The currently logged-in user
+//  is visually highlighted. The sheet is presented within a NavigationStack
+//  and includes a close button for dismissal.
+//
+
 import SwiftUI
 
 struct MinimalLeaderboardSheet: View {

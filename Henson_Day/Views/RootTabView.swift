@@ -1,9 +1,11 @@
-//
 //  RootTabView.swift
 //  Henson_Day
 //
-//  Created by Jake Frischmann on 2/27/26.
-//
+//  File Description: This file defines the main tab-based navigation view of the Henson_Day
+//  app. It provides a TabView containing the primary sections of the app: Home,
+//  Schedule, Map, Collection, and Profile. Each tab is associated with an
+//  AppTab enum value to manage selection state. Additionally, it listens
+//  for user-facing errors from the ModelController and presents them in an alert.
 
 
 // RootTabView.swift
