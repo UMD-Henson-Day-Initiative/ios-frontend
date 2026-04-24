@@ -70,11 +70,15 @@ final class ModelController: ObservableObject {
     @Published private(set) var storeMode: StoreMode = .persistent
     @Published private(set) var userFacingError: UserFacingErrorState?
     @Published private(set) var lastCapturedCollectibleID: String?
+    @Published private(set) var pendingCodexRevealCollectibleID: String?
+    @Published private(set) var unlockedCollectibleIDs: Set<String> = []
+    @Published private(set) var unlockedCollectibleNames: Set<String> = []
 
     private(set) var modelContainer: ModelContainer?
     private var context: ModelContext?
     private let logger = AppLogger.make(.model)
     private let campusConfigProvider: CampusConfigProviding
+    private let userDefaults = UserDefaults.standard
 
     convenience init() {
         self.init(campusConfigProvider: CampusConfigProvider.active)
@@ -103,6 +107,9 @@ final class ModelController: ObservableObject {
         storeMode = .persistent
         userFacingError = nil
         lastCapturedCollectibleID = nil
+        pendingCodexRevealCollectibleID = nil
+        unlockedCollectibleIDs = []
+        unlockedCollectibleNames = []
         currentUser = nil
         pins = []
         leaderboardUsers = []
@@ -189,6 +196,8 @@ final class ModelController: ObservableObject {
                 ($0.dayNumber, $0.timeRange) < ($1.dayNumber, $1.timeRange)
             }
             collectibleCatalog = Database.collectibleCatalog
+            refreshUnlockedCollectibleIDs()
+            refreshPendingCodexRevealState()
             isSeedLoading = false
             startupErrorMessage = nil
         } catch {
@@ -231,6 +240,9 @@ final class ModelController: ObservableObject {
             } else {
                 self.addedScheduleEventIDs = []
             }
+
+            refreshPendingCodexRevealState()
+            refreshUnlockedCollectibleIDs()
         } catch {
             publishRuntimeError(
                 title: "Couldn't refresh data",
@@ -243,12 +255,7 @@ final class ModelController: ObservableObject {
 
     func captureCollectible(from pin: PinEntity, points: Int = 50) {
         if let collectible = preferredCollectible(for: pin) {
-            captureCollectible(
-                collectibleName: collectible.name,
-                rarity: collectible.rarity,
-                foundAtTitle: pin.title,
-                points: collectible.points
-            )
+            captureCollectible(collectible: collectible, foundAtTitle: pin.title)
             return
         }
 
@@ -261,7 +268,51 @@ final class ModelController: ObservableObject {
         )
     }
 
+    func captureCollectible(collectible: DatabaseCollectible, foundAtTitle: String) {
+        captureCollectible(
+            collectibleID: collectible.id,
+            collectibleName: collectible.name,
+            rarity: collectible.rarity,
+            foundAtTitle: foundAtTitle,
+            points: collectible.points
+        )
+    }
+
     func captureCollectible(collectibleName: String, rarity: String, foundAtTitle: String, points: Int) {
+        let collectibleID = collectibleCatalog.first(where: { $0.name == collectibleName })?.id
+        captureCollectible(
+            collectibleID: collectibleID,
+            collectibleName: collectibleName,
+            rarity: rarity,
+            foundAtTitle: foundAtTitle,
+            points: points
+        )
+    }
+
+    func consumePendingCodexReveal(collectibleID: String) {
+        let queue = pendingCodexRevealQueue().filter { $0 != collectibleID }
+        storePendingCodexRevealQueue(queue)
+    }
+
+    func isCollectibleUnlocked(id: String?, name: String) -> Bool {
+        if unlockedCollectibleNames.contains(name) {
+            return true
+        }
+
+        if let id, unlockedCollectibleIDs.contains(id) {
+            return true
+        }
+
+        return false
+    }
+
+    private func captureCollectible(
+        collectibleID: String?,
+        collectibleName: String,
+        rarity: String,
+        foundAtTitle: String,
+        points: Int
+    ) {
         guard let user = currentUser else { return }
         guard let context else {
             publishRuntimeError(
@@ -276,13 +327,21 @@ final class ModelController: ObservableObject {
         do {
             let itemDescriptor = FetchDescriptor<CollectedItemEntity>(
                 predicate: #Predicate { item in
-                    item.collectibleName == collectibleName && item.playerID == userID
+                    item.playerID == userID
                 }
             )
             let existing = try context.fetch(itemDescriptor)
-            guard existing.isEmpty else { return }
+            let duplicate = existing.contains { item in
+                if let collectibleID {
+                    return item.collectibleID == collectibleID || item.collectibleName == collectibleName
+                }
+
+                return item.collectibleName == collectibleName
+            }
+            guard !duplicate else { return }
 
             let collected = CollectedItemEntity(
+                collectibleID: collectibleID,
                 collectibleName: collectibleName,
                 rarity: rarity,
                 foundAtTitle: foundAtTitle,
@@ -293,7 +352,15 @@ final class ModelController: ObservableObject {
 
             user.totalPoints += points
             user.collectedCount += 1
-            lastCapturedCollectibleID = collectibleCatalog.first(where: { $0.name == collectibleName })?.id
+
+            if let collectibleID {
+                lastCapturedCollectibleID = collectibleID
+                enqueuePendingCodexReveal(collectibleID: collectibleID)
+                storeUnlockedCollectibleID(collectibleID)
+                unlockedCollectibleNames.insert(collectibleName)
+            } else {
+                lastCapturedCollectibleID = collectibleCatalog.first(where: { $0.name == collectibleName })?.id
+            }
 
             try context.save()
             refreshPublishedData()
@@ -398,6 +465,84 @@ final class ModelController: ObservableObject {
 
     func consumeLastCapturedCollectibleID() {
         lastCapturedCollectibleID = nil
+    }
+
+    private func pendingCodexRevealQueueKey(for userID: UUID) -> String {
+        "codex.pendingRevealCollectibleIDs.\(userID.uuidString)"
+    }
+
+    private func unlockedCollectibleIDsKey(for userID: UUID) -> String {
+        "codex.unlockedCollectibleIDs.\(userID.uuidString)"
+    }
+
+    private func pendingCodexRevealQueue() -> [String] {
+        guard let userID = currentUser?.id else { return [] }
+        return userDefaults.stringArray(forKey: pendingCodexRevealQueueKey(for: userID)) ?? []
+    }
+
+    private func persistedUnlockedCollectibleIDs() -> Set<String> {
+        guard let userID = currentUser?.id else { return [] }
+        return Set(userDefaults.stringArray(forKey: unlockedCollectibleIDsKey(for: userID)) ?? [])
+    }
+
+    private func storePendingCodexRevealQueue(_ queue: [String]) {
+        guard let userID = currentUser?.id else {
+            pendingCodexRevealCollectibleID = nil
+            return
+        }
+
+        userDefaults.set(queue, forKey: pendingCodexRevealQueueKey(for: userID))
+        pendingCodexRevealCollectibleID = queue.first
+    }
+
+    private func enqueuePendingCodexReveal(collectibleID: String) {
+        var queue = pendingCodexRevealQueue()
+        queue.removeAll { $0 == collectibleID }
+        queue.append(collectibleID)
+        storePendingCodexRevealQueue(queue)
+    }
+
+    private func refreshPendingCodexRevealState() {
+        pendingCodexRevealCollectibleID = pendingCodexRevealQueue().first
+    }
+
+    private func storeUnlockedCollectibleID(_ collectibleID: String) {
+        guard let userID = currentUser?.id else { return }
+
+        var ids = persistedUnlockedCollectibleIDs()
+        ids.insert(collectibleID)
+        let sorted = Array(ids).sorted()
+        userDefaults.set(sorted, forKey: unlockedCollectibleIDsKey(for: userID))
+        unlockedCollectibleIDs = ids
+    }
+
+    private func refreshUnlockedCollectibleIDs() {
+        let collectionItems = collectionItemsForCurrentUser()
+        let idsFromCollection = Set(collectionItems.compactMap { item in
+            if let collectibleID = item.collectibleID, !collectibleID.isEmpty {
+                return collectibleID
+            }
+
+            return collectibleCatalog.first(where: { $0.name == item.collectibleName })?.id
+        })
+        let namesFromCollection = Set(collectionItems.compactMap { item in
+            if let collectibleID = item.collectibleID,
+               let collectible = collectibleCatalog.first(where: { $0.id == collectibleID }) {
+                return collectible.name
+            }
+
+            return item.collectibleName
+        })
+        let mergedIDs = idsFromCollection.union(persistedUnlockedCollectibleIDs())
+        unlockedCollectibleIDs = mergedIDs
+        unlockedCollectibleNames = namesFromCollection.union(
+            collectibleCatalog
+                .filter { mergedIDs.contains($0.id) }
+                .map(\.name)
+        )
+
+        guard let userID = currentUser?.id else { return }
+        userDefaults.set(Array(mergedIDs).sorted(), forKey: unlockedCollectibleIDsKey(for: userID))
     }
 
     func pin(for event: DatabaseEvent) -> PinEntity? {

@@ -109,6 +109,10 @@ private struct FestiveBannerHeaderView: View {
                 PennantTitleView(title: "My Collection")
                     .padding(.top, 8)
 
+                
+                
+                
+                
                 // Stat chips
                 HStack(spacing: 10) {
                     FestiveStatChip(label: "Collected", value: "\(collectedCount)/\(catalogCount)")
