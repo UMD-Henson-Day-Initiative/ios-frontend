@@ -219,6 +219,32 @@ private struct ProfileStatPill: View {
     }
 }
 
+private struct StatTile: View {
+    let value: String
+    let label: String
+    let icon: String
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(DS.Color.primary)
+
+            Text(value)
+                .font(DS.Typography.title2)
+                .foregroundStyle(DS.Color.campusNight)
+
+            Text(label)
+                .font(DS.Typography.caption)
+                .foregroundStyle(DS.Color.neutral)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 14)
+        .background(DS.Color.surfaceElevated)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.statTile))
+        .shadow(color: DS.Shadow.cardColor, radius: DS.Shadow.cardRadius, x: DS.Shadow.cardX, y: DS.Shadow.cardY)
+    }
+}
 // MARK: - Color(hex:) helper
 
 private extension Color {

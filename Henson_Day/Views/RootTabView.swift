@@ -24,7 +24,7 @@ struct RootTabView: View {
                 case .home:        HomeScreen()
                 case .schedule:    ScheduleScreen()
                 case .map:         MapScreen()
-                case .collection:  CollectionScreen()
+                case .collection:  CollectiblesScreen()
                 case .leaderboard: LeaderboardScreen()
                 case .profile:     ProfileScreen()
                 }
