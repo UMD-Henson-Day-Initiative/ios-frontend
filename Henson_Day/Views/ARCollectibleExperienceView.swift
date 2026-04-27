@@ -355,14 +355,14 @@ struct ARPlacementView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> ARView {
         let arView = ARView(frame: .zero, cameraMode: .ar, automaticallyConfigureSession: false)
-        context.coordinator.didTapCollectible = { didTapCollectible = true }
+        wireCoordinatorCallbacks(context.coordinator)
         context.coordinator.lastSeenReplaceToken = replaceToken
         context.coordinator.configure(arView)
         return arView
     }
 
     func updateUIView(_ uiView: ARView, context: Context) {
-        context.coordinator.didTapCollectible = { didTapCollectible = true }
+        wireCoordinatorCallbacks(context.coordinator)
         context.coordinator.handleReplaceTokenIfChanged(replaceToken)
         context.coordinator.syncState(
             arView: uiView,
@@ -376,6 +376,13 @@ struct ARPlacementView: UIViewRepresentable {
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
+
+    private func wireCoordinatorCallbacks(_ coordinator: Coordinator) {
+        coordinator.didTapCollectible = { didTapCollectible = true }
+        coordinator.didConfirmPlacement = { hasPlaced = true }
+        coordinator.didStartDetectingPlanes = { hasDetectedPlane = true }
+        coordinator.didLoseAllPlanes = { hasDetectedPlane = false }
+    }
 
     final class Coordinator: NSObject, ARSessionDelegate {
         private weak var arView: ARView?
@@ -403,6 +410,9 @@ struct ARPlacementView: UIViewRepresentable {
         private let collectibleEntityName = "ar.collectible.entity"
 
         var didTapCollectible: (() -> Void)?
+        var didConfirmPlacement: (() -> Void)?
+        var didStartDetectingPlanes: (() -> Void)?
+        var didLoseAllPlanes: (() -> Void)?
         var lastSeenReplaceToken: UUID?
 
         func configure(_ arView: ARView) {
@@ -487,6 +497,7 @@ struct ARPlacementView: UIViewRepresentable {
         private func addPlaneVisualization(for plane: ARPlaneAnchor) {
             guard confirmedPlaneID == nil else { return }
             guard let arView, planeVisualizations[plane.identifier] == nil else { return }
+            let wasEmpty = planeVisualizations.isEmpty
             let anchorEntity = AnchorEntity(.anchor(identifier: plane.identifier))
             let modelEntity = makePlaneEntity(for: plane)
             anchorEntity.addChild(modelEntity)
@@ -496,6 +507,11 @@ struct ARPlacementView: UIViewRepresentable {
                 modelEntity: modelEntity,
                 firstSeen: CACurrentMediaTime()
             )
+            if wasEmpty {
+                DispatchQueue.main.async { [weak self] in
+                    self?.didStartDetectingPlanes?()
+                }
+            }
         }
 
         private func updatePlaneVisualization(for plane: ARPlaneAnchor) {
@@ -519,6 +535,11 @@ struct ARPlacementView: UIViewRepresentable {
             viz.anchorEntity.removeFromParent()
             if confirmedPlaneID == id && collectibleAnchor == nil {
                 confirmedPlaneID = nil
+            }
+            if planeVisualizations.isEmpty && collectibleAnchor == nil {
+                DispatchQueue.main.async { [weak self] in
+                    self?.didLoseAllPlanes?()
+                }
             }
         }
 
@@ -630,6 +651,10 @@ struct ARPlacementView: UIViewRepresentable {
             localTranslation.columns.3 = SIMD4<Float>(plane.center.x, 0, plane.center.z, 1)
             let world = matrix_multiply(plane.transform, localTranslation)
             placeCollectible(at: world, modelAssetName: modelAssetName)
+
+            DispatchQueue.main.async { [weak self] in
+                self?.didConfirmPlacement?()
+            }
         }
 
         // MARK: - Collectible Placement
