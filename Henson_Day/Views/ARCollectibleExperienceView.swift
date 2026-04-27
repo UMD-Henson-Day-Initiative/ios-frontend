@@ -34,6 +34,7 @@ struct ARCollectibleExperienceView: View {
     @State private var activeCollectible: DatabaseCollectible?
     @State private var pointsBurstProgress: CGFloat = 1
     @State private var collectFlowTask: Task<Void, Never>?
+    @State private var replaceToken = UUID()
 
     private var collectibleName: String {
         activeCollectible?.name ?? (pin.collectibleName ?? pin.title)
@@ -70,12 +71,23 @@ struct ARCollectibleExperienceView: View {
         flowState == .collecting || flowState == .captured
     }
 
+    private var shouldShowGuidanceCard: Bool {
+        switch flowState {
+        case .searching, .confirming, .alreadyCollected, .noCollectiblesConfigured:
+            return true
+        case .placed, .collecting, .captured:
+            return false
+        }
+    }
+
     var body: some View {
         ZStack {
             ARPlacementView(
                 canSpawnCollectible: canSpawnCollectible,
                 isCapturing: isCapturing,
                 modelAssetName: collectibleModelAssetName,
+                rarity: collectibleRarity,
+                replaceToken: replaceToken,
                 hasPlaced: $hasPlaced,
                 hasDetectedPlane: $hasDetectedPlane,
                 didTapCollectible: $didTapCollectible
@@ -110,9 +122,14 @@ struct ARCollectibleExperienceView: View {
 
                 Spacer()
 
-                overlayCard
-                    .padding(.horizontal)
-                    .padding(.bottom, 24)
+                if shouldShowGuidanceCard {
+                    overlayCard
+                        .padding(.horizontal)
+                        .padding(.bottom, 24)
+                } else if flowState == .placed {
+                    replaceButton
+                        .padding(.bottom, 24)
+                }
             }
 
             if isCapturing {
@@ -185,6 +202,31 @@ struct ARCollectibleExperienceView: View {
                 subtitle: "Unlocked in the UMD Index. Total points: \(currentTotalPoints)."
             )
         }
+    }
+
+    private var replaceButton: some View {
+        Button(action: triggerReplace) {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                Text("Re-Place")
+            }
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+            .background(.black.opacity(0.55), in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Re-place the collectible's platform")
+    }
+
+    private func triggerReplace() {
+        let generator = UIImpactFeedbackGenerator(style: .soft)
+        generator.impactOccurred()
+        replaceToken = UUID()
+        hasPlaced = false
+        hasDetectedPlane = false
+        recalculateFlow()
     }
 
     private var captureAnimationOverlay: some View {
@@ -305,6 +347,8 @@ struct ARPlacementView: UIViewRepresentable {
     let canSpawnCollectible: Bool
     let isCapturing: Bool
     let modelAssetName: String
+    let rarity: String
+    let replaceToken: UUID
     @Binding var hasPlaced: Bool
     @Binding var hasDetectedPlane: Bool
     @Binding var didTapCollectible: Bool
@@ -312,17 +356,20 @@ struct ARPlacementView: UIViewRepresentable {
     func makeUIView(context: Context) -> ARView {
         let arView = ARView(frame: .zero, cameraMode: .ar, automaticallyConfigureSession: false)
         context.coordinator.didTapCollectible = { didTapCollectible = true }
+        context.coordinator.lastSeenReplaceToken = replaceToken
         context.coordinator.configure(arView)
         return arView
     }
 
     func updateUIView(_ uiView: ARView, context: Context) {
         context.coordinator.didTapCollectible = { didTapCollectible = true }
+        context.coordinator.handleReplaceTokenIfChanged(replaceToken)
         context.coordinator.syncState(
             arView: uiView,
             canSpawnCollectible: canSpawnCollectible,
             isCapturing: isCapturing,
             modelAssetName: modelAssetName,
+            rarity: rarity,
             hasPlaced: $hasPlaced,
             hasDetectedPlane: $hasDetectedPlane
         )
@@ -336,6 +383,7 @@ struct ARPlacementView: UIViewRepresentable {
         private var collectibleAnchor: AnchorEntity?
         private var collectibleEntity: Entity?
         private var tapTargetEntity: ModelEntity?
+        private var haloEntity: ModelEntity?
         private var loadCancellable: AnyCancellable?
         private var isCollectAnimationRunning = false
 
@@ -347,6 +395,7 @@ struct ARPlacementView: UIViewRepresentable {
         private var planeVisualizations: [UUID: PlaneVisualization] = [:]
         private var confirmedPlaneID: UUID?
         private var latestModelAssetName: String?
+        private var latestRarity: String?
 
         private let planeStableDuration: CFTimeInterval = 1.0
         private let minPlaneArea: Float = 0.1   // m²
@@ -354,6 +403,7 @@ struct ARPlacementView: UIViewRepresentable {
         private let collectibleEntityName = "ar.collectible.entity"
 
         var didTapCollectible: (() -> Void)?
+        var lastSeenReplaceToken: UUID?
 
         func configure(_ arView: ARView) {
             self.arView = arView
@@ -374,11 +424,13 @@ struct ARPlacementView: UIViewRepresentable {
             canSpawnCollectible: Bool,
             isCapturing: Bool,
             modelAssetName: String,
+            rarity: String,
             hasPlaced: Binding<Bool>,
             hasDetectedPlane: Binding<Bool>
         ) {
             self.arView = arView
             latestModelAssetName = modelAssetName
+            latestRarity = rarity
 
             if isCapturing { return }
 
@@ -488,6 +540,19 @@ struct ARPlacementView: UIViewRepresentable {
             }
         }
 
+        // MARK: - Re-Place
+
+        func handleReplaceTokenIfChanged(_ token: UUID) {
+            guard lastSeenReplaceToken != token else { return }
+            lastSeenReplaceToken = token
+            resetPlacement()
+        }
+
+        private func resetPlacement() {
+            removeCollectible()
+            removeAllPlaneVisualizations()
+        }
+
         // MARK: - ARSessionDelegate
 
         func session(_ session: ARSession, didAdd anchors: [ARAnchor]) {
@@ -577,6 +642,8 @@ struct ARPlacementView: UIViewRepresentable {
             arView.scene.addAnchor(anchor)
             collectibleAnchor = anchor
 
+            attachRarityHalo(to: anchor, rarity: latestRarity ?? "Common")
+
             loadCancellable = Entity.loadModelAsync(named: modelAssetName)
                 .receive(on: DispatchQueue.main)
                 .sink(receiveCompletion: { [weak self] completion in
@@ -660,12 +727,48 @@ struct ARPlacementView: UIViewRepresentable {
             return AppConstants.AR.ModelSizing.defaultTargetMaxDimension
         }
 
+        // MARK: - Rarity Halo
+
+        private func attachRarityHalo(to anchor: AnchorEntity, rarity: String) {
+            removeHalo()
+            let radius: Float = 0.08
+            let mesh = MeshResource.generatePlane(
+                width: radius * 2,
+                depth: radius * 2,
+                cornerRadius: radius
+            )
+            let material = translucentMaterial(color: haloColor(for: rarity), alpha: 0.55)
+            let halo = ModelEntity(mesh: mesh, materials: [material])
+            halo.position = SIMD3<Float>(0, 0.001, 0)
+            anchor.addChild(halo)
+            haloEntity = halo
+        }
+
+        private func haloColor(for rarity: String) -> UIColor {
+            switch rarity.lowercased() {
+            case "legendary":
+                return UIColor(named: "UMDGold") ?? .systemYellow
+            case "epic":
+                return .systemPurple
+            case "rare":
+                return .systemBlue
+            default:
+                return UIColor.white.withAlphaComponent(0.85)
+            }
+        }
+
+        private func removeHalo() {
+            haloEntity?.removeFromParent()
+            haloEntity = nil
+        }
+
         private func removeCollectible() {
             collectibleEntity = nil
             tapTargetEntity = nil
             loadCancellable?.cancel()
             loadCancellable = nil
 
+            removeHalo()
             collectibleAnchor?.removeFromParent()
             collectibleAnchor = nil
             confirmedPlaneID = nil
@@ -694,6 +797,7 @@ struct ARPlacementView: UIViewRepresentable {
             isCollectAnimationRunning = true
             playTapFeedback()
             removeAllPlaneVisualizations()
+            removeHalo()
 
             let cameraMatrix = arView.cameraTransform.matrix
             let cameraPosition = SIMD3<Float>(
