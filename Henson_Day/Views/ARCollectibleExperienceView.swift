@@ -392,6 +392,7 @@ struct ARPlacementView: UIViewRepresentable {
 
             if collectibleAnchor != nil {
                 if !hasPlaced.wrappedValue { hasPlaced.wrappedValue = true }
+                prunePlaneVisualizationsToConfirmed()
                 return
             }
 
@@ -432,6 +433,7 @@ struct ARPlacementView: UIViewRepresentable {
         }
 
         private func addPlaneVisualization(for plane: ARPlaneAnchor) {
+            guard confirmedPlaneID == nil else { return }
             guard let arView, planeVisualizations[plane.identifier] == nil else { return }
             let anchorEntity = AnchorEntity(.anchor(identifier: plane.identifier))
             let modelEntity = makePlaneEntity(for: plane)
@@ -445,6 +447,9 @@ struct ARPlacementView: UIViewRepresentable {
         }
 
         private func updatePlaneVisualization(for plane: ARPlaneAnchor) {
+            if let confirmedPlaneID, plane.identifier != confirmedPlaneID {
+                return
+            }
             guard let viz = planeVisualizations[plane.identifier] else {
                 addPlaneVisualization(for: plane)
                 return
@@ -460,7 +465,9 @@ struct ARPlacementView: UIViewRepresentable {
         private func removePlaneVisualization(for id: UUID) {
             guard let viz = planeVisualizations.removeValue(forKey: id) else { return }
             viz.anchorEntity.removeFromParent()
-            if confirmedPlaneID == id { confirmedPlaneID = nil }
+            if confirmedPlaneID == id && collectibleAnchor == nil {
+                confirmedPlaneID = nil
+            }
         }
 
         private func removeAllPlaneVisualizations() {
@@ -471,9 +478,23 @@ struct ARPlacementView: UIViewRepresentable {
             confirmedPlaneID = nil
         }
 
+        private func prunePlaneVisualizationsToConfirmed() {
+            guard let confirmedPlaneID else { return }
+            let strayIDs = planeVisualizations.keys.filter { $0 != confirmedPlaneID }
+            for id in strayIDs {
+                if let viz = planeVisualizations.removeValue(forKey: id) {
+                    viz.anchorEntity.removeFromParent()
+                }
+            }
+        }
+
         // MARK: - ARSessionDelegate
 
         func session(_ session: ARSession, didAdd anchors: [ARAnchor]) {
+            guard confirmedPlaneID == nil else {
+                prunePlaneVisualizationsToConfirmed()
+                return
+            }
             for anchor in anchors {
                 guard let plane = anchor as? ARPlaneAnchor,
                       plane.alignment == .horizontal else { continue }
@@ -482,6 +503,10 @@ struct ARPlacementView: UIViewRepresentable {
         }
 
         func session(_ session: ARSession, didUpdate anchors: [ARAnchor]) {
+            guard confirmedPlaneID == nil else {
+                prunePlaneVisualizationsToConfirmed()
+                return
+            }
             for anchor in anchors {
                 guard let plane = anchor as? ARPlaneAnchor,
                       plane.alignment == .horizontal else { continue }
