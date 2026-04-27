@@ -404,6 +404,10 @@ struct ARPlacementView: UIViewRepresentable {
         private var latestModelAssetName: String?
         private var latestRarity: String?
 
+        private enum PlacementMode { case firstStable, viewportPrioritized }
+        private var placementMode: PlacementMode = .firstStable
+        private var excludedPlaneID: UUID?
+
         private let planeStableDuration: CFTimeInterval = 1.0
         private let minPlaneArea: Float = 0.1   // m²
 
@@ -481,6 +485,58 @@ struct ARPlacementView: UIViewRepresentable {
                 axis: SIMD3<Float>(0, 1, 0)
             )
             return Transform(scale: .one, rotation: rotation, translation: center)
+        }
+
+        private func worldCorners(of plane: ARPlaneAnchor) -> [SIMD3<Float>] {
+            let halfW = plane.planeExtent.width / 2
+            let halfD = plane.planeExtent.height / 2
+            let localOffsets: [SIMD3<Float>] = [
+                SIMD3<Float>(-halfW, 0,  halfD),
+                SIMD3<Float>( halfW, 0,  halfD),
+                SIMD3<Float>( halfW, 0, -halfD),
+                SIMD3<Float>(-halfW, 0, -halfD)
+            ]
+            let yRot = simd_quatf(
+                angle: plane.planeExtent.rotationOnYAxis,
+                axis: SIMD3<Float>(0, 1, 0)
+            )
+            return localOffsets.map { offset in
+                let local = plane.center + yRot.act(offset)
+                let world4 = plane.transform * SIMD4<Float>(local.x, local.y, local.z, 1)
+                return SIMD3<Float>(world4.x, world4.y, world4.z)
+            }
+        }
+
+        private func viewportProminenceScore(for plane: ARPlaneAnchor, in arView: ARView) -> Float? {
+            var projected: [CGPoint] = []
+            projected.reserveCapacity(4)
+            for corner in worldCorners(of: plane) {
+                guard let p = arView.project(corner) else { return nil }
+                projected.append(p)
+            }
+
+            let centroid = CGPoint(
+                x: (projected[0].x + projected[1].x + projected[2].x + projected[3].x) / 4,
+                y: (projected[0].y + projected[1].y + projected[2].y + projected[3].y) / 4
+            )
+
+            var signedArea: CGFloat = 0
+            for i in 0..<4 {
+                let a = projected[i]
+                let b = projected[(i + 1) % 4]
+                signedArea += a.x * b.y - b.x * a.y
+            }
+            let area = Float(abs(signedArea) / 2)
+
+            let bounds = arView.bounds
+            let screenCenter = CGPoint(x: bounds.midX, y: bounds.midY)
+            let dx = centroid.x - screenCenter.x
+            let dy = centroid.y - screenCenter.y
+            let distance = Float(sqrt(dx * dx + dy * dy))
+            let halfDiagonal = Float(max(bounds.width, bounds.height) / 2)
+            let normalizedDistance = halfDiagonal > 0 ? distance / halfDiagonal : 0
+
+            return area / (1 + 2 * normalizedDistance)
         }
 
         private func makePlaneEntity(for plane: ARPlaneAnchor) -> ModelEntity {
@@ -570,6 +626,8 @@ struct ARPlacementView: UIViewRepresentable {
         }
 
         private func resetPlacement() {
+            excludedPlaneID = confirmedPlaneID
+            placementMode = .viewportPrioritized
             removeCollectible()
             removeAllPlaneVisualizations()
         }
@@ -619,7 +677,7 @@ struct ARPlacementView: UIViewRepresentable {
                 }
             }
 
-            let candidate = planeVisualizations
+            let stableCandidates = planeVisualizations
                 .compactMap { (id, viz) -> (ARPlaneAnchor, PlaneVisualization)? in
                     guard let plane = currentPlanes[id] else { return nil }
                     let age = now - viz.firstSeen
@@ -627,9 +685,27 @@ struct ARPlacementView: UIViewRepresentable {
                     guard age >= planeStableDuration, area >= minPlaneArea else { return nil }
                     return (plane, viz)
                 }
-                .min { $0.1.firstSeen < $1.1.firstSeen }
 
-            if let (plane, viz) = candidate {
+            let chosen: (ARPlaneAnchor, PlaneVisualization)?
+            switch placementMode {
+            case .firstStable:
+                chosen = stableCandidates.min { $0.1.firstSeen < $1.1.firstSeen }
+            case .viewportPrioritized:
+                if let arView {
+                    chosen = stableCandidates
+                        .filter { $0.0.identifier != excludedPlaneID }
+                        .compactMap { (plane, viz) -> (ARPlaneAnchor, PlaneVisualization, Float)? in
+                            guard let score = viewportProminenceScore(for: plane, in: arView) else { return nil }
+                            return (plane, viz, score)
+                        }
+                        .max { $0.2 < $1.2 }
+                        .map { ($0.0, $0.1) }
+                } else {
+                    chosen = nil
+                }
+            }
+
+            if let (plane, viz) = chosen {
                 confirmPlane(plane, viz: viz)
             }
         }
@@ -651,6 +727,9 @@ struct ARPlacementView: UIViewRepresentable {
             localTranslation.columns.3 = SIMD4<Float>(plane.center.x, 0, plane.center.z, 1)
             let world = matrix_multiply(plane.transform, localTranslation)
             placeCollectible(at: world, modelAssetName: modelAssetName)
+
+            placementMode = .firstStable
+            excludedPlaneID = nil
 
             DispatchQueue.main.async { [weak self] in
                 self?.didConfirmPlacement?()
