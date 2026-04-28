@@ -48,6 +48,7 @@ enum AppConstants {
         static let readyToSpawnConfidenceThreshold: Double = 0.72
 
         static let proximityRadiusMeters: CLLocationDistance = 10
+        static let proximityNearRadiusMeters: CLLocationDistance = 50
         static let proximityDebounceMilliseconds: Int = 500
         static let defaultCollectiblePoints: Int = 50
         static let collectTapSoundID: UInt32 = 1104

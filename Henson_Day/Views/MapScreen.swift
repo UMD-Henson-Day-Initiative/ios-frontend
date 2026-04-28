@@ -13,6 +13,7 @@ import MapKit
 import CoreLocation
 import RealityKit
 import Combine
+import UIKit
 
 struct MapScreen: View {
     private let isInTestingMode = AppConstants.Debug.isMapTeleportTestingEnabled
@@ -27,6 +28,22 @@ struct MapScreen: View {
     @State private var arPin: PinEntity?
     @State private var teleportPreloadCancellable: AnyCancellable?
     @State private var arLaunchTask: Task<Void, Never>?
+    @StateObject private var proximityMonitor = ProximityMonitor()
+    @State private var destinationPin: PinEntity?
+    @State private var hasCelebratedBattleReady = false
+
+    private var distanceToDestination: CLLocationDistance? {
+        guard let pin = destinationPin else { return nil }
+        return straightLineDistance(
+            from: locationManager.effectiveCoordinate,
+            to: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)
+        )
+    }
+
+    private var liveDestinationPin: PinEntity? {
+        guard let pin = destinationPin else { return nil }
+        return modelController.pins.first(where: { $0.id == pin.id })
+    }
 
     private var collectedCollectibleNames: Set<String> {
         Set(modelController.collectionItemsForCurrentUser().map(\.collectibleName))
@@ -64,6 +81,26 @@ struct MapScreen: View {
                     Spacer()
                 }
 
+                if !isDetailPresented,
+                   let nearbyPin = proximityMonitor.nearbyPin,
+                   let distance = proximityMonitor.distanceToNearbyPin,
+                   let collectibleName = proximityMonitor.nearbyCollectibleName,
+                   let rarity = proximityMonitor.nearbyCollectibleRarity,
+                   let tier = proximityMonitor.tier {
+                    ProximityAlertBanner(
+                        pin: nearbyPin,
+                        distance: distance,
+                        collectibleName: collectibleName,
+                        rarity: rarity,
+                        tier: tier,
+                        onViewAR: { launchARExperience(for: nearbyPin) },
+                        onDismiss: { proximityMonitor.dismiss(pin: nearbyPin) }
+                    )
+                    .padding(.bottom, 8)
+                    .animation(.spring(response: 0.45, dampingFraction: 0.85), value: proximityMonitor.nearbyPin?.id)
+                    .animation(.easeInOut(duration: 0.25), value: proximityMonitor.tier)
+                }
+
                 if let selectedPin, isDetailPresented {
                     let hasEventDetails = modelController.scheduleEventID(matchingPinTitle: selectedPin.title) != nil
 
@@ -88,7 +125,11 @@ struct MapScreen: View {
                         },
                         onDetails: hasEventDetails ? {
                             openEventDetails(for: selectedPin)
-                        } : nil
+                        } : nil,
+                        onSetDestination: {
+                            toggleDestination(selectedPin)
+                        },
+                        isCurrentDestination: destinationPin?.id == selectedPin.id
                     )
                 }
             }
@@ -106,6 +147,22 @@ struct MapScreen: View {
             modelController.refreshPublishedData()
             cameraPermission.requestIfNeeded()
             locationManager.requestWhenInUseAuthorizationIfNeeded()
+            proximityMonitor.startMonitoring(locationManager: locationManager, modelController: modelController)
+        }
+        .onChange(of: destinationPin?.id) { _, _ in
+            hasCelebratedBattleReady = false
+        }
+        .onChange(of: distanceToDestination) { _, newDistance in
+            guard let d = newDistance else {
+                hasCelebratedBattleReady = false
+                return
+            }
+            if d > AppConstants.AR.collectibleProximityMeters {
+                hasCelebratedBattleReady = false
+            } else if !hasCelebratedBattleReady {
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                hasCelebratedBattleReady = true
+            }
         }
         .onDisappear {
             arLaunchTask?.cancel()
@@ -147,7 +204,16 @@ struct MapScreen: View {
                         }
                 }
                 Spacer()
+                if let pin = liveDestinationPin {
+                    DestinationTrackerPill(
+                        pin: pin,
+                        distanceMeters: distanceToDestination,
+                        onClear: { destinationPin = nil }
+                    )
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
             }
+            .animation(.spring(response: 0.4, dampingFraction: 0.85), value: liveDestinationPin?.id)
 
 
             if isInTestingMode {
@@ -274,6 +340,14 @@ struct MapScreen: View {
         arLaunchTask?.cancel()
         teleportPreloadCancellable?.cancel()
         teleportPreloadCancellable = nil
+    }
+
+    private func toggleDestination(_ pin: PinEntity) {
+        if destinationPin?.id == pin.id {
+            destinationPin = nil
+        } else {
+            destinationPin = pin
+        }
     }
 }
 

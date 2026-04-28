@@ -4,6 +4,7 @@ import ARKit
 import Combine
 import AudioToolbox
 import UIKit
+import CoreHaptics
 
 /// Full-screen AR experience for finding and collecting a muppet at a map pin.
 ///
@@ -393,6 +394,7 @@ struct ARPlacementView: UIViewRepresentable {
         private var haloEntity: ModelEntity?
         private var loadCancellable: AnyCancellable?
         private var isCollectAnimationRunning = false
+        private var hapticEngine: CHHapticEngine?
 
         private struct PlaneVisualization {
             let anchorEntity: AnchorEntity
@@ -427,6 +429,11 @@ struct ARPlacementView: UIViewRepresentable {
 
             let configuration = ARWorldTrackingConfiguration()
             configuration.planeDetection = [.horizontal]
+            // Match Camera-app 1x FOV by using the full wide-sensor format
+            // (default ARKit format uses a tighter sensor crop).
+            if let wideFormat = ARWorldTrackingConfiguration.recommendedVideoFormatForHighResolutionFrameCapturing {
+                configuration.videoFormat = wideFormat
+            }
             arView.session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
 
             let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
@@ -771,6 +778,7 @@ struct ARPlacementView: UIViewRepresentable {
 
             collectibleAnchor?.addChild(entity)
             collectibleEntity = entity
+            playPlacementPulse()
         }
 
         private func installFallbackEntity() {
@@ -783,6 +791,50 @@ struct ARPlacementView: UIViewRepresentable {
             installTapTarget(for: fallbackEntity)
             collectibleAnchor?.addChild(fallbackEntity)
             collectibleEntity = fallbackEntity
+            playPlacementPulse()
+        }
+
+        // Smooth ~0.5s swell — a wave that crests then fades, not a tap.
+        // Falls back to .success notification on simulator / non-haptic devices.
+        private func playPlacementPulse() {
+            guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else {
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                return
+            }
+            do {
+                if hapticEngine == nil {
+                    let engine = try CHHapticEngine()
+                    engine.isAutoShutdownEnabled = true
+                    engine.resetHandler = { [weak engine] in
+                        try? engine?.start()
+                    }
+                    hapticEngine = engine
+                }
+                try hapticEngine?.start()
+
+                let intensity = CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.9)
+                let sharpness = CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.3)
+                let event = CHHapticEvent(
+                    eventType: .hapticContinuous,
+                    parameters: [intensity, sharpness],
+                    relativeTime: 0,
+                    duration: 0.5
+                )
+                let intensityCurve = CHHapticParameterCurve(
+                    parameterID: .hapticIntensityControl,
+                    controlPoints: [
+                        .init(relativeTime: 0.0, value: 0.0),
+                        .init(relativeTime: 0.08, value: 1.0),
+                        .init(relativeTime: 0.5, value: 0.0)
+                    ],
+                    relativeTime: 0
+                )
+                let pattern = try CHHapticPattern(events: [event], parameterCurves: [intensityCurve])
+                let player = try hapticEngine?.makePlayer(with: pattern)
+                try player?.start(atTime: 0)
+            } catch {
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            }
         }
 
         private func installTapTarget(for entity: Entity) {
