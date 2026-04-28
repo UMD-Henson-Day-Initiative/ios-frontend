@@ -406,7 +406,7 @@ private struct CodexUnlockRevealOverlay: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 20) {
-                Text("New Codex Entry")
+                Text("Added to Inventory")
                     .font(.system(size: 15, weight: .black))
                     .foregroundStyle(.white.opacity(0.92))
                     .tracking(0.8)
