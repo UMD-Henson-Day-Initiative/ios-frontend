@@ -252,3 +252,34 @@ private extension Color {
         )
     }
 }
+
+// MARK: - StatTile
+
+private struct StatTile: View {
+    let value: String
+    let label: String
+    let icon: String
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(DS.Color.primary)
+            Text(value)
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .foregroundStyle(DS.Color.campusNight)
+            Text(label.uppercased())
+                .font(.system(size: 9, weight: .bold, design: .rounded))
+                .tracking(0.8)
+                .foregroundStyle(DS.Color.neutral)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 14)
+        .background(DS.Color.primaryTint)
+        .overlay(
+            RoundedRectangle(cornerRadius: DS.Radius.statTile)
+                .strokeBorder(DS.Color.gold, lineWidth: 1.5)
+        )
+        .cornerRadius(DS.Radius.statTile)
+    }
+}
