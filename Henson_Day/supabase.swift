@@ -27,8 +27,8 @@ enum SupabaseClientConfigurationError: LocalizedError {
 }
 
 private enum SupabaseConfiguration {
-  static let urlKey = "SUPABASE_URL"
-  static let publishableKey = "SUPABASE_PUBLISHABLE_KEY"
+  static let urlKey = "https://yfiaypkcoasjtcnhxzpm.supabase.co"
+  static let publishableKey = "sb_publishable_7riDB8U-7TPpjYyghTkejA_dFHrPRKJ"
   static let defaultURL = "https://yfiaypkcoasjtcnhxzpm.supabase.co"
   static let defaultPublishableKey = "sb_publishable_7riDB8U-7TPpjYyghTkejA_dFHrPRKJ"
 
