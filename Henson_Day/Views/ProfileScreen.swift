@@ -6,6 +6,7 @@ import SwiftUI
 struct ProfileScreen: View {
     @EnvironmentObject private var modelController: ModelController
     @EnvironmentObject private var tabRouter: TabRouter
+    @EnvironmentObject private var authController: AuthController
     @State private var progressAppeared = false
     @State private var showSignOutAlert = false
 
@@ -106,7 +107,9 @@ struct ProfileScreen: View {
             }
             .alert("Sign out of HensonDay?", isPresented: $showSignOutAlert) {
                 Button("Cancel", role: .cancel) {}
-                Button("Sign Out", role: .destructive) {}
+                Button("Sign Out", role: .destructive) {
+                    Task { await authController.signOut() }
+                }
             }
         }
     }
@@ -361,6 +364,7 @@ private extension Color {
     ProfileScreen()
         .environmentObject(ModelController())
         .environmentObject(TabRouter())
+    .environmentObject(AuthController())
 }
 
 // MARK: - Profile toolbar button (shared across all screens)

@@ -7,6 +7,7 @@ struct HensonDayApp: App {
     private let environment: AppEnvironment
     @StateObject private var modelController = ModelController()
     @StateObject private var tabRouter = TabRouter()
+    @StateObject private var authController = AuthController()
     @StateObject private var cameraPermission = CameraPermissionManager()
     @StateObject private var worldAnchorManager = WorldAnchorManager()
     @StateObject private var locationManager = LocationPermissionManager()
@@ -31,13 +32,17 @@ struct HensonDayApp: App {
 
     var body: some Scene {
         WindowGroup {
-            LaunchGateView()
+            AppEntryView()
                 .environmentObject(modelController)
                 .environmentObject(tabRouter)
+                .environmentObject(authController)
                 .environmentObject(cameraPermission)
                 .environmentObject(worldAnchorManager)
                 .environmentObject(locationManager)
                 .environmentObject(contentService)
+                .onOpenURL { url in
+                    Task { await authController.handleOpenURL(url) }
+                }
                 .task {
                     await contentService.loadFromBundle()
 
