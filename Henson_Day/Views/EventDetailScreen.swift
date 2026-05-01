@@ -226,28 +226,13 @@ struct EventDetailScreen: View {
                         }
 
                         // Action buttons
-                        HStack(spacing: 12) {
-                            Button {
-                                openMapsForEvent(event)
-                            } label: {
-                                Label("Get Directions", systemImage: "location.north.line")
-                            }
-                            .buttonStyle(.bordered)
-                            .frame(maxWidth: .infinity)
-
-                            if collectible != nil {
-                                NavigationLink {
-                                    ARCaptureScreen(collectibleId: collectible!.id)
-                                } label: {
-                                    Label("Capture Now", systemImage: "sparkles")
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .tint(Color("UMDRed"))
-                                .frame(maxWidth: .infinity)
-                                .disabled(!availability.isActive)
-                                .opacity(availability.isActive ? 1.0 : 0.45)
-                            }
+                        Button {
+                            openMapsForEvent(event)
+                        } label: {
+                            Label("Get Directions", systemImage: "location.north.line")
                         }
+                        .buttonStyle(.bordered)
+                        .frame(maxWidth: .infinity)
                         .padding(.top, 4)
                     }
                     .padding(.horizontal)

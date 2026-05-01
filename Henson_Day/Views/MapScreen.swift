@@ -11,13 +11,9 @@
 import SwiftUI
 import MapKit
 import CoreLocation
-import RealityKit
-import Combine
 import UIKit
 
 struct MapScreen: View {
-    private let isInTestingMode = AppConstants.Debug.isMapTeleportTestingEnabled
-
     @EnvironmentObject private var modelController: ModelController
     @EnvironmentObject private var tabRouter: TabRouter
     @EnvironmentObject private var cameraPermission: CameraPermissionManager
@@ -26,7 +22,6 @@ struct MapScreen: View {
     @State private var selectedPinID: UUID?
     @State private var isDetailPresented = false
     @State private var arPin: PinEntity?
-    @State private var teleportPreloadCancellable: AnyCancellable?
     @State private var arLaunchTask: Task<Void, Never>?
     @StateObject private var proximityMonitor = ProximityMonitor()
     @State private var destinationPin: PinEntity?
@@ -166,7 +161,6 @@ struct MapScreen: View {
         }
         .onDisappear {
             arLaunchTask?.cancel()
-            teleportPreloadCancellable?.cancel()
         }
     }
 
@@ -215,17 +209,15 @@ struct MapScreen: View {
             }
             .animation(.spring(response: 0.4, dampingFraction: 0.85), value: liveDestinationPin?.id)
 
-
-            if isInTestingMode {
+            if AppConstants.Debug.isMapTeleportTestingEnabled {
                 HStack {
-                    Button("Teleport to a collectible location") {
-                        teleportToUncollectedCollectiblePin()
-                    }
-                    .font(.caption.weight(.semibold))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(.thinMaterial)
-                    .clipShape(Capsule())
+                    Label("Test mode • AR unlocked anywhere", systemImage: "wrench.and.screwdriver.fill")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(.thinMaterial)
+                        .clipShape(Capsule())
                     Spacer()
                 }
             }
@@ -288,45 +280,6 @@ struct MapScreen: View {
         tabRouter.selectedTab = .schedule
     }
 
-    private func teleportToUncollectedCollectiblePin() {
-        // Testing flow: always teleport to the Stadium Stomper pin and then
-        // open the collectible experience after a short delay.
-        let targetPin = modelController.pins.first { pin in
-            modelController.collectibles(for: pin).contains {
-                $0.name == "Stadium Stomper" || $0.id == "c1"
-            }
-        }
-
-        guard let targetPin else {
-            return
-        }
-
-        let targetCoordinate = CLLocationCoordinate2D(
-            latitude: targetPin.latitude,
-            longitude: targetPin.longitude
-        )
-        locationManager.setTestingCoordinate(targetCoordinate)
-
-        let modelAssetName = modelAssetNameForPin(targetPin) ?? "robot"
-
-        arLaunchTask?.cancel()
-        teleportPreloadCancellable?.cancel()
-
-        // Preload before launching AR so model decode doesn't block initial collectible screen.
-        teleportPreloadCancellable = Entity.loadModelAsync(named: modelAssetName)
-            // Thread-safety measure: ensure model completion handlers dispatch to MainThread
-            .receive(on: DispatchQueue.main)
-            .sink(receiveCompletion: { _ in
-                teleportPreloadCancellable = nil
-            }, receiveValue: { _ in })
-
-        launchARExperience(for: targetPin)
-    }
-
-    private func modelAssetNameForPin(_ pin: PinEntity) -> String? {
-        return modelController.preferredCollectible(for: pin)?.modelFileName
-    }
-
     private func launchARExperience(for pin: PinEntity) {
         arLaunchTask?.cancel()
         arLaunchTask = Task { @MainActor in
@@ -338,8 +291,6 @@ struct MapScreen: View {
 
     private func finishARLaunchCleanup() {
         arLaunchTask?.cancel()
-        teleportPreloadCancellable?.cancel()
-        teleportPreloadCancellable = nil
     }
 
     private func toggleDestination(_ pin: PinEntity) {

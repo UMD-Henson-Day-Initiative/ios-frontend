@@ -111,7 +111,6 @@ struct HensonBottomBar: View {
         .environmentObject(ModelController())
         .environmentObject(TabRouter())
         .environmentObject(CameraPermissionManager())
-        .environmentObject(WorldAnchorManager())
         .environmentObject(LocationPermissionManager())
 }
 

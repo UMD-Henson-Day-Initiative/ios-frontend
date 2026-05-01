@@ -59,7 +59,7 @@ enum AppConstants {
         static let collectibleTapTargetRadius: Float = 0.12
 
         static let minScale: Float = 0.0003
-        static let maxScale: Float = 0.006
+        static let maxScale: Float = 0.05
         static let fallbackUniformScale: Float = 0.0021
 
         enum ModelSizing {
@@ -70,9 +70,10 @@ enum AppConstants {
             static let targetDimensionByModelAsset: [String: Float] = [ // They start huuuuuge
                 "toy_car": 0.07,
                 "hummingbird_anim": 0.07,
-                "robot": 0.125,
+                "robot": 25.0   ,
                 "toy_biplane_realistic": 0.125,
-                "slide": 0.10
+                "slide": 0.10,
+                "jimhensonpuppet": 25.0
             ]
         }
     }

@@ -499,6 +499,10 @@ struct PinDetailBottomSheet: View {
     }
 
     private func checkProximityAndLaunchAR() {
+        if AppConstants.Debug.isMapTeleportTestingEnabled {
+            onPrimaryAction()
+            return
+        }
         guard let userLoc = userLocation else {
             onPrimaryAction()
             return
