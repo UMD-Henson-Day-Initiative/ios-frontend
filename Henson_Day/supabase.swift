@@ -1,5 +1,13 @@
 import Foundation
+#if canImport(Supabase)
 import Supabase
+#endif
+
+#if canImport(Supabase)
+typealias SupabaseAppClient = SupabaseClient
+#else
+struct SupabaseAppClient {}
+#endif
 
 enum SupabaseClientConfigurationError: LocalizedError {
   case missingURL
@@ -19,8 +27,8 @@ enum SupabaseClientConfigurationError: LocalizedError {
 }
 
 private enum SupabaseConfiguration {
-  static let urlKey = "https://yfiaypkcoasjtcnhxzpm.supabase.co"
-  static let publishableKey = "sb_publishable_7riDB8U-7TPpjYyghTkejA_dFHrPRKJ"
+  static let urlKey = "SUPABASE_URL"
+  static let publishableKey = "SUPABASE_PUBLISHABLE_KEY"
 
   static func value(for key: String, bundle: Bundle = .main, processInfo: ProcessInfo = .processInfo) -> String? {
     if let envValue = processInfo.environment[key], !envValue.isEmpty {
@@ -35,7 +43,8 @@ private enum SupabaseConfiguration {
     return trimmed.isEmpty ? nil : trimmed
   }
 
-  static func clientResult(bundle: Bundle = .main, processInfo: ProcessInfo = .processInfo) -> Result<SupabaseClient, Error> {
+  static func clientResult(bundle: Bundle = .main, processInfo: ProcessInfo = .processInfo) -> Result<SupabaseAppClient, Error> {
+#if canImport(Supabase)
     guard let urlString = value(for: urlKey, bundle: bundle, processInfo: processInfo) else {
       return .failure(SupabaseClientConfigurationError.missingURL)
     }
@@ -49,25 +58,32 @@ private enum SupabaseConfiguration {
     }
 
     return .success(SupabaseClient(supabaseURL: url, supabaseKey: key))
+#else
+    return .failure(SupabaseClientConfigurationError.missingPublishableKey)
+#endif
   }
 }
 
 enum SupabaseClientProvider {
-  static let configuredClient: Result<SupabaseClient, Error> = SupabaseConfiguration.clientResult()
+  static let configuredClient: Result<SupabaseAppClient, Error> = SupabaseConfiguration.clientResult()
 
-  static var client: SupabaseClient? {
+  static var client: SupabaseAppClient? {
     try? configuredClient.get()
   }
 
   static var configurationErrorDescription: String? {
+#if canImport(Supabase)
     switch configuredClient {
     case .success:
       return nil
     case .failure(let error):
       return (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
     }
+#else
+    return "Supabase SDK is not installed. Add https://github.com/supabase/supabase-swift to the project packages."
+#endif
   }
 }
 
-let supabase: SupabaseClient? = SupabaseClientProvider.client
+let supabase: SupabaseAppClient? = SupabaseClientProvider.client
 

@@ -179,6 +179,8 @@ struct CollectiblesScreen: View {
     }
 }
 
+typealias CollectionScreen = CollectiblesScreen
+
 // MARK: - Bunting
 
 private struct BuntingView: View {

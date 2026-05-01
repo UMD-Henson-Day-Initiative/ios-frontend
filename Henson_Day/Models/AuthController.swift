@@ -1,15 +1,23 @@
 import Foundation
-import Supabase
 import Combine
+
+#if canImport(Supabase)
+import Supabase
+typealias AuthSession = Session
+typealias AuthClient = SupabaseClient
+#else
+struct AuthSession {}
+typealias AuthClient = SupabaseAppClient
+#endif
 
 @MainActor
 final class AuthController: ObservableObject {
-    @Published private(set) var session: Session?
+    @Published private(set) var session: AuthSession?
     @Published private(set) var isLoading = false
     @Published private(set) var infoMessage: String?
     @Published private(set) var errorMessage: String?
 
-    private let client: SupabaseClient?
+    private let client: AuthClient?
     private let redirectURL: URL?
     private var authListenerTask: Task<Void, Never>?
 
@@ -22,10 +30,10 @@ final class AuthController: ObservableObject {
     }
 
     init(
-        client: SupabaseClient? = supabase,
+        client: AuthClient? = nil,
         redirectURL: URL? = URL(string: "io.hensonday.app://login-callback")
     ) {
-        self.client = client
+        self.client = client ?? supabase
         self.redirectURL = redirectURL
 
         Task {
@@ -39,6 +47,7 @@ final class AuthController: ObservableObject {
     }
 
     func signInWithMagicLink(email: String) async {
+#if canImport(Supabase)
         guard let client else {
             errorMessage = configurationError ?? "Supabase is not configured yet."
             return
@@ -62,9 +71,13 @@ final class AuthController: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
         }
+#else
+        errorMessage = configurationError ?? "Supabase SDK is not installed in this target."
+#endif
     }
 
     func handleOpenURL(_ url: URL) async {
+#if canImport(Supabase)
         guard let client else {
             return
         }
@@ -77,9 +90,13 @@ final class AuthController: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
         }
+#else
+        _ = url
+#endif
     }
 
     func signOut() async {
+#if canImport(Supabase)
         guard let client else {
             return
         }
@@ -95,9 +112,14 @@ final class AuthController: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
         }
+#else
+        session = nil
+        errorMessage = configurationError ?? "Supabase SDK is not installed in this target."
+#endif
     }
 
     private func refreshSession() async {
+#if canImport(Supabase)
         guard let client else {
             return
         }
@@ -107,9 +129,13 @@ final class AuthController: ObservableObject {
         } catch {
             session = nil
         }
+#else
+        session = nil
+#endif
     }
 
     private func observeAuthStateChanges() async {
+#if canImport(Supabase)
         guard let client else {
             return
         }
@@ -124,5 +150,6 @@ final class AuthController: ObservableObject {
                 }
             }
         }
+#endif
     }
 }
