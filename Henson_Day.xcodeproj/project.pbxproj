@@ -23,6 +23,10 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXBuildFile section */
+		DBF0A0012FA5494A0011BC04 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = DBF0A0022FA5494A0011BC04 /* Supabase */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		788F72702F622FFE004EE753 /* Henson_Day.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Henson_Day.xcodeproj; sourceTree = "<group>"; };
 		DB43930D2F86EEE800948D85 /* Henson_Day.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Henson_Day.xcodeproj; sourceTree = "<group>"; };
@@ -55,6 +59,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DBF0A0012FA5494A0011BC04 /* Supabase in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -130,6 +135,7 @@
 			);
 			name = Henson_Day;
 			packageProductDependencies = (
+				DBF0A0022FA5494A0011BC04 /* Supabase */,
 			);
 			productName = Henson_Day;
 			productReference = DBB3AA5F2F52A0FD00F99705 /* Henson_Day.app */;
@@ -646,6 +652,14 @@
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		DBF0A0022FA5494A0011BC04 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DBDCD5172FA5494A0011BC04 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = DBB3AA572F52A0FD00F99705 /* Project object */;
 }

@@ -29,6 +29,8 @@ enum SupabaseClientConfigurationError: LocalizedError {
 private enum SupabaseConfiguration {
   static let urlKey = "SUPABASE_URL"
   static let publishableKey = "SUPABASE_PUBLISHABLE_KEY"
+  static let defaultURL = "https://yfiaypkcoasjtcnhxzpm.supabase.co"
+  static let defaultPublishableKey = "sb_publishable_7riDB8U-7TPpjYyghTkejA_dFHrPRKJ"
 
   static func value(for key: String, bundle: Bundle = .main, processInfo: ProcessInfo = .processInfo) -> String? {
     if let envValue = processInfo.environment[key], !envValue.isEmpty {
@@ -45,7 +47,8 @@ private enum SupabaseConfiguration {
 
   static func clientResult(bundle: Bundle = .main, processInfo: ProcessInfo = .processInfo) -> Result<SupabaseAppClient, Error> {
 #if canImport(Supabase)
-    guard let urlString = value(for: urlKey, bundle: bundle, processInfo: processInfo) else {
+    let urlString = value(for: urlKey, bundle: bundle, processInfo: processInfo) ?? defaultURL
+    guard !urlString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
       return .failure(SupabaseClientConfigurationError.missingURL)
     }
 
@@ -53,7 +56,8 @@ private enum SupabaseConfiguration {
       return .failure(SupabaseClientConfigurationError.invalidURL(urlString))
     }
 
-    guard let key = value(for: publishableKey, bundle: bundle, processInfo: processInfo) else {
+    let key = value(for: publishableKey, bundle: bundle, processInfo: processInfo) ?? defaultPublishableKey
+    guard !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
       return .failure(SupabaseClientConfigurationError.missingPublishableKey)
     }
 
