@@ -76,6 +76,56 @@ final class AuthController: ObservableObject {
 #endif
     }
 
+    func signInWithGoogle() async {
+#if canImport(Supabase)
+        guard let client else {
+            errorMessage = configurationError ?? "Supabase is not configured yet."
+            return
+        }
+
+        isLoading = true
+        errorMessage = nil
+        infoMessage = nil
+        defer { isLoading = false }
+
+        do {
+            _ = try await client.auth.signInWithOAuth(
+                provider: .google,
+                redirectTo: redirectURL
+            )
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+#else
+        errorMessage = configurationError ?? "Supabase SDK is not installed in this target."
+#endif
+    }
+
+    func signInWithApple() async {
+#if canImport(Supabase)
+        guard let client else {
+            errorMessage = configurationError ?? "Supabase is not configured yet."
+            return
+        }
+
+        isLoading = true
+        errorMessage = nil
+        infoMessage = nil
+        defer { isLoading = false }
+
+        do {
+            _ = try await client.auth.signInWithOAuth(
+                provider: .apple,
+                redirectTo: redirectURL
+            )
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+#else
+        errorMessage = configurationError ?? "Supabase SDK is not installed in this target."
+#endif
+    }
+
     func handleOpenURL(_ url: URL) async {
 #if canImport(Supabase)
         guard let client else {

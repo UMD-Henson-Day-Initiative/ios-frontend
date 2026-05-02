@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		DBF0A0012FA5494A0011BC04 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = DBF0A0022FA5494A0011BC04 /* Supabase */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		DBB3AA6D2F52A0FE00F99705 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -22,10 +26,6 @@
 			remoteInfo = Henson_Day;
 		};
 /* End PBXContainerItemProxy section */
-
-/* Begin PBXBuildFile section */
-		DBF0A0012FA5494A0011BC04 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = DBF0A0022FA5494A0011BC04 /* Supabase */; };
-/* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		788F72702F622FFE004EE753 /* Henson_Day.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Henson_Day.xcodeproj; sourceTree = "<group>"; };
@@ -440,7 +440,8 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = M2ZV7F454Z;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_HENSON_ANON_KEY = "";
 				INFOPLIST_KEY_HENSON_API_BASE_URL = "http://localhost:54321";
 				INFOPLIST_KEY_HENSON_CONTENT_VERSION = 1;
@@ -483,7 +484,8 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = M2ZV7F454Z;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Info.plist;
 				INFOPLIST_KEY_HENSON_ANON_KEY = "";
 				INFOPLIST_KEY_HENSON_API_BASE_URL = "https://api.hensonday.app";
 				INFOPLIST_KEY_HENSON_CONTENT_VERSION = 1;

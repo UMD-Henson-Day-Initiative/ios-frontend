@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>io.hensonday.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>io.hensonday.app</string>
+			</array>
+		</dict>
+	</array>
+	<key>HENSON_ANON_KEY</key>
+	<string>$(INFOPLIST_KEY_HENSON_ANON_KEY)</string>
+	<key>HENSON_API_BASE_URL</key>
+	<string>$(INFOPLIST_KEY_HENSON_API_BASE_URL)</string>
+	<key>HENSON_CONTENT_VERSION</key>
+	<string>$(INFOPLIST_KEY_HENSON_CONTENT_VERSION)</string>
+	<key>HENSON_ENABLE_ANALYTICS</key>
+	<string>$(INFOPLIST_KEY_HENSON_ENABLE_ANALYTICS)</string>
+	<key>HENSON_ENABLE_REMOTE_CAMPUS_CONFIG</key>
+	<string>$(INFOPLIST_KEY_HENSON_ENABLE_REMOTE_CAMPUS_CONFIG)</string>
+	<key>HENSON_ENVIRONMENT</key>
+	<string>$(INFOPLIST_KEY_HENSON_ENVIRONMENT)</string>
+	<key>HENSON_USE_REMOTE_CONTENT</key>
+	<string>$(INFOPLIST_KEY_HENSON_USE_REMOTE_CONTENT)</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Henson Day uses your camera for the AR collectible experience.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Henson Day uses your location to center the minimap and support location-based AR collectibles.</string>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+	<key>UILaunchScreen</key>
+	<dict/>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>arkit</string>
+	</array>
+	<key>UIStatusBarHidden</key>
+	<true/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+</dict>
+</plist>

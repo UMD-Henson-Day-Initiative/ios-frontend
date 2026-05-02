@@ -69,6 +69,54 @@ struct AuthView: View {
                     .clipShape(RoundedRectangle(cornerRadius: DS.Radius.button, style: .continuous))
                     .disabled(!canSubmit)
 
+                    HStack {
+                        Rectangle().frame(height: 1).foregroundStyle(DS.Color.neutral.opacity(0.3))
+                        Text("or").font(DS.Typography.caption).foregroundStyle(DS.Color.neutral)
+                        Rectangle().frame(height: 1).foregroundStyle(DS.Color.neutral.opacity(0.3))
+                    }
+
+                    Button {
+                        Task { await authController.signInWithApple() }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "apple.logo")
+                                .font(.system(size: 16, weight: .semibold))
+                            Text("Continue with Apple")
+                                .font(DS.Typography.title2)
+                                .frame(maxWidth: .infinity)
+                        }
+                        .padding(.vertical, 14)
+                        .padding(.horizontal, 16)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.white)
+                    .background(Color.black)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.button, style: .continuous))
+                    .disabled(authController.isLoading)
+
+                    Button {
+                        Task { await authController.signInWithGoogle() }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "globe")
+                                .font(.system(size: 16, weight: .semibold))
+                            Text("Continue with Google")
+                                .font(DS.Typography.title2)
+                                .frame(maxWidth: .infinity)
+                        }
+                        .padding(.vertical, 14)
+                        .padding(.horizontal, 16)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(DS.Color.campusNight)
+                    .background(DS.Color.surfaceElevated)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DS.Radius.button, style: .continuous)
+                            .stroke(DS.Color.neutral.opacity(0.3), lineWidth: 1)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.button, style: .continuous))
+                    .disabled(authController.isLoading)
+
                     if let infoMessage = authController.infoMessage, !infoMessage.isEmpty {
                         Text(infoMessage)
                             .font(DS.Typography.caption)
