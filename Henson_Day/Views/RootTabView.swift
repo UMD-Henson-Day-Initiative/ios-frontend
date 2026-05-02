@@ -117,3 +117,4 @@ struct HensonBottomBar: View {
         .environmentObject(LocationPermissionManager())
 }
 
+
