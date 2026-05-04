@@ -1,273 +1,368 @@
-// HomeScreen.swift
-// Henson_Day
+//  HomeScreen.swift
+//  Henson_Day
 
 import SwiftUI
+
+// MARK: - Theme Colors (matches CollectiblesScreen CT palette)
+
+private enum HT {
+    static let hensRed         = Color(red: 0.85, green: 0.15, blue: 0.15)
+    static let hensRedSoft     = Color(red: 0.95, green: 0.35, blue: 0.35)
+    static let hensRedPale     = Color(red: 1.00, green: 0.88, blue: 0.88)
+    static let hensYellow      = Color(red: 1.00, green: 0.85, blue: 0.20)
+    static let hensYellowSoft  = Color(red: 1.00, green: 0.93, blue: 0.55)
+    static let hensCream       = Color(red: 1.00, green: 1.00, blue: 1.00)
+    static let hensWarm        = Color(red: 0.99, green: 0.94, blue: 0.82)
+    static let hensMid         = Color(red: 0.97, green: 0.88, blue: 0.72)
+    static let hensDimText     = Color(red: 0.65, green: 0.30, blue: 0.25)
+    static let hensFadedText   = Color(red: 0.75, green: 0.45, blue: 0.35)
+    static let hensBackground  = Color(red: 1.00, green: 1.00, blue: 1.00)
+}
+
+// MARK: - Home Screen
 
 struct HomeScreen: View {
     @EnvironmentObject private var modelController: ModelController
     @EnvironmentObject private var tabRouter: TabRouter
 
-    @State private var heroAppeared = false
-    @State private var statsAppeared = false
-    @State private var cardsAppeared = false
-
-    private var nextEvent: DatabaseEvent? {
-        modelController.featuredEventForHome()
-    }
-
-    private var nextEventAvailability: PinAvailabilityState {
-        guard let nextEvent else { return .active }
-        return modelController.availabilityState(for: nextEvent)
-    }
-
-    private var collectedCount: Int {
-        modelController.currentUser?.collectedCount ?? 0
-    }
-
-    private var totalPoints: Int {
-        modelController.currentUser?.totalPoints ?? 0
-    }
-
-    private var userRank: Int {
-        let sorted = modelController.leaderboardUsers.sorted { $0.totalPoints > $1.totalPoints }
-        return (sorted.firstIndex { $0.isLocalUser } ?? 0) + 1
-    }
-
     var body: some View {
         NavigationStack {
             ZStack {
-                DS.Color.surface.ignoresSafeArea()
+                HT.hensBackground.ignoresSafeArea()
 
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: DS.Spacing.section) {
-                        // Hero stage card
-                        HeroStageCard(event: nextEvent, availability: nextEventAvailability)
-                            .padding(.horizontal, DS.Spacing.screenH)
-                            .offset(y: heroAppeared ? 0 : 20)
-                            .opacity(heroAppeared ? 1 : 0)
+                ScrollView {
+                    VStack(spacing: 0) {
 
-                        // Stat strip
-                        HomeStatStrip(
-                            collected: collectedCount,
-                            points: totalPoints,
-                            rank: userRank
-                        ) {
-                            tabRouter.selectedTab = .collection
-                        } onLeaderboard: {
-                            tabRouter.selectedTab = .leaderboard
-                        }
-                        .padding(.horizontal, DS.Spacing.screenH)
-                        .opacity(statsAppeared ? 1 : 0)
-                        .offset(y: statsAppeared ? 0 : 12)
+                        // Festive banner header
+                        HomeFestiveBannerView()
+                            .ignoresSafeArea(edges: .top)
 
-                        // How it works
-                        VStack(alignment: .leading, spacing: 14) {
-                            Text("How It Works")
-                                .font(DS.Typography.display)
-                                .foregroundStyle(DS.Color.campusNight)
-                                .padding(.horizontal, DS.Spacing.screenH)
+                        VStack(spacing: 20) {
 
-                            VStack(spacing: DS.Spacing.card) {
-                                ForEach(Array(tutorialCards.enumerated()), id: \.offset) { index, card in
-                                    TutorialCard(card: card)
-                                        .opacity(cardsAppeared ? 1 : 0)
-                                        .offset(y: cardsAppeared ? 0 : 14)
-                                        .animation(
-                                            .easeOut(duration: 0.32).delay(Double(index) * 0.07),
-                                            value: cardsAppeared
-                                        )
+                            // Featured Event Card
+                            HomeFeaturedEventCardView(
+                                week: 1,
+                                day: 3,
+                                title: "McKeldin Time Capsule Hunt",
+                                timeRange: "2:30 – 4:00 PM",
+                                location: "McKeldin Mall",
+                                onViewEvent: {
+                                    tabRouter.selectedTab = .map
                                 }
-                            }
-                            .padding(.horizontal, DS.Spacing.screenH)
-                        }
-                    }
-                    .padding(.top, DS.Spacing.card)
-                    .padding(.bottom, DS.Spacing.section)
-                }
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("HensonDay")
-                        .font(DS.Typography.title2)
-                        .foregroundStyle(DS.Color.primary)
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    ProfileToolbarButton()
-                }
-            }
-            .onAppear {
-                withAnimation(.spring(response: 0.5, dampingFraction: 0.75)) {
-                    heroAppeared = true
-                }
-                withAnimation(.easeOut(duration: 0.35).delay(0.12)) {
-                    statsAppeared = true
-                }
-                withAnimation(.easeOut(duration: 0.3).delay(0.22)) {
-                    cardsAppeared = true
-                }
-            }
-        }
-    }
+                            )
+                            .padding(.horizontal, 16)
 
-    private var tutorialCards: [TutorialCardModel] {
-        [
-            TutorialCardModel(
-                icon: "calendar",
-                color: DS.Color.primary,
-                tint: DS.Color.primaryTint,
-                title: "Schedule",
-                description: "Browse all Henson Week events, see what collectibles each one offers, and plan your week."
-            ),
-            TutorialCardModel(
-                icon: "map.fill",
-                color: DS.Color.Rarity.rare,
-                tint: DS.Color.Rarity.rareTint,
-                title: "Map",
-                description: "Explore campus, tap event pins to see what's happening nearby, and launch AR to capture muppets."
-            ),
-            TutorialCardModel(
-                icon: "star.square.fill",
-                color: DS.Color.gold,
-                tint: DS.Color.Rarity.legendaryTint,
-                title: "Collection",
-                description: "View every muppet you've collected, check their rarity, and track how many points you've earned."
-            ),
-            TutorialCardModel(
-                icon: "trophy.fill",
-                color: DS.Color.Rarity.epic,
-                tint: DS.Color.Rarity.epicTint,
-                title: "Leaderboard",
-                description: "See where you rank against the rest of campus across the full week."
-            ),
-        ]
+                            // Description card
+                            HomeDescriptionCardView()
+                                .padding(.horizontal, 16)
+
+                            // Stats row
+                            HomeStatsRowView(modelController: modelController)
+                                .padding(.horizontal, 16)
+
+                            HomeConfettiFooterView()
+                                .padding(.top, 8)
+                                .padding(.bottom, 16)
+                        }
+                        .padding(.top, 16)
+                    }
+                }
+                .ignoresSafeArea(edges: .top)
+            }
+            .navigationBarHidden(true)
+        }
     }
 }
 
-// MARK: - Hero stage card
+// MARK: - Festive Banner (matches CollectiblesScreen pattern)
 
-private struct HeroStageCard: View {
-    let event: DatabaseEvent?
-    let availability: PinAvailabilityState
+private struct HomeFestiveBannerView: View {
+    var body: some View {
+        VStack(spacing: 0) {
+            HomeBuntingView()
+
+            HomePennantTitleView(title: "Henson Week")
+
+            Text("University of Maryland · AR Scavenger Hunt")
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .tracking(0.5)
+                .foregroundStyle(HT.hensYellowSoft.opacity(0.9))
+                .padding(.bottom, 16)
+        }
+        .background(
+            LinearGradient(
+                colors: [HT.hensRed, HT.hensRed.opacity(0.85)],
+                startPoint: .top, endPoint: .bottom
+            )
+        )
+    }
+}
+
+private struct HomeBuntingView: View {
+    private let flagCount = 8
+    private let flagColors: [Color] = [
+        HT.hensRed, HT.hensYellow, HT.hensRedSoft, HT.hensYellowSoft,
+        HT.hensRed, HT.hensYellow, HT.hensRedSoft, HT.hensYellowSoft
+    ]
 
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            // Gradient background
-            LinearGradient(
-                colors: [DS.Color.primary, Color(red: 139/255, green: 0, blue: 0)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.heroCard, style: .continuous))
-            .frame(height: 200)
+        Canvas { context, size in
+            let spacing = size.width / CGFloat(flagCount)
+            let ropeY: CGFloat = 18
 
-            // Day badge top-left
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Henson Week")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.8))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(.white.opacity(0.2))
-                    .clipShape(Capsule())
+            var rope = Path()
+            rope.move(to: CGPoint(x: 0, y: ropeY))
+            rope.addLine(to: CGPoint(x: size.width, y: ropeY))
+            context.stroke(rope, with: .color(HT.hensYellow.opacity(0.9)), lineWidth: 1.5)
 
-                if let ev = event {
-                    AvailabilityChip(availability: availability)
+            for i in 0..<flagCount {
+                let cx = CGFloat(i) * spacing + spacing / 2
+                let topLeft  = CGPoint(x: cx - spacing * 0.38, y: ropeY)
+                let topRight = CGPoint(x: cx + spacing * 0.38, y: ropeY)
+                let tip      = CGPoint(x: cx, y: ropeY + 38)
 
-                    Text(ev.title)
-                        .font(DS.Typography.title1)
-                        .foregroundStyle(.white)
-                        .lineLimit(2)
+                var flag = Path()
+                flag.move(to: topLeft)
+                flag.addLine(to: topRight)
+                flag.addLine(to: tip)
+                flag.closeSubpath()
 
-                    Label("\(ev.timeRange) · \(ev.locationName)", systemImage: "clock")
-                        .font(DS.Typography.caption)
-                        .foregroundStyle(.white.opacity(0.8))
+                let color = flagColors[i % flagColors.count]
+                context.fill(flag, with: .color(color.opacity(0.92)))
+                context.stroke(flag, with: .color(HT.hensYellow.opacity(0.6)), lineWidth: 1)
+            }
+        }
+        .frame(height: 60)
+    }
+}
 
-                    if let message = availability.message {
-                        Text(message)
-                            .font(DS.Typography.caption)
-                            .foregroundStyle(.white.opacity(0.82))
-                            .lineLimit(2)
-                    }
-                } else {
-                    Text("Campus comes alive this week.")
-                        .font(DS.Typography.title1)
-                        .foregroundStyle(.white)
+private struct HomePennantTitleView: View {
+    let title: String
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Text(title.uppercased())
+                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .tracking(3)
+                .foregroundStyle(HT.hensYellow)
+
+            HStack(spacing: 5) {
+                ForEach(0..<7, id: \.self) { _ in
+                    Circle()
+                        .fill(HT.hensYellowSoft.opacity(0.80))
+                        .frame(width: 5, height: 5)
                 }
             }
-            .padding(DS.Spacing.cardPad)
+        }
+        .padding(.vertical, 14)
+        .padding(.horizontal, 32)
+        .background(HT.hensRed.opacity(0.85))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(HT.hensYellow, lineWidth: 2)
+        )
+        .cornerRadius(12)
+        .padding(.bottom, 8)
+    }
+}
+
+// MARK: - Featured Event Card
+
+private struct HomeFeaturedEventCardView: View {
+    let week: Int
+    let day: Int
+    let title: String
+    let timeRange: String
+    let location: String
+    let onViewEvent: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header band
+            HStack {
+                HStack(spacing: 5) {
+                    Image(systemName: "star.fill")
+                        .font(.system(size: 9, weight: .black))
+                        .foregroundStyle(HT.hensRed)
+                    Text("WEEK \(week) · DAY \(day) · FEATURED")
+                        .font(.system(size: 10, weight: .black, design: .rounded))
+                        .tracking(0.5)
+                        .foregroundStyle(HT.hensRed)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(HT.hensYellow)
+                .cornerRadius(8)
+
+                Spacer()
+            }
+            .padding(14)
+            .background(HT.hensRed)
+
+            // Content
+            VStack(alignment: .leading, spacing: 12) {
+                Text(title)
+                    .font(.system(size: 19, weight: .bold, design: .rounded))
+                    .foregroundStyle(HT.hensRed)
+
+                HStack(spacing: 14) {
+                    HStack(spacing: 5) {
+                        Image(systemName: "clock")
+                            .font(.system(size: 12))
+                            .foregroundStyle(HT.hensDimText)
+                        Text(timeRange)
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .foregroundStyle(HT.hensDimText)
+                    }
+                    HStack(spacing: 5) {
+                        Image(systemName: "mappin")
+                            .font(.system(size: 12))
+                            .foregroundStyle(HT.hensDimText)
+                        Text(location)
+                            .font(.system(size: 12, weight: .semibold, design: .rounded))
+                            .foregroundStyle(HT.hensDimText)
+                    }
+                }
+
+                Button(action: onViewEvent) {
+                    HStack(spacing: 6) {
+                        Text("View on Map")
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 11, weight: .bold))
+                    }
+                    .foregroundStyle(HT.hensCream)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 10)
+                    .background(HT.hensRed)
+                    .cornerRadius(10)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .strokeBorder(HT.hensYellow, lineWidth: 1.5)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(HT.hensWarm)
         }
         .frame(maxWidth: .infinity)
-        .shadow(color: DS.Color.primary.opacity(0.3), radius: 16, x: 0, y: 6)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(HT.hensYellow, lineWidth: 2)
+        )
+        .cornerRadius(14)
     }
 }
 
-// MARK: - Home stat strip
+// MARK: - Description Card
 
-private struct HomeStatStrip: View {
-    let collected: Int
-    let points: Int
-    let rank: Int
-    let onCollection: () -> Void
-    let onLeaderboard: () -> Void
+private struct HomeDescriptionCardView: View {
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "map.fill")
+                .foregroundStyle(HT.hensRed)
+                .font(.system(size: 18))
+                .padding(.top, 2)
+
+            Text("Join the AR scavenger hunt across UMD. Tap the Map icon to find events and AR characters. Collect creatures, earn points, and climb the leaderboard!")
+                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .foregroundStyle(HT.hensDimText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(14)
+        .background(HT.hensWarm)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(HT.hensYellow, lineWidth: 1.5)
+        )
+        .cornerRadius(12)
+    }
+}
+
+// MARK: - Stats Row
+
+private struct HomeStatsRowView: View {
+    let modelController: ModelController
 
     var body: some View {
-        HStack(spacing: DS.Spacing.card) {
-            Button(action: onCollection) {
-                StatTile(value: "\(collected)", label: "Collected", icon: "star.fill")
+        // Section label
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Image(systemName: "chart.bar.fill")
+                    .foregroundStyle(HT.hensRed)
+                Text("Your Stats")
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundStyle(HT.hensRed)
             }
-            .buttonStyle(.plain)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(HT.hensYellowSoft)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(HT.hensYellow, lineWidth: 1.5)
+            )
+            .cornerRadius(10)
 
-            StatTile(value: "\(points)", label: "Points", icon: "bolt.fill")
-
-            Button(action: onLeaderboard) {
-                StatTile(value: "#\(rank)", label: "Rank", icon: "chart.bar.fill")
+            HStack(spacing: 10) {
+                HomeStatChip(label: "Events",       value: "90+")
+                HomeStatChip(label: "Collectibles", value: "\(modelController.currentUser?.collectedCount ?? 0)")
+                HomeStatChip(label: "Days",         value: "7")
             }
-            .buttonStyle(.plain)
         }
     }
 }
 
-// MARK: - Tutorial card
-
-private struct TutorialCardModel {
-    let icon: String
-    let color: Color
-    let tint: Color
-    let title: String
-    let description: String
-}
-
-private struct TutorialCard: View {
-    let card: TutorialCardModel
+private struct HomeStatChip: View {
+    let label: String
+    let value: String
 
     var body: some View {
-        HStack(spacing: 16) {
-            Image(systemName: card.icon)
-                .font(.system(size: 24, weight: .semibold))
-                .foregroundStyle(card.color)
-                .frame(width: 52, height: 52)
-                .background(card.tint)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(card.title)
-                    .font(DS.Typography.title2)
-                    .foregroundStyle(DS.Color.campusNight)
-                Text(card.description)
-                    .font(DS.Typography.body)
-                    .foregroundStyle(DS.Color.neutral)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer(minLength: 0)
+        VStack(spacing: 2) {
+            Text(label.uppercased())
+                .font(.system(size: 9, weight: .bold, design: .rounded))
+                .tracking(1)
+                .foregroundStyle(HT.hensDimText)
+            Text(value)
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .foregroundStyle(HT.hensRed)
         }
-        .padding(DS.Spacing.cardPad)
-        .background(DS.Color.surfaceElevated)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.card, style: .continuous))
-        .shadow(color: DS.Shadow.cardColor, radius: DS.Shadow.cardRadius, x: DS.Shadow.cardX, y: DS.Shadow.cardY)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .background(HT.hensCream)
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(HT.hensYellow, lineWidth: 1.5)
+        )
+        .cornerRadius(10)
     }
 }
+
+// MARK: - Confetti Footer
+
+private struct HomeConfettiFooterView: View {
+    private let dots: [Color] = [
+        HT.hensRed, HT.hensYellow, HT.hensRedSoft, HT.hensYellowSoft,
+        HT.hensRed, HT.hensYellow, HT.hensRedSoft, HT.hensYellowSoft,
+        HT.hensRed, HT.hensYellow, HT.hensRedSoft, HT.hensYellowSoft
+    ]
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(0..<dots.count, id: \.self) { i in
+                Circle()
+                    .fill(dots[i].opacity(0.65))
+                    .frame(width: 8, height: 8)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(.horizontal, 10)
+    }
+}
+
+// MARK: - Preview
 
 #Preview {
     HomeScreen()

@@ -1,3 +1,13 @@
+//  MyCollectionSheet.swift
+//  Henson_Day
+//
+//  File Description: This file defines a SwiftUI sheet view that displays the user's collected
+//  AR items. If no items have been collected, an empty-state placeholder is
+//  shown with guidance on how to start collecting. Otherwise, the sheet presents
+//  a list of collected items including their name, rarity, and location found.
+//  The view is embedded in a NavigationStack and includes a close button for dismissal.
+//
+
 import SwiftUI
 
 struct MyCollectionSheet: View {

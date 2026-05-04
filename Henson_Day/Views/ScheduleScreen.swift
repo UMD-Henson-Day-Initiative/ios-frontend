@@ -1,9 +1,31 @@
+//  ScheduleScreen.swift
+//  Henson_Day
+//
+//  File Description: This file defines the ScheduleScreen view for the Henson Day
+//  app. It displays the event schedule for each day of the program, allows
+//  users to filter events by day, view event details in a full-screen
+//  modal, and interact with events by opening their location on the map,
+//  visiting the UMD website, or accessing collectibles in the collection.
+
 import SwiftUI
 
-// MARK: - Schedule screen
-/// Day-filtered event schedule. Renders a header with event count, a horizontal
-/// strip of day pills, and a vertical timeline of events for the selected day.
-/// Supports deep-linking from map pins via `TabRouter.focusedScheduleEventID`.
+// MARK: - Theme Colors (matches CollectiblesScreen CT palette)
+
+private enum ST {
+    static let hensRed         = Color(red: 0.85, green: 0.15, blue: 0.15)
+    static let hensRedSoft     = Color(red: 0.95, green: 0.35, blue: 0.35)
+    static let hensYellow      = Color(red: 1.00, green: 0.85, blue: 0.20)
+    static let hensYellowSoft  = Color(red: 1.00, green: 0.93, blue: 0.55)
+    static let hensCream       = Color(red: 1.00, green: 1.00, blue: 1.00)
+    static let hensWarm        = Color(red: 0.99, green: 0.94, blue: 0.82)
+    static let hensMid         = Color(red: 0.97, green: 0.88, blue: 0.72)
+    static let hensDimText     = Color(red: 0.65, green: 0.30, blue: 0.25)
+    static let hensFadedText   = Color(red: 0.75, green: 0.45, blue: 0.35)
+    static let hensBackground  = Color(red: 1.00, green: 1.00, blue: 1.00)
+}
+
+// MARK: - Schedule Screen
+
 struct ScheduleScreen: View {
     @EnvironmentObject private var modelController: ModelController
     @EnvironmentObject private var tabRouter: TabRouter
@@ -31,38 +53,47 @@ struct ScheduleScreen: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                ScheduleHeaderSection(
-                    selectedDay: selectedDay,
-                    totalEvents: totalVisibleEvents,
-                    viewingAddedOnly: viewingAddedOnly
-                )
-                ScheduleScopeToggle(viewingAddedOnly: $viewingAddedOnly)
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 8)
-                DayPillStrip(
-                    days: days.isEmpty ? Array(1...7) : days,
-                    selectedDay: selectedDay,
-                    events: modelController.scheduleEvents
-                ) { day in
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                        selectedDay = day
+            ZStack {
+                ST.hensBackground.ignoresSafeArea()
+
+                VStack(spacing: 0) {
+                    // Festive banner header
+                    ScheduleFestiveBannerView(
+                        selectedDay: selectedDay,
+                        totalEvents: totalVisibleEvents,
+                        viewingAddedOnly: viewingAddedOnly
+                    )
+                    .ignoresSafeArea(edges: .top)
+
+                    // Scope toggle
+                    ScheduleScopeToggleView(viewingAddedOnly: $viewingAddedOnly)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(ST.hensBackground)
+
+                    // Day pill strip
+                    ScheduleDayPillStrip(
+                        days: days.isEmpty ? Array(1...7) : days,
+                        selectedDay: selectedDay,
+                        events: modelController.scheduleEvents
+                    ) { day in
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                            selectedDay = day
+                        }
                     }
-                }
-                Divider().background(Color(hex: "#EAEAEE"))
-                TimelineEventList(
-                    sections: daySections,
-                    onTap: { selectedEvent = $0 }
-                )
-            }
-            .background(Color(hex: "#F2F2F0").ignoresSafeArea())
-            .navigationTitle("Schedule")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    ProfileToolbarButton()
+                    .background(ST.hensBackground)
+
+                    Divider()
+                        .background(ST.hensYellow)
+
+                    // Timeline
+                    ScheduleTimelineEventList(
+                        sections: daySections,
+                        onTap: { selectedEvent = $0 }
+                    )
                 }
             }
+            .navigationBarHidden(true)
             .fullScreenCover(item: $selectedEvent) { event in
                 ScheduleEventDetailFullScreen(
                     event: event,
@@ -92,132 +123,172 @@ struct ScheduleScreen: View {
     }
 }
 
-// MARK: - Header section
+// MARK: - Festive Banner
 
-private struct ScheduleHeaderSection: View {
+private struct ScheduleFestiveBannerView: View {
     let selectedDay: Int
     let totalEvents: Int
     let viewingAddedOnly: Bool
 
-    private var weekProgress: Double { Double(selectedDay - 1) / 6.0 }
     private var eventsToday: Int { max(1, totalEvents / 7) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .lastTextBaseline) {
-                Spacer()
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text("Day \(selectedDay) of 7")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(Color(hex: "#3D3D42"))
-                    Text(viewingAddedOnly ? "\(totalEvents) saved events" : "\(eventsToday) events today")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Color(hex: "#8A8A92"))
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 6)
-            .padding(.bottom, 10)
+        VStack(spacing: 0) {
+            ScheduleBuntingView()
 
-            WeekProgressBar(progress: weekProgress, selectedDay: selectedDay)
-                .padding(.horizontal, 20)
-                .padding(.bottom, 14)
+            SchedulePennantTitleView(title: "Schedule")
+                .padding(.top, 8)
+
+            HStack(spacing: 10) {
+                ScheduleStatChip(label: "Day",    value: "\(selectedDay) of 7")
+                ScheduleStatChip(label: "Events", value: viewingAddedOnly ? "\(totalEvents) saved" : "\(eventsToday) today")
+                ScheduleStatChip(label: "Week",   value: "1 of 1")
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 18)
         }
-        .background(Color(hex: "#F2F2F0"))
     }
 }
 
-private struct ScheduleScopeToggle: View {
+private struct ScheduleBuntingView: View {
+    private let flagCount = 8
+    private let flagColors: [Color] = [
+        ST.hensRed, ST.hensYellow, ST.hensRedSoft, ST.hensYellowSoft,
+        ST.hensRed, ST.hensYellow, ST.hensRedSoft, ST.hensYellowSoft
+    ]
+
+    var body: some View {
+        Canvas { context, size in
+            let spacing = size.width / CGFloat(flagCount)
+            let ropeY: CGFloat = 18
+
+            var rope = Path()
+            rope.move(to: CGPoint(x: 0, y: ropeY))
+            rope.addLine(to: CGPoint(x: size.width, y: ropeY))
+            context.stroke(rope, with: .color(ST.hensYellow.opacity(0.9)), lineWidth: 1.5)
+
+            for i in 0..<flagCount {
+                let cx = CGFloat(i) * spacing + spacing / 2
+                let topLeft  = CGPoint(x: cx - spacing * 0.38, y: ropeY)
+                let topRight = CGPoint(x: cx + spacing * 0.38, y: ropeY)
+                let tip      = CGPoint(x: cx, y: ropeY + 38)
+
+                var flag = Path()
+                flag.move(to: topLeft)
+                flag.addLine(to: topRight)
+                flag.addLine(to: tip)
+                flag.closeSubpath()
+
+                let color = flagColors[i % flagColors.count]
+                context.fill(flag, with: .color(color.opacity(0.92)))
+                context.stroke(flag, with: .color(ST.hensYellow.opacity(0.6)), lineWidth: 1)
+            }
+        }
+        .frame(height: 60)
+        .background(ST.hensRed.opacity(0.85))
+    }
+}
+
+private struct SchedulePennantTitleView: View {
+    let title: String
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Text(title.uppercased())
+                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .tracking(3)
+                .foregroundStyle(ST.hensYellow)
+
+            HStack(spacing: 5) {
+                ForEach(0..<7, id: \.self) { _ in
+                    Circle()
+                        .fill(ST.hensYellowSoft.opacity(0.80))
+                        .frame(width: 5, height: 5)
+                }
+            }
+        }
+        .padding(.vertical, 14)
+        .padding(.horizontal, 32)
+        .background(ST.hensRed.opacity(0.85))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(ST.hensYellow, lineWidth: 2)
+        )
+        .cornerRadius(12)
+    }
+}
+
+private struct ScheduleStatChip: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        VStack(spacing: 2) {
+            Text(label.uppercased())
+                .font(.system(size: 9, weight: .bold, design: .rounded))
+                .tracking(1)
+                .foregroundStyle(ST.hensDimText)
+            Text(value)
+                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .foregroundStyle(ST.hensRed)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: 110)
+        .padding(.vertical, 8)
+        .background(ST.hensCream)
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(ST.hensYellow, lineWidth: 1.5)
+        )
+        .cornerRadius(10)
+    }
+}
+
+// MARK: - Scope Toggle
+
+private struct ScheduleScopeToggleView: View {
     @Binding var viewingAddedOnly: Bool
 
     var body: some View {
         HStack(spacing: 8) {
-            scopeButton(title: "All events", isSelected: !viewingAddedOnly) {
+            scopeButton(title: "All events", systemImage: "calendar", isSelected: !viewingAddedOnly) {
                 viewingAddedOnly = false
             }
-            scopeButton(title: "My plan", isSelected: viewingAddedOnly) {
+            scopeButton(title: "My plan", systemImage: "bookmark.fill", isSelected: viewingAddedOnly) {
                 viewingAddedOnly = true
             }
             Spacer()
         }
     }
 
-    private func scopeButton(title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+    private func scopeButton(title: String, systemImage: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(title)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(isSelected ? .white : Color(hex: "#3D3D42"))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(
-                    Capsule()
-                        .fill(isSelected ? DS.Color.primary : .white)
-                        .overlay(
-                            Capsule().strokeBorder(isSelected ? Color.clear : Color(hex: "#EAEAEE"), lineWidth: 1.5)
-                        )
-                )
+            HStack(spacing: 5) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 10, weight: .bold))
+                Text(title)
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+            }
+            .foregroundStyle(isSelected ? ST.hensCream : ST.hensRed)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(
+                Capsule()
+                    .fill(isSelected ? ST.hensRed : ST.hensWarm)
+                    .overlay(
+                        Capsule().strokeBorder(isSelected ? ST.hensYellow : ST.hensYellow.opacity(0.5), lineWidth: 1.5)
+                    )
+            )
         }
         .buttonStyle(.plain)
     }
 }
 
-// MARK: - Week progress bar
+// MARK: - Day Pill Strip
 
-private struct WeekProgressBar: View {
-    let progress: Double
-    let selectedDay: Int
-
-    var body: some View {
-        VStack(spacing: 5) {
-            HStack {
-                Text("Week progress")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Color(hex: "#8A8A92"))
-                    .textCase(.uppercase)
-                    .tracking(0.4)
-                Spacer()
-                Text("\(selectedDay - 1) attended \u{00B7} 4 pts/event")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Color(hex: "#8A8A92"))
-                    .textCase(.uppercase)
-                    .tracking(0.4)
-            }
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Color(hex: "#EAEAEE")).frame(height: 4)
-                    // Tick marks
-                    HStack(spacing: 0) {
-                        ForEach(0..<7, id: \.self) { i in
-                            if i > 0 { Rectangle().fill(Color(hex: "#F2F2F0")).frame(width: 1.5, height: 4) }
-                            if i < 6 { Spacer() }
-                        }
-                    }.frame(height: 4)
-                    // Fill
-                    let w = geo.size.width * max(0, min(1, progress))
-                    Capsule()
-                        .fill(LinearGradient(colors: [DS.Color.primary, Color(hex: "#FF4060")],
-                                             startPoint: .leading, endPoint: .trailing))
-                        .frame(width: w, height: 4)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.8), value: progress)
-                    if progress > 0 {
-                        Circle()
-                            .fill(DS.Color.primary)
-                            .frame(width: 8, height: 8)
-                            .shadow(color: DS.Color.primary.opacity(0.5), radius: 4)
-                            .offset(x: max(0, w - 4))
-                            .animation(.spring(response: 0.5, dampingFraction: 0.8), value: progress)
-                    }
-                }
-                .frame(height: 8)
-            }
-            .frame(height: 8)
-        }
-    }
-}
-
-// MARK: - Day pill strip
-
-private struct DayPillStrip: View {
+private struct ScheduleDayPillStrip: View {
     let days: [Int]
     let selectedDay: Int
     let events: [DatabaseEvent]
@@ -227,21 +298,20 @@ private struct DayPillStrip: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
                 ForEach(days, id: \.self) { day in
-                    DayPill(
+                    ScheduleDayPill(
                         day: day,
                         isActive: day == selectedDay,
                         hasEvents: events.contains { $0.dayNumber == day }
                     ) { onSelect(day) }
                 }
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, 16)
         }
-        .padding(.vertical, 12)
-        .background(Color(hex: "#F2F2F0"))
+        .padding(.vertical, 10)
     }
 }
 
-private struct DayPill: View {
+private struct ScheduleDayPill: View {
     let day: Int
     let isActive: Bool
     let hasEvents: Bool
@@ -263,17 +333,17 @@ private struct DayPill: View {
         Button(action: onTap) {
             VStack(spacing: 2) {
                 Text(dowLabel)
-                    .font(.system(size: 9, weight: .bold)).tracking(0.7)
-                    .foregroundStyle(isActive ? Color.white.opacity(0.7) : Color(hex: "#8A8A92"))
+                    .font(.system(size: 9, weight: .bold, design: .rounded)).tracking(0.7)
+                    .foregroundStyle(isActive ? ST.hensYellowSoft : ST.hensDimText)
                 Text(dayNumber)
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(isActive ? .white : Color(hex: "#141418"))
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .foregroundStyle(isActive ? ST.hensYellow : ST.hensRed)
                 HStack(spacing: 3) {
                     ForEach(0..<3, id: \.self) { i in
                         Circle()
                             .fill(i == 0 && hasEvents
-                                  ? (isActive ? Color.white : DS.Color.primary)
-                                  : (isActive ? Color.white.opacity(0.4) : Color(hex: "#C8C8D0")))
+                                  ? (isActive ? ST.hensYellow : ST.hensRed)
+                                  : (isActive ? ST.hensYellowSoft.opacity(0.4) : ST.hensMid))
                             .frame(width: 4, height: 4)
                     }
                 }
@@ -281,19 +351,18 @@ private struct DayPill: View {
             .padding(.horizontal, 14).padding(.vertical, 8).frame(minWidth: 52)
             .background(
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(isActive ? DS.Color.primary : .white)
+                    .fill(isActive ? ST.hensRed : ST.hensWarm)
                     .overlay(RoundedRectangle(cornerRadius: 14)
-                        .strokeBorder(isActive ? Color.clear : Color(hex: "#EAEAEE"), lineWidth: 1.5))
+                        .strokeBorder(isActive ? ST.hensYellow : ST.hensYellow.opacity(0.5), lineWidth: 1.5))
             )
-            .shadow(color: isActive ? DS.Color.primary.opacity(0.35) : .clear, radius: 6, x: 0, y: 3)
         }
         .buttonStyle(.plain)
     }
 }
 
-// MARK: - Timeline event list
+// MARK: - Timeline Event List
 
-private struct TimelineEventList: View {
+private struct ScheduleTimelineEventList: View {
     let sections: [ScheduleEventSection]
     let onTap: (DatabaseEvent) -> Void
 
@@ -301,29 +370,31 @@ private struct TimelineEventList: View {
         if sections.allSatisfy({ $0.items.isEmpty }) {
             VStack(spacing: 12) {
                 Image(systemName: "calendar.badge.exclamationmark")
-                    .font(.system(size: 36)).foregroundStyle(DS.Color.primary.opacity(0.4))
-                Text("No events this day").font(DS.Typography.title2)
+                    .font(.system(size: 36)).foregroundStyle(ST.hensRed.opacity(0.4))
+                Text("No events this day")
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundStyle(ST.hensRed)
                 Text("Pick another day to see what's happening.")
-                    .font(DS.Typography.body).foregroundStyle(DS.Color.neutral)
+                    .font(.system(size: 13, design: .rounded))
+                    .foregroundStyle(ST.hensDimText)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity).padding(.vertical, 60)
         } else {
             ScrollView {
                 VStack(spacing: 0) {
                     ForEach(sections) { section in
+                        // Section header band
                         HStack(spacing: 8) {
-                            if section.showsPulse { LiveDot(color: section.labelColor) }
+                            if section.showsPulse { ScheduleLiveDot(color: section.labelColor) }
                             Text(section.label)
-                                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                                .foregroundStyle(section.labelColor)
+                                .font(.system(size: 10, weight: .bold, design: .rounded))
+                                .foregroundStyle(section.showsPulse ? section.labelColor : ST.hensRed)
                                 .tracking(1.0).textCase(.uppercase)
                             Rectangle()
-                                .fill(section.showsPulse
-                                      ? section.labelColor.opacity(0.2)
-                                      : Color(hex: "#EAEAEE"))
+                                .fill(ST.hensYellow.opacity(0.4))
                                 .frame(height: 1)
                         }
-                        .padding(.horizontal, 20).padding(.top, 10).padding(.bottom, 4)
+                        .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 4)
 
                         ForEach(Array(section.items.enumerated()), id: \.element.id) { idx, presentation in
                             ScheduleTimelineRow(
@@ -341,7 +412,7 @@ private struct TimelineEventList: View {
     }
 }
 
-private struct LiveDot: View {
+private struct ScheduleLiveDot: View {
     let color: Color
     @State private var pulse = false
     var body: some View {
@@ -351,7 +422,7 @@ private struct LiveDot: View {
     }
 }
 
-// MARK: - Timeline row
+// MARK: - Timeline Row
 
 private struct ScheduleTimelineRow: View {
     @EnvironmentObject private var modelController: ModelController
@@ -370,11 +441,11 @@ private struct ScheduleTimelineRow: View {
 
     private var dotColor: Color {
         switch presentation.status {
-        case .active:   return Color(hex: "#2DB37A")
-        case .ended:    return Color(hex: "#8A8A92")
-        case .featured: return Color(hex: "#E8A800")
-        case .upcoming: return Color(hex: "#FF6B00")
-        case .unavailable: return Color(hex: "#C8C8D0")
+        case .active:      return Color(red: 0.17, green: 0.70, blue: 0.47)
+        case .ended:       return ST.hensFadedText
+        case .featured:    return ST.hensYellow
+        case .upcoming:    return ST.hensRedSoft
+        case .unavailable: return ST.hensMid
         }
     }
 
@@ -385,34 +456,34 @@ private struct ScheduleTimelineRow: View {
                 VStack(alignment: .trailing, spacing: 0) {
                     Text(timeComponents.hour)
                         .font(.system(size: 12, weight: .medium, design: .monospaced))
-                        .foregroundStyle(Color(hex: "#3D3D42"))
+                        .foregroundStyle(ST.hensDimText)
                     Text(timeComponents.rest)
                         .font(.system(size: 10, weight: .regular, design: .monospaced))
-                        .foregroundStyle(Color(hex: "#8A8A92"))
+                        .foregroundStyle(ST.hensFadedText)
                 }
                 .frame(width: 48, alignment: .trailing).padding(.top, 14).padding(.trailing, 10)
 
                 // Gutter
                 VStack(alignment: .center, spacing: 0) {
                     ZStack {
-                        Circle().fill(Color.white).frame(width: 9, height: 9)
+                        Circle().fill(ST.hensWarm).frame(width: 9, height: 9)
                         Circle().fill(dotColor).frame(width: 7, height: 7)
                     }
                     .padding(.top, 14)
                     if !isLast {
                         Rectangle()
-                            .fill(presentation.status == .active ? Color(hex: "#2DB37A").opacity(0.2) : Color(hex: "#EAEAEE"))
+                            .fill(ST.hensYellow.opacity(0.35))
                             .frame(width: 1.5).frame(maxHeight: .infinity)
                     }
                 }
                 .frame(width: 20)
 
                 // Card
-                EventTimelineCard(
+                ScheduleEventTimelineCard(
                     presentation: presentation,
                     onToggleAdded: { modelController.toggleEventAddedToSchedule(presentation.event) }
                 )
-                    .padding(.leading, 8).padding(.vertical, 4).padding(.trailing, 20)
+                    .padding(.leading, 8).padding(.vertical, 4).padding(.trailing, 16)
             }
             .opacity(presentation.status == .ended || presentation.status == .unavailable ? 0.6 : 1.0)
         }
@@ -420,52 +491,47 @@ private struct ScheduleTimelineRow: View {
     }
 }
 
-// MARK: - Event timeline card
+// MARK: - Event Timeline Card
 
-private struct EventTimelineCard: View {
+private struct ScheduleEventTimelineCard: View {
     let presentation: ScheduleEventPresentation
     let onToggleAdded: () -> Void
 
-    @ViewBuilder private var bg: some View {
-        if presentation.status == .featured {
-            LinearGradient(colors: [Color(hex: "#FFFCF0"), Color(hex: "#FFF7DC")],
-                           startPoint: .topLeading, endPoint: .bottomTrailing)
-        } else {
-            Color.white
+    private var borderColor: Color {
+        switch presentation.status {
+        case .active:   return Color(red: 0.17, green: 0.70, blue: 0.47).opacity(0.35)
+        case .featured: return ST.hensYellow.opacity(0.5)
+        case .upcoming: return ST.hensRedSoft.opacity(0.3)
+        default:        return ST.hensYellow.opacity(0.4)
         }
     }
 
-    private var borderColor: Color {
-        switch presentation.status {
-        case .active:   return Color(hex: "#2DB37A").opacity(0.25)
-        case .featured: return Color(hex: "#E8A800").opacity(0.25)
-        case .upcoming: return Color(hex: "#FF6B00").opacity(0.18)
-        default:        return Color.clear
-        }
+    private var bgColor: Color {
+        presentation.status == .featured ? ST.hensWarm : ST.hensCream
     }
 
     var body: some View {
         HStack(spacing: 0) {
             // Rarity stripe
             Rectangle()
-                .fill(presentation.collectible != nil ? presentation.collectible!.rarity.rarityColor() : Color(hex: "#C8C8D0"))
+                .fill(presentation.collectible != nil ? presentation.collectible!.rarity.rarityColor() : ST.hensMid)
                 .frame(width: 3)
-                .clipShape(.rect(topLeadingRadius: 14, bottomLeadingRadius: 14))
+                .clipShape(.rect(topLeadingRadius: 12, bottomLeadingRadius: 12))
 
-            EventCardInner(presentation: presentation, onToggleAdded: onToggleAdded)
+            ScheduleEventCardInner(presentation: presentation, onToggleAdded: onToggleAdded)
 
             if let c = presentation.collectible {
                 CollectibleEventPreview(collectible: c)
             }
         }
-        .background(bg)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(borderColor, lineWidth: 1.5))
-        .shadow(color: Color.black.opacity(0.055), radius: 6, x: 0, y: 2)
+        .background(bgColor)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(borderColor, lineWidth: 1.5))
+        .shadow(color: ST.hensRed.opacity(0.06), radius: 6, x: 0, y: 2)
     }
 }
 
-private struct EventCardInner: View {
+private struct ScheduleEventCardInner: View {
     let presentation: ScheduleEventPresentation
     let onToggleAdded: () -> Void
 
@@ -477,9 +543,11 @@ private struct EventCardInner: View {
             HStack(spacing: 5) {
                 if presentation.status == .active {
                     HStack(spacing: 4) {
-                        LiveDot(color: Color(hex: "#2DB37A"))
-                        Text("Available now").font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(Color(hex: "#2DB37A")).tracking(0.4).textCase(.uppercase)
+                        ScheduleLiveDot(color: Color(red: 0.17, green: 0.70, blue: 0.47))
+                        Text("Available now")
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color(red: 0.17, green: 0.70, blue: 0.47))
+                            .tracking(0.4).textCase(.uppercase)
                     }
                 } else {
                     AvailabilityChip(availability: presentation.availability)
@@ -487,36 +555,44 @@ private struct EventCardInner: View {
                         RarityBadge(rarity: rarityStr)
                     } else {
                         Text(presentation.event.eventTypeName)
-                            .font(.system(size: 10, weight: .semibold)).foregroundStyle(Color(hex: "#8A8A92"))
+                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                            .foregroundStyle(ST.hensDimText)
                             .padding(.horizontal, 7).padding(.vertical, 3)
-                            .background(Color(hex: "#F0F0F3")).clipShape(RoundedRectangle(cornerRadius: 6))
+                            .background(ST.hensMid.opacity(0.5))
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
                 }
                 Spacer(minLength: 0)
-                ScheduleAddButton(isAdded: presentation.isAdded, onTap: onToggleAdded)
+                ScheduleAddButtonView(isAdded: presentation.isAdded, onTap: onToggleAdded)
             }
+
             Text(presentation.event.title)
-                .font(.system(size: 14, weight: .bold)).foregroundStyle(Color(hex: "#141418"))
+                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .foregroundStyle(ST.hensRed)
                 .lineLimit(2).multilineTextAlignment(.leading)
+
             HStack(spacing: 10) {
                 Label(presentation.event.locationName, systemImage: "mappin")
-                    .font(.system(size: 11, weight: .medium)).foregroundStyle(Color(hex: "#8A8A92")).lineLimit(1)
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(ST.hensDimText).lineLimit(1)
                 if pts > 0 {
                     Text("+\(pts) pts")
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundStyle(Color(hex: "#8A8A92"))
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .foregroundStyle(ST.hensRed)
                         .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(Color.black.opacity(0.04)).clipShape(RoundedRectangle(cornerRadius: 6))
+                        .background(ST.hensYellowSoft.opacity(0.5))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
                 }
             }
+
             if let message = presentation.availability.message {
                 Text(message)
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color(hex: "#8A8A92"))
-                    .lineLimit(2)
+                    .font(.system(size: 11, design: .rounded))
+                    .foregroundStyle(ST.hensDimText).lineLimit(2)
             } else if presentation.status == .active || presentation.status == .featured {
                 Text(presentation.event.description)
-                    .font(.system(size: 11)).foregroundStyle(Color(hex: "#8A8A92")).lineLimit(2)
+                    .font(.system(size: 11, design: .rounded))
+                    .foregroundStyle(ST.hensDimText).lineLimit(2)
             }
         }
         .padding(.horizontal, 10).padding(.vertical, 10)
@@ -524,79 +600,30 @@ private struct EventCardInner: View {
     }
 }
 
-private struct ScheduleAddButton: View {
+private struct ScheduleAddButtonView: View {
     let isAdded: Bool
     let onTap: () -> Void
+
     var body: some View {
-        Button { withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { onTap() } } label: {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { onTap() }
+        } label: {
             Text(isAdded ? "✓ Added" : "+ Add")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(isAdded ? .white : DS.Color.primary)
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(isAdded ? ST.hensRed : ST.hensCream)
                 .padding(.horizontal, 10).padding(.vertical, 4)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(isAdded ? Color(hex: "#2DB37A") : Color.clear)
+                        .fill(isAdded ? ST.hensYellow : ST.hensRed)
                         .overlay(RoundedRectangle(cornerRadius: 8)
-                            .strokeBorder(isAdded ? Color.clear : DS.Color.primary, lineWidth: 1.5))
+                            .strokeBorder(isAdded ? ST.hensRed.opacity(0.3) : ST.hensYellow, lineWidth: 1.2))
                 )
         }
         .buttonStyle(.plain)
     }
 }
 
-private struct CollectibleEventPreview: View {
-    let collectible: DatabaseCollectible
-    var body: some View {
-        VStack(spacing: 2) {
-            if let name = collectible.imageName {
-                AvifImage(named: name)
-                    .scaledToFill().frame(width: 32, height: 32)
-                    .clipShape(RoundedRectangle(cornerRadius: 9))
-            } else {
-                Text(collectible.emoji).font(.system(size: 18))
-                    .frame(width: 32, height: 32)
-                    .background(collectible.rarity.rarityTint())
-                    .clipShape(RoundedRectangle(cornerRadius: 9))
-            }
-            Text(collectible.name)
-                .font(.system(size: 8, weight: .semibold)).foregroundStyle(Color(hex: "#8A8A92"))
-                .lineLimit(1).frame(maxWidth: 40)
-        }
-        .padding(.trailing, 8).padding(.vertical, 6).frame(width: 44)
-    }
-}
-
-// MARK: - Rarity badge (shared)
-
-struct RarityBadge: View {
-    let rarity: String
-
-    var body: some View {
-        Label(rarity, systemImage: rarity.raritySymbol())
-            .font(DS.Typography.caption)
-            .foregroundStyle(rarity.rarityColor())
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(rarity.rarityTint())
-            .clipShape(Capsule())
-    }
-}
-
-struct AvailabilityChip: View {
-    let availability: PinAvailabilityState
-
-    var body: some View {
-        Label(availability.label, systemImage: availability.symbolName)
-            .font(.system(size: 10, weight: .semibold))
-            .foregroundStyle(availability.tint)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(availability.tint.opacity(0.12))
-            .clipShape(Capsule())
-    }
-}
-
-// MARK: - Event detail full-screen
+// MARK: - Event detail full-screen (re-themed)
 
 private struct ScheduleEventDetailFullScreen: View {
     @EnvironmentObject private var modelController: ModelController
@@ -617,60 +644,61 @@ private struct ScheduleEventDetailFullScreen: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color.white.ignoresSafeArea()
+                ST.hensBackground.ignoresSafeArea()
+
                 ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: DS.Spacing.card) {
+                    VStack(alignment: .leading, spacing: 12) {
                         if let c = collectible {
                             VStack(alignment: .leading, spacing: 10) {
                                 RarityBadge(rarity: c.rarity)
                                 Text(c.name)
-                                    .font(DS.Typography.title1)
-                                    .foregroundStyle(DS.Color.campusNight)
+                                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                                    .foregroundStyle(ST.hensRed)
                             }
-                            .padding(DS.Spacing.cardPad)
+                            .padding(14)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(DS.Color.surfaceElevated)
-                            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.card, style: .continuous))
-                            .shadow(color: DS.Shadow.cardColor, radius: DS.Shadow.cardRadius, x: DS.Shadow.cardX, y: DS.Shadow.cardY)
+                            .background(ST.hensWarm)
+                            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(ST.hensYellow, lineWidth: 1.5))
+                            .cornerRadius(12)
                         }
 
                         VStack(alignment: .leading, spacing: 12) {
                             AvailabilityChip(availability: availability)
 
                             Text(event.title)
-                                .font(DS.Typography.display)
-                                .foregroundStyle(DS.Color.campusNight)
+                                .font(.system(size: 22, weight: .bold, design: .rounded))
+                                .foregroundStyle(ST.hensRed)
 
                             VStack(alignment: .leading, spacing: 8) {
                                 Label(event.timeRange, systemImage: "clock")
-                                    .font(DS.Typography.body)
-                                    .foregroundStyle(DS.Color.neutral)
+                                    .font(.system(size: 14, design: .rounded))
+                                    .foregroundStyle(ST.hensDimText)
                                 Label(event.locationName, systemImage: "mappin")
-                                    .font(DS.Typography.body)
-                                    .foregroundStyle(DS.Color.neutral)
+                                    .font(.system(size: 14, design: .rounded))
+                                    .foregroundStyle(ST.hensDimText)
                             }
 
                             Text(event.description)
-                                .font(DS.Typography.body)
-                                .foregroundStyle(DS.Color.campusNight.opacity(0.75))
+                                .font(.system(size: 14, design: .rounded))
+                                .foregroundStyle(ST.hensDimText.opacity(0.85))
 
                             if let message = availability.message {
                                 Text(message)
-                                    .font(DS.Typography.body)
-                                    .foregroundStyle(DS.Color.neutral)
+                                    .font(.system(size: 14, design: .rounded))
+                                    .foregroundStyle(ST.hensDimText)
                             }
                         }
-                        .padding(DS.Spacing.cardPad)
+                        .padding(14)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(DS.Color.surfaceElevated)
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.card, style: .continuous))
-                        .shadow(color: DS.Shadow.cardColor, radius: DS.Shadow.cardRadius, x: DS.Shadow.cardX, y: DS.Shadow.cardY)
+                        .background(ST.hensWarm)
+                        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(ST.hensYellow, lineWidth: 1.5))
+                        .cornerRadius(12)
 
                         VStack(spacing: 10) {
-                            DetailActionButton(title: "Open on Map", systemImage: "map", action: onOpenMap)
-                            DetailActionButton(title: "Visit UMD Website", systemImage: "safari", action: onOpenWebsite)
+                            ScheduleDetailActionButton(title: "Open on Map",       systemImage: "map",              action: onOpenMap)
+                            ScheduleDetailActionButton(title: "Visit UMD Website", systemImage: "safari",           action: onOpenWebsite)
                             if collectible != nil {
-                                DetailActionButton(
+                                ScheduleDetailActionButton(
                                     title: availability.isActive ? "Go to Collection" : "Collection Unavailable",
                                     systemImage: availability.isActive ? "star.square.fill" : availability.symbolName,
                                     isEnabled: availability.isActive,
@@ -679,19 +707,22 @@ private struct ScheduleEventDetailFullScreen: View {
                             }
                         }
                     }
-                    .padding(DS.Spacing.screenH)
+                    .padding(16)
                 }
             }
             .navigationTitle(event.title)
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(ST.hensRed, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: onClose) {
                         Image(systemName: "xmark")
                             .font(.headline)
-                            .foregroundStyle(DS.Color.neutral)
+                            .foregroundStyle(ST.hensYellow)
                             .padding(8)
-                            .background(Color(UIColor.secondarySystemBackground))
+                            .background(Color.white.opacity(0.15))
                             .clipShape(Circle())
                     }
                 }
@@ -700,9 +731,7 @@ private struct ScheduleEventDetailFullScreen: View {
     }
 }
 
-// MARK: - Action button
-
-private struct DetailActionButton: View {
+private struct ScheduleDetailActionButton: View {
     let title: String
     let systemImage: String
     var isEnabled: Bool = true
@@ -711,20 +740,67 @@ private struct DetailActionButton: View {
     var body: some View {
         Button(action: action) {
             Label(title, systemImage: systemImage)
-                .font(DS.Typography.label)
-                .foregroundStyle(DS.Color.primary)
+                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .foregroundStyle(ST.hensRed)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(DS.Spacing.cardPad)
-                .background(DS.Color.surfaceElevated)
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.card, style: .continuous))
-                .shadow(color: DS.Shadow.cardColor, radius: 6, x: 0, y: 2)
+                .padding(14)
+                .background(ST.hensWarm)
+                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(ST.hensYellow, lineWidth: 1.5))
+                .cornerRadius(12)
         }
-            .disabled(!isEnabled)
-            .opacity(isEnabled ? 1.0 : 0.5)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1.0 : 0.5)
     }
 }
 
-// MARK: - AVIF image helper (shared with CollectionScreen)
+// MARK: - Shared: RarityBadge, AvailabilityChip, CollectibleEventPreview, AvifImage
+
+struct RarityBadge: View {
+    let rarity: String
+    var body: some View {
+        Label(rarity, systemImage: rarity.raritySymbol())
+            .font(.system(size: 11, weight: .bold, design: .rounded))
+            .foregroundStyle(rarity.rarityColor())
+            .padding(.horizontal, 10).padding(.vertical, 5)
+            .background(rarity.rarityTint())
+            .clipShape(Capsule())
+    }
+}
+
+struct AvailabilityChip: View {
+    let availability: PinAvailabilityState
+    var body: some View {
+        Label(availability.label, systemImage: availability.symbolName)
+            .font(.system(size: 10, weight: .semibold, design: .rounded))
+            .foregroundStyle(availability.tint)
+            .padding(.horizontal, 8).padding(.vertical, 4)
+            .background(availability.tint.opacity(0.12))
+            .clipShape(Capsule())
+    }
+}
+
+private struct CollectibleEventPreview: View {
+    let collectible: DatabaseCollectible
+    var body: some View {
+        VStack(spacing: 2) {
+            if let name = collectible.imageName {
+                AvifImage(named: name)
+                    .scaledToFill().frame(width: 32, height: 32)
+                    .clipShape(RoundedRectangle(cornerRadius: 9))
+            } else {
+                Text(collectible.emoji).font(.system(size: 18))
+                    .frame(width: 32, height: 32)
+                    .background(collectible.rarity.rarityTint())
+                    .clipShape(RoundedRectangle(cornerRadius: 9))
+            }
+            Text(collectible.name)
+                .font(.system(size: 8, weight: .semibold, design: .rounded))
+                .foregroundStyle(ST.hensDimText)
+                .lineLimit(1).frame(maxWidth: 40)
+        }
+        .padding(.trailing, 8).padding(.vertical, 6).frame(width: 44)
+    }
+}
 
 struct AvifImage: View {
     let named: String
@@ -734,7 +810,7 @@ struct AvifImage: View {
            let ui = UIImage(data: data) {
             Image(uiImage: ui).resizable()
         } else {
-            Color(hex: "#252A3E")
+            Color(red: 0.97, green: 0.88, blue: 0.72)
         }
     }
 }

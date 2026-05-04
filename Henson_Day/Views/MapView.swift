@@ -1,8 +1,3 @@
-//
-//  MapView.swift
-//  Henson_Day
-//  Created by Havish
-
 import SwiftUI
 import MapKit
 import CoreLocation
