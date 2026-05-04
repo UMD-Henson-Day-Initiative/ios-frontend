@@ -5,10 +5,13 @@ import UIKit
 
 @MainActor
 final class ProximityMonitor: ObservableObject {
+    enum ProximityTier { case outer, inner }
+
     @Published private(set) var nearbyPin: PinEntity?
     @Published private(set) var distanceToNearbyPin: Double?
     @Published private(set) var nearbyCollectibleRarity: String?
     @Published private(set) var nearbyCollectibleName: String?
+    @Published private(set) var tier: ProximityTier?
 
     private var locationManager: LocationPermissionManager?
     private var modelController: ModelController?
@@ -16,9 +19,11 @@ final class ProximityMonitor: ObservableObject {
     private var dismissedPinIDs = Set<UUID>()
     private var previousNearbyPinID: UUID?
 
-    private let proximityRadius: CLLocationDistance = AppConstants.AR.proximityRadiusMeters
+    private let outerRadius: CLLocationDistance = AppConstants.AR.proximityNearRadiusMeters
+    private let innerRadius: CLLocationDistance = AppConstants.AR.proximityRadiusMeters
 
     func startMonitoring(locationManager: LocationPermissionManager, modelController: ModelController) {
+        guard cancellables.isEmpty else { return }
         self.locationManager = locationManager
         self.modelController = modelController
 
@@ -38,6 +43,7 @@ final class ProximityMonitor: ObservableObject {
             distanceToNearbyPin = nil
             nearbyCollectibleRarity = nil
             nearbyCollectibleName = nil
+            tier = nil
         }
     }
 
@@ -56,7 +62,7 @@ final class ProximityMonitor: ObservableObject {
         for dismissedID in dismissedPinIDs {
             if let pin = arPins.first(where: { $0.id == dismissedID }) {
                 let pinLocation = CLLocation(latitude: pin.latitude, longitude: pin.longitude)
-                if userLocation.distance(from: pinLocation) > proximityRadius {
+                if userLocation.distance(from: pinLocation) > outerRadius {
                     dismissedPinIDs.remove(dismissedID)
                 }
             }
@@ -72,7 +78,7 @@ final class ProximityMonitor: ObservableObject {
 
             let pinLocation = CLLocation(latitude: pin.latitude, longitude: pin.longitude)
             let distance = userLocation.distance(from: pinLocation)
-            guard distance <= proximityRadius else { continue }
+            guard distance <= outerRadius else { continue }
 
             // Resolve collectible for this pin
             let candidates = modelController.collectibles(for: pin)
@@ -94,6 +100,7 @@ final class ProximityMonitor: ObservableObject {
             distanceToNearbyPin = closestDistance
             nearbyCollectibleRarity = collectible.rarity
             nearbyCollectibleName = collectible.name
+            tier = closestDistance <= innerRadius ? .inner : .outer
 
             // Haptic when transitioning from no nearby pin to a nearby pin
             if oldNearbyPinID == nil {
@@ -105,6 +112,7 @@ final class ProximityMonitor: ObservableObject {
             distanceToNearbyPin = nil
             nearbyCollectibleRarity = nil
             nearbyCollectibleName = nil
+            tier = nil
         }
     }
 }

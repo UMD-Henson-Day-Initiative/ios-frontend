@@ -9,6 +9,7 @@ import Foundation
 import CoreLocation
 import Combine
 import MapKit
+import AVFoundation
 
 @MainActor
 class LocationManager: NSObject, ObservableObject {
@@ -38,6 +39,33 @@ class LocationManager: NSObject, ObservableObject {
     func stopTracking() {
         manager.stopUpdatingLocation()
         manager.stopUpdatingHeading()
+    }
+}
+
+final class CameraPermissionManager: ObservableObject {
+    @Published private(set) var authorizationStatus: AVAuthorizationStatus
+
+    init() {
+        authorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
+    }
+
+    var isAuthorized: Bool {
+        authorizationStatus == .authorized
+    }
+
+    var isDeniedOrRestricted: Bool {
+        authorizationStatus == .denied || authorizationStatus == .restricted
+    }
+
+    func requestIfNeeded() {
+        let current = AVCaptureDevice.authorizationStatus(for: .video)
+        authorizationStatus = current
+        guard current == .notDetermined else { return }
+        AVCaptureDevice.requestAccess(for: .video) { [weak self] _ in
+            Task { @MainActor in
+                self?.authorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
+            }
+        }
     }
 }
 
