@@ -12,10 +12,10 @@ This is an Xcode project (no SPM Package.swift). Open `Henson_Day.xcodeproj` and
 
 ```bash
 # Build from command line
-xcodebuild -project Henson_Day.xcodeproj -scheme Henson_Day -destination 'platform=iOS Simulator,name=iPhone 16' build
+xcodebuild -project Henson_Day.xcodeproj -scheme Henson_Day -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' build
 
 # Run tests
-xcodebuild -project Henson_Day.xcodeproj -scheme Henson_Day -destination 'platform=iOS Simulator,name=iPhone 16' test
+xcodebuild -project Henson_Day.xcodeproj -scheme Henson_Day -destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' test
 ```
 
 Requires iOS device or simulator with camera and location capabilities. The app requests camera and location permissions on launch via `LaunchGateView`.

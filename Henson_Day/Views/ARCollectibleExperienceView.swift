@@ -11,32 +11,20 @@
 import SwiftUI
 import RealityKit
 import ARKit
-import CoreLocation
 import Combine
 import AudioToolbox
 import UIKit
-import QuartzCore
+import CoreHaptics
 
 /// Full-screen AR experience for finding and collecting a muppet at a map pin.
 ///
-/// **State machine flow:**
-/// 1. `tooFar` — User is outside spawn radius; shows distance and direction.
-/// 2. `detectSurface` / `waitingForSecondSurface` — User is close enough; AR session
-///    searches for a horizontal surface to place the collectible.
-/// 3. `placed` — Model is placed in the scene; user taps it to collect.
-/// 4. `collecting` → `captured` — Capture animation plays, points are awarded via
-///    `ModelController.captureCollectible(...)`, and the user is returned to the map.
-/// 5. `alreadyCollected` — User already owns this collectible; shown a message.
-/// 6. `noCollectiblesConfigured` — Pin has no collectible data; error state.
-///
-/// Teleport mode (DEBUG only) bypasses GPS proximity checks for testing.
+/// Flow: every detected horizontal plane gets a translucent white overlay; once one
+/// plane has been observed for `planeStableDuration` and exceeds `minPlaneArea`, it
+/// auto-confirms (turns translucent blue) and the muppet spawns at its center.
 struct ARCollectibleExperienceView: View {
-    /// Tracks the user's progression through the AR collectible flow.
     enum FlowState {
-        case tooFar
-        case waitingForSecondSurface
-        case guiding
-        case readyToSpawn
+        case searching
+        case confirming
         case placed
         case alreadyCollected
         case collecting
@@ -50,22 +38,14 @@ struct ARCollectibleExperienceView: View {
     @EnvironmentObject private var locationManager: LocationPermissionManager
     @Environment(\.dismiss) private var dismiss
 
-    @State private var flowState: FlowState = .tooFar
-    @State private var surfaceDetected = false
+    @State private var flowState: FlowState = .searching
     @State private var hasPlaced = false
+    @State private var hasDetectedPlane = false
     @State private var didTapCollectible = false
-    @State private var isWithinSpawnRadius = false
-    @State private var distanceMeters: Double?
     @State private var activeCollectible: DatabaseCollectible?
-    @State private var secondHorizontalSurfaceDetected = false
-    @State private var placementFallbackReady = false
-    @State private var placementReadiness: Double = 0
     @State private var pointsBurstProgress: CGFloat = 1
-    @State private var placementFallbackTask: Task<Void, Never>?
     @State private var collectFlowTask: Task<Void, Never>?
-
-    // Show nearby collectible state within 30m.
-    private let spawnRadiusMeters: CLLocationDistance = AppConstants.AR.spawnRadiusMeters
+    @State private var replaceToken = UUID()
 
     private var collectibleName: String {
         activeCollectible?.name ?? (pin.collectibleName ?? pin.title)
@@ -87,116 +67,53 @@ struct ARCollectibleExperienceView: View {
         modelController.currentUser?.totalPoints ?? 0
     }
 
-    private var formattedDistance: String {
-        guard let distanceMeters else { return "--" }
-        return "\(Int(distanceMeters.rounded())) m"
-    }
-
-    private var locationModeLabel: String {
-        locationManager.testingOverrideCoordinate == nil ? "LIVE" : "TESTING OVERRIDE"
-    }
-
-    private var debugCollectibleID: String {
-        activeCollectible.map { "ID: \($0.id)" } ?? "ID: none"
-    }
-
-    private var debugSpawnPath: String {
-        guard isTeleportFlow else { return "via: proximity" }
-        if secondHorizontalSurfaceDetected { return "via: 2nd surface" }
-        if placementFallbackReady { return "via: timed fallback" }
-        return "via: waiting…"
-    }
-
-    private var isTeleportFlow: Bool {
-        locationManager.testingOverrideCoordinate != nil
-    }
-
     private var alreadyCollected: Bool {
         if let activeCollectible {
             return modelController.isCollectibleUnlocked(id: activeCollectible.id, name: activeCollectible.name)
         }
-
         return modelController.hasCollectedCollectible(named: collectibleName)
     }
 
-    // Teleport flow: spawn only after second detected horizontal surface OR after 10 seconds.
-    private var teleportSpawnGateSatisfied: Bool {
-        !isTeleportFlow || secondHorizontalSurfaceDetected || placementFallbackReady
-    }
-
     private var canSpawnCollectible: Bool {
-        isWithinSpawnRadius && !alreadyCollected && activeCollectible != nil && teleportSpawnGateSatisfied
+        activeCollectible != nil && !alreadyCollected
     }
 
-    private var shouldForceSpawnWithoutSurface: Bool {
-        placementFallbackReady && !hasPlaced && placementReadiness < 1
+    private var isCapturing: Bool {
+        flowState == .collecting || flowState == .captured
+    }
+
+    private var shouldShowGuidanceCard: Bool {
+        switch flowState {
+        case .searching, .confirming, .alreadyCollected, .noCollectiblesConfigured:
+            return true
+        case .placed, .collecting, .captured:
+            return false
+        }
     }
 
     var body: some View {
         ZStack {
             ARPlacementView(
                 canSpawnCollectible: canSpawnCollectible,
-                shouldForceSpawnWithoutSurface: shouldForceSpawnWithoutSurface,
+                isCapturing: isCapturing,
                 modelAssetName: collectibleModelAssetName,
-                surfaceDetected: $surfaceDetected,
+                rarity: collectibleRarity,
+                replaceToken: replaceToken,
                 hasPlaced: $hasPlaced,
-                didTapCollectible: $didTapCollectible,
-                secondHorizontalSurfaceDetected: $secondHorizontalSurfaceDetected,
-                placementReadiness: $placementReadiness
+                hasDetectedPlane: $hasDetectedPlane,
+                didTapCollectible: $didTapCollectible
             )
             .ignoresSafeArea()
 
             VStack {
                 HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(collectibleName)
-                            .font(.headline.weight(.bold))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 7)
-                            .background(.black.opacity(0.55))
-                            .foregroundStyle(.white)
-                            .clipShape(Capsule())
-
-                        Text(locationModeLabel)
-                            .font(.caption2.weight(.bold))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 5)
-                            .background(.black.opacity(0.55))
-                            .foregroundStyle(.white)
-                            .clipShape(Capsule())
-
-                        Text("AR BETA")
-                            .font(.caption2.weight(.bold))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 5)
-                            .background(Color("UMDGold").opacity(0.88))
-                            .foregroundStyle(.black.opacity(0.82))
-                            .clipShape(Capsule())
-
-                        Text(debugCollectibleID)
-                            .font(.caption2)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 5)
-                            .background(.black.opacity(0.45))
-                            .foregroundStyle(.white.opacity(0.85))
-                            .clipShape(Capsule())
-
-                        Text(debugSpawnPath)
-                            .font(.caption2)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 5)
-                            .background(.black.opacity(0.45))
-                            .foregroundStyle(.white.opacity(0.85))
-                            .clipShape(Capsule())
-
-                        Text("dist: \(formattedDistance)")
-                            .font(.caption2)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 5)
-                            .background(.black.opacity(0.45))
-                            .foregroundStyle(.white.opacity(0.85))
-                            .clipShape(Capsule())
-                    }
+                    Text(collectibleName)
+                        .font(.headline.weight(.bold))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(.black.opacity(0.55))
+                        .foregroundStyle(.white)
+                        .clipShape(Capsule())
 
                     Spacer()
 
@@ -216,55 +133,33 @@ struct ARCollectibleExperienceView: View {
 
                 Spacer()
 
-                if flowState == .guiding || flowState == .readyToSpawn || flowState == .waitingForSecondSurface {
-                    guidanceOverlay
-                        .padding(.horizontal, 24)
+                if shouldShowGuidanceCard {
+                    overlayCard
+                        .padding(.horizontal)
+                        .padding(.bottom, 24)
+                } else if flowState == .placed {
+                    replaceButton
+                        .padding(.bottom, 24)
                 }
-
-                overlayCard
-                    .padding(.horizontal)
-                    .padding(.bottom, 24)
             }
 
-            if flowState == .collecting || flowState == .captured {
+            if isCapturing {
                 captureAnimationOverlay
                     .transition(.opacity.combined(with: .scale))
             }
         }
         .onAppear {
             chooseCollectibleForCurrentPin()
-            recalculateProximityAndFlow()
-
-            placementFallbackReady = false
-            placementFallbackTask?.cancel()
-            placementFallbackTask = Task { @MainActor in
-                let delay = isTeleportFlow
-                    ? AppConstants.AR.teleportFallbackDelaySeconds
-                    : AppConstants.AR.livePlacementFallbackDelaySeconds
-                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                guard !Task.isCancelled else { return }
-                placementFallbackReady = true
-                recalculateProximityAndFlow()
-            }
+            recalculateFlow()
         }
         .onDisappear {
-            placementFallbackTask?.cancel()
             collectFlowTask?.cancel()
         }
-        .onReceive(locationManager.$currentCoordinate.combineLatest(locationManager.$testingOverrideCoordinate)) { _ in
-            recalculateProximityAndFlow()
-        }
-        .onChange(of: surfaceDetected) { _, _ in
-            recalculateProximityAndFlow()
-        }
         .onChange(of: hasPlaced) { _, _ in
-            recalculateProximityAndFlow()
+            recalculateFlow()
         }
-        .onChange(of: secondHorizontalSurfaceDetected) { _, _ in
-            recalculateProximityAndFlow()
-        }
-        .onChange(of: placementReadiness) { _, _ in
-            recalculateProximityAndFlow()
+        .onChange(of: hasDetectedPlane) { _, _ in
+            recalculateFlow()
         }
         .onChange(of: didTapCollectible) { _, tapped in
             guard tapped, flowState == .placed, !alreadyCollected else { return }
@@ -279,45 +174,26 @@ struct ARCollectibleExperienceView: View {
             promptCard(
                 title: "No collectibles configured for this pin",
                 subtitle: "This pin does not currently map to any active collectible content."
-            ) {
-                EmptyView()
-            }
-        case .tooFar:
+            )
+        case .searching:
             promptCard(
-                title: "Move closer to unlock this collectible",
-                subtitle: "Current distance: \(formattedDistance). Get within \(Int(spawnRadiusMeters)) m of \(pin.title)."
-            ) {
-                EmptyView()
-            }
-        case .waitingForSecondSurface:
+                title: collectibleName,
+                subtitle: "Looking for a flat surface — pan your camera around the floor."
+            )
+        case .confirming:
             promptCard(
-                title: "Collectible nearby",
-                subtitle: "Teleport mode active. It appears on the second horizontal surface, or automatically after ~2 seconds."
-            ) {
-                EmptyView()
-            }
-        case .guiding:
-            promptCard(
-                title: "\(collectibleName) is nearby!",
-                subtitle: surfaceDetected
-                    ? "Hold steady on a clear patch of ground while the spirit scout locks in the spawn."
-                    : "Tilt toward the ground and follow the pep-rally guide markers to find a landing spot."
-            ) {
-                EmptyView()
-            }
-        case .readyToSpawn:
-            promptCard(
-                title: "Hold steady...",
-                subtitle: "Placement is nearly locked. Keep the guide centered for the collectible to appear."
-            ) {
-                EmptyView()
-            }
+                title: collectibleName,
+                subtitle: "Hold steady — locking onto a surface."
+            )
         case .placed:
-            promptCard(title: collectibleName, subtitle: "Tap the 3D model to collect +\(collectiblePoints) points.") {
-                EmptyView()
-            }
+            promptCard(title: collectibleName, subtitle: "Tap the 3D model to collect +\(collectiblePoints) points.")
         case .alreadyCollected:
-            promptCard(title: "Already collected", subtitle: "You already captured \(collectibleName).") {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Already collected")
+                    .font(.headline)
+                Text("You already captured \(collectibleName).")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
                 Button("Go to Gallery") {
                     tabRouter.selectedTab = .collection
                     dismiss()
@@ -325,46 +201,43 @@ struct ARCollectibleExperienceView: View {
                 .buttonStyle(.borderedProminent)
                 .tint(Color("UMDRed"))
             }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         case .collecting:
-            promptCard(title: "Collecting \(collectibleName)...", subtitle: "Nice find. Finalizing your capture.") {
-                EmptyView()
-            }
+            promptCard(title: "Collecting \(collectibleName)...", subtitle: "Nice find. Finalizing your capture.")
         case .captured:
             promptCard(
                 title: "You collected \(collectibleName)! +\(collectiblePoints) pts",
                 subtitle: "Unlocked in the UMD Index. Total points: \(currentTotalPoints)."
-            ) {
-                EmptyView()
-            }
+            )
         }
     }
 
-    @ViewBuilder
-    private var guidanceOverlay: some View {
-        switch flowState {
-        case .waitingForSecondSurface:
-            ScoutGuidanceBanner(
-                mode: .scan,
-                title: "Scout the floor",
-                subtitle: "Pan slowly until the guide finds a second horizontal surface."
-            )
-        case .guiding:
-            ScoutGuidanceBanner(
-                mode: surfaceDetected ? .holdSteady(progress: placementReadiness) : .scan,
-                title: surfaceDetected ? "Pep squad is locking on" : "Sweep the ground",
-                subtitle: surfaceDetected
-                    ? "Keep the guide centered and steady."
-                    : "Aim a little lower and move slowly to reveal a clear surface."
-            )
-        case .readyToSpawn:
-            ScoutGuidanceBanner(
-                mode: .holdSteady(progress: placementReadiness),
-                title: "Target almost ready",
-                subtitle: "Keep the center marker lined up for the drop."
-            )
-        default:
-            EmptyView()
+    private var replaceButton: some View {
+        Button(action: triggerReplace) {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                Text("Re-Place")
+            }
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+            .background(.black.opacity(0.55), in: Capsule())
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Re-place the collectible's platform")
+    }
+
+    private func triggerReplace() {
+        let generator = UIImpactFeedbackGenerator(style: .soft)
+        generator.impactOccurred()
+        replaceToken = UUID()
+        hasPlaced = false
+        hasDetectedPlane = false
+        recalculateFlow()
     }
 
     private var captureAnimationOverlay: some View {
@@ -401,10 +274,6 @@ struct ARCollectibleExperienceView: View {
         }
     }
 
-    /// Selects which collectible to display for this pin. Prefers uncollected items
-    /// so the user always sees something new. Falls back to any matching item if all
-    /// have been collected. Uses `collectibleIDs` on the pin if available, otherwise
-    /// falls back to the legacy `collectibleName` field.
     private func chooseCollectibleForCurrentPin() {
         let candidates = modelController.collectibles(for: pin)
         let notCollected = candidates.filter {
@@ -413,54 +282,24 @@ struct ARCollectibleExperienceView: View {
         activeCollectible = (notCollected.isEmpty ? candidates : notCollected).randomElement()
     }
 
-    /// Recalculates the current flow state based on GPS proximity, surface detection,
-    /// and collection status. Called on every location update and AR state change.
-    /// The state machine guards are evaluated in priority order: no collectible →
-    /// already collected → too far → teleport gate → surface detected → placed.
-    private func recalculateProximityAndFlow() {
+    private func recalculateFlow() {
+        if isCapturing { return }
+
         guard activeCollectible != nil else {
             flowState = .noCollectiblesConfigured
             return
         }
-
-        let pinLocation = CLLocation(latitude: pin.latitude, longitude: pin.longitude)
-
-        if let userCoordinate = locationManager.effectiveCoordinate {
-            let userLocation = CLLocation(latitude: userCoordinate.latitude, longitude: userCoordinate.longitude)
-            let distance = userLocation.distance(from: pinLocation)
-            distanceMeters = distance
-            isWithinSpawnRadius = distance <= spawnRadiusMeters
-        } else {
-            distanceMeters = nil
-            isWithinSpawnRadius = false
-        }
-
-        guard !alreadyCollected else {
+        if alreadyCollected {
             flowState = .alreadyCollected
             return
         }
-
-        guard isWithinSpawnRadius else {
-            flowState = .tooFar
-            return
-        }
-
-        guard teleportSpawnGateSatisfied else {
-            flowState = .waitingForSecondSurface
-            return
-        }
-
         if hasPlaced {
             flowState = .placed
-        } else if placementReadiness >= AppConstants.AR.readyToSpawnConfidenceThreshold {
-            flowState = .readyToSpawn
-        } else {
-            flowState = .guiding
+            return
         }
+        flowState = hasDetectedPlane ? .confirming : .searching
     }
 
-    /// Saves the captured collectible to SwiftData, plays the capture animation,
-    /// switches to the collection tab, and dismisses after a short delay.
     private func handleCollectTapped() {
         flowState = .collecting
         playCaptureSuccessFeedback()
@@ -499,7 +338,7 @@ struct ARCollectibleExperienceView: View {
         generator.notificationOccurred(.success)
     }
 
-    private func promptCard<Content: View>(title: String, subtitle: String, @ViewBuilder actions: () -> Content) -> some View {
+    private func promptCard(title: String, subtitle: String) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title)
                 .font(.headline)
@@ -507,7 +346,6 @@ struct ARCollectibleExperienceView: View {
             Text(subtitle)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            actions()
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -518,53 +356,80 @@ struct ARCollectibleExperienceView: View {
 
 struct ARPlacementView: UIViewRepresentable {
     let canSpawnCollectible: Bool
-    let shouldForceSpawnWithoutSurface: Bool
+    let isCapturing: Bool
     let modelAssetName: String
-    @Binding var surfaceDetected: Bool
+    let rarity: String
+    let replaceToken: UUID
     @Binding var hasPlaced: Bool
+    @Binding var hasDetectedPlane: Bool
     @Binding var didTapCollectible: Bool
-    @Binding var secondHorizontalSurfaceDetected: Bool
-    @Binding var placementReadiness: Double
 
     func makeUIView(context: Context) -> ARView {
         let arView = ARView(frame: .zero, cameraMode: .ar, automaticallyConfigureSession: false)
-        context.coordinator.didTapCollectible = { didTapCollectible = true }
+        wireCoordinatorCallbacks(context.coordinator)
+        context.coordinator.lastSeenReplaceToken = replaceToken
         context.coordinator.configure(arView)
         return arView
     }
 
     func updateUIView(_ uiView: ARView, context: Context) {
-        context.coordinator.didTapCollectible = { didTapCollectible = true }
+        wireCoordinatorCallbacks(context.coordinator)
+        context.coordinator.handleReplaceTokenIfChanged(replaceToken)
         context.coordinator.syncState(
             arView: uiView,
             canSpawnCollectible: canSpawnCollectible,
-            shouldForceSpawnWithoutSurface: shouldForceSpawnWithoutSurface,
+            isCapturing: isCapturing,
             modelAssetName: modelAssetName,
-            surfaceDetected: $surfaceDetected,
+            rarity: rarity,
             hasPlaced: $hasPlaced,
-            secondHorizontalSurfaceDetected: $secondHorizontalSurfaceDetected,
-            placementReadiness: $placementReadiness
+            hasDetectedPlane: $hasDetectedPlane
         )
     }
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    private func wireCoordinatorCallbacks(_ coordinator: Coordinator) {
+        coordinator.didTapCollectible = { didTapCollectible = true }
+        coordinator.didConfirmPlacement = { hasPlaced = true }
+        coordinator.didStartDetectingPlanes = { hasDetectedPlane = true }
+        coordinator.didLoseAllPlanes = { hasDetectedPlane = false }
     }
 
     final class Coordinator: NSObject, ARSessionDelegate {
         private weak var arView: ARView?
+
         private var collectibleAnchor: AnchorEntity?
         private var collectibleEntity: Entity?
         private var tapTargetEntity: ModelEntity?
-        private var currentModelAssetName: String?
+        private var haloEntity: ModelEntity?
         private var loadCancellable: AnyCancellable?
-        private var horizontalPlaneAnchorCount = 0
         private var isCollectAnimationRunning = false
-        private var candidatePosition: SIMD3<Float>?
-        private var candidateStableSince: CFTimeInterval?
-        var didTapCollectible: (() -> Void)?
+        private var hapticEngine: CHHapticEngine?
+
+        private struct PlaneVisualization {
+            let anchorEntity: AnchorEntity
+            let modelEntity: ModelEntity
+            let firstSeen: CFTimeInterval
+        }
+        private var planeVisualizations: [UUID: PlaneVisualization] = [:]
+        private var confirmedPlaneID: UUID?
+        private var latestModelAssetName: String?
+        private var latestRarity: String?
+
+        private enum PlacementMode { case firstStable, viewportPrioritized }
+        private var placementMode: PlacementMode = .firstStable
+        private var excludedPlaneID: UUID?
+
+        private let planeStableDuration: CFTimeInterval = 1.0
+        private let minPlaneArea: Float = 0.1   // m²
 
         private let collectibleEntityName = "ar.collectible.entity"
+
+        var didTapCollectible: (() -> Void)?
+        var didConfirmPlacement: (() -> Void)?
+        var didStartDetectingPlanes: (() -> Void)?
+        var didLoseAllPlanes: (() -> Void)?
+        var lastSeenReplaceToken: UUID?
 
         func configure(_ arView: ARView) {
             self.arView = arView
@@ -574,6 +439,11 @@ struct ARPlacementView: UIViewRepresentable {
 
             let configuration = ARWorldTrackingConfiguration()
             configuration.planeDetection = [.horizontal]
+            // Match Camera-app 1x FOV by using the full wide-sensor format
+            // (default ARKit format uses a tighter sensor crop).
+            if let wideFormat = ARWorldTrackingConfiguration.recommendedVideoFormatForHighResolutionFrameCapturing {
+                configuration.videoFormat = wideFormat
+            }
             arView.session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
 
             let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
@@ -583,100 +453,319 @@ struct ARPlacementView: UIViewRepresentable {
         func syncState(
             arView: ARView,
             canSpawnCollectible: Bool,
-            shouldForceSpawnWithoutSurface: Bool,
+            isCapturing: Bool,
             modelAssetName: String,
-            surfaceDetected: Binding<Bool>,
+            rarity: String,
             hasPlaced: Binding<Bool>,
-            secondHorizontalSurfaceDetected: Binding<Bool>,
-            placementReadiness: Binding<Double>
+            hasDetectedPlane: Binding<Bool>
         ) {
             self.arView = arView
+            latestModelAssetName = modelAssetName
+            latestRarity = rarity
 
-            // Guard all binding writes — unconditional writes trigger SwiftUI re-renders,
-            // which call updateUIView again, creating a tight loop with raycasting each iteration.
-            let newSecondSurface = horizontalPlaneAnchorCount >= 2
-            if secondHorizontalSurfaceDetected.wrappedValue != newSecondSurface {
-                secondHorizontalSurfaceDetected.wrappedValue = newSecondSurface
-            }
+            if isCapturing { return }
 
             if !canSpawnCollectible {
-                removeCollectibleIfNeeded()
-                resetPlacementCandidate()
-                if surfaceDetected.wrappedValue { surfaceDetected.wrappedValue = false }
+                removeAllPlaneVisualizations()
+                removeCollectible()
                 if hasPlaced.wrappedValue { hasPlaced.wrappedValue = false }
-                if placementReadiness.wrappedValue != 0 { placementReadiness.wrappedValue = 0 }
+                if hasDetectedPlane.wrappedValue { hasDetectedPlane.wrappedValue = false }
                 return
             }
 
-            // Keep the collectible anchored in world space once placed so it doesn't
-            // drift with camera movement as `updateUIView` runs repeatedly.
             if collectibleAnchor != nil {
-                if !surfaceDetected.wrappedValue { surfaceDetected.wrappedValue = true }
-                let placed = collectibleEntity != nil
-                if hasPlaced.wrappedValue != placed { hasPlaced.wrappedValue = placed }
-                if placementReadiness.wrappedValue != 1 { placementReadiness.wrappedValue = 1 }
+                if !hasPlaced.wrappedValue { hasPlaced.wrappedValue = true }
+                prunePlaneVisualizationsToConfirmed()
                 return
             }
 
-            let center = CGPoint(x: arView.bounds.midX, y: arView.bounds.midY)
-            let raycastResults = arView.raycast(from: center, allowing: .estimatedPlane, alignment: .horizontal)
-
-            if let result = raycastResults.first {
-                if !surfaceDetected.wrappedValue { surfaceDetected.wrappedValue = true }
-                let readiness = updatePlacementCandidate(using: result.worldTransform)
-                if placementReadiness.wrappedValue != readiness {
-                    placementReadiness.wrappedValue = readiness
-                }
-
-                if readiness >= 1 {
-                    placeOrMoveCollectible(using: result.worldTransform, modelAssetName: modelAssetName)
-                    let placed = collectibleEntity != nil
-                    if hasPlaced.wrappedValue != placed { hasPlaced.wrappedValue = placed }
-                } else if hasPlaced.wrappedValue {
-                    hasPlaced.wrappedValue = false
-                }
-            } else if shouldForceSpawnWithoutSurface {
-                // Teleport fallback path: place collectible in front of camera after timeout.
-                if !surfaceDetected.wrappedValue { surfaceDetected.wrappedValue = true }
-                if placementReadiness.wrappedValue != 1 { placementReadiness.wrappedValue = 1 }
-                placeCollectibleInFrontOfCamera(modelAssetName: modelAssetName)
-                let placed = collectibleEntity != nil
-                if hasPlaced.wrappedValue != placed { hasPlaced.wrappedValue = placed }
-            } else {
-                resetPlacementCandidate()
-                if surfaceDetected.wrappedValue { surfaceDetected.wrappedValue = false }
-                if hasPlaced.wrappedValue { hasPlaced.wrappedValue = false }
-                if placementReadiness.wrappedValue != 0 { placementReadiness.wrappedValue = 0 }
+            let detected = !planeVisualizations.isEmpty
+            if hasDetectedPlane.wrappedValue != detected {
+                hasDetectedPlane.wrappedValue = detected
             }
         }
+
+        // MARK: - Plane Visualization
+
+        private func translucentMaterial(color: UIColor, alpha: CGFloat) -> SimpleMaterial {
+            var m = SimpleMaterial()
+            m.color = .init(tint: color.withAlphaComponent(alpha), texture: nil)
+            m.roughness = 0.9
+            m.metallic = 0.0
+            return m
+        }
+
+        private func localTransform(for plane: ARPlaneAnchor) -> Transform {
+            let center = SIMD3<Float>(plane.center.x, 0, plane.center.z)
+            let rotation = simd_quatf(
+                angle: plane.planeExtent.rotationOnYAxis,
+                axis: SIMD3<Float>(0, 1, 0)
+            )
+            return Transform(scale: .one, rotation: rotation, translation: center)
+        }
+
+        private func worldCorners(of plane: ARPlaneAnchor) -> [SIMD3<Float>] {
+            let halfW = plane.planeExtent.width / 2
+            let halfD = plane.planeExtent.height / 2
+            let localOffsets: [SIMD3<Float>] = [
+                SIMD3<Float>(-halfW, 0,  halfD),
+                SIMD3<Float>( halfW, 0,  halfD),
+                SIMD3<Float>( halfW, 0, -halfD),
+                SIMD3<Float>(-halfW, 0, -halfD)
+            ]
+            let yRot = simd_quatf(
+                angle: plane.planeExtent.rotationOnYAxis,
+                axis: SIMD3<Float>(0, 1, 0)
+            )
+            return localOffsets.map { offset in
+                let local = plane.center + yRot.act(offset)
+                let world4 = plane.transform * SIMD4<Float>(local.x, local.y, local.z, 1)
+                return SIMD3<Float>(world4.x, world4.y, world4.z)
+            }
+        }
+
+        private func viewportProminenceScore(for plane: ARPlaneAnchor, in arView: ARView) -> Float? {
+            var projected: [CGPoint] = []
+            projected.reserveCapacity(4)
+            for corner in worldCorners(of: plane) {
+                guard let p = arView.project(corner) else { return nil }
+                projected.append(p)
+            }
+
+            let centroid = CGPoint(
+                x: (projected[0].x + projected[1].x + projected[2].x + projected[3].x) / 4,
+                y: (projected[0].y + projected[1].y + projected[2].y + projected[3].y) / 4
+            )
+
+            var signedArea: CGFloat = 0
+            for i in 0..<4 {
+                let a = projected[i]
+                let b = projected[(i + 1) % 4]
+                signedArea += a.x * b.y - b.x * a.y
+            }
+            let area = Float(abs(signedArea) / 2)
+
+            let bounds = arView.bounds
+            let screenCenter = CGPoint(x: bounds.midX, y: bounds.midY)
+            let dx = centroid.x - screenCenter.x
+            let dy = centroid.y - screenCenter.y
+            let distance = Float(sqrt(dx * dx + dy * dy))
+            let halfDiagonal = Float(max(bounds.width, bounds.height) / 2)
+            let normalizedDistance = halfDiagonal > 0 ? distance / halfDiagonal : 0
+
+            return area / (1 + 2 * normalizedDistance)
+        }
+
+        private func makePlaneEntity(for plane: ARPlaneAnchor) -> ModelEntity {
+            let mesh = MeshResource.generatePlane(
+                width: plane.planeExtent.width,
+                depth: plane.planeExtent.height
+            )
+            let material = translucentMaterial(color: .white, alpha: 0.3)
+            let entity = ModelEntity(mesh: mesh, materials: [material])
+            entity.transform = localTransform(for: plane)
+            return entity
+        }
+
+        private func addPlaneVisualization(for plane: ARPlaneAnchor) {
+            guard confirmedPlaneID == nil else { return }
+            guard let arView, planeVisualizations[plane.identifier] == nil else { return }
+            let wasEmpty = planeVisualizations.isEmpty
+            let anchorEntity = AnchorEntity(.anchor(identifier: plane.identifier))
+            let modelEntity = makePlaneEntity(for: plane)
+            anchorEntity.addChild(modelEntity)
+            arView.scene.addAnchor(anchorEntity)
+            planeVisualizations[plane.identifier] = PlaneVisualization(
+                anchorEntity: anchorEntity,
+                modelEntity: modelEntity,
+                firstSeen: CACurrentMediaTime()
+            )
+            if wasEmpty {
+                DispatchQueue.main.async { [weak self] in
+                    self?.didStartDetectingPlanes?()
+                }
+            }
+        }
+
+        private func updatePlaneVisualization(for plane: ARPlaneAnchor) {
+            if let confirmedPlaneID, plane.identifier != confirmedPlaneID {
+                return
+            }
+            guard let viz = planeVisualizations[plane.identifier] else {
+                addPlaneVisualization(for: plane)
+                return
+            }
+            guard plane.identifier != confirmedPlaneID else { return }
+            viz.modelEntity.model?.mesh = MeshResource.generatePlane(
+                width: plane.planeExtent.width,
+                depth: plane.planeExtent.height
+            )
+            viz.modelEntity.transform = localTransform(for: plane)
+        }
+
+        private func removePlaneVisualization(for id: UUID) {
+            guard let viz = planeVisualizations.removeValue(forKey: id) else { return }
+            viz.anchorEntity.removeFromParent()
+            if confirmedPlaneID == id && collectibleAnchor == nil {
+                confirmedPlaneID = nil
+            }
+            if planeVisualizations.isEmpty && collectibleAnchor == nil {
+                DispatchQueue.main.async { [weak self] in
+                    self?.didLoseAllPlanes?()
+                }
+            }
+        }
+
+        private func removeAllPlaneVisualizations() {
+            for (_, viz) in planeVisualizations {
+                viz.anchorEntity.removeFromParent()
+            }
+            planeVisualizations.removeAll()
+            confirmedPlaneID = nil
+        }
+
+        private func prunePlaneVisualizationsToConfirmed() {
+            guard let confirmedPlaneID else { return }
+            let strayIDs = planeVisualizations.keys.filter { $0 != confirmedPlaneID }
+            for id in strayIDs {
+                if let viz = planeVisualizations.removeValue(forKey: id) {
+                    viz.anchorEntity.removeFromParent()
+                }
+            }
+        }
+
+        // MARK: - Re-Place
+
+        func handleReplaceTokenIfChanged(_ token: UUID) {
+            guard lastSeenReplaceToken != token else { return }
+            lastSeenReplaceToken = token
+            resetPlacement()
+        }
+
+        private func resetPlacement() {
+            excludedPlaneID = confirmedPlaneID
+            placementMode = .viewportPrioritized
+            removeCollectible()
+            removeAllPlaneVisualizations()
+        }
+
+        // MARK: - ARSessionDelegate
 
         func session(_ session: ARSession, didAdd anchors: [ARAnchor]) {
-            let newHorizontalCount = anchors.compactMap { $0 as? ARPlaneAnchor }
-                .filter { $0.alignment == .horizontal }
-                .count
-            horizontalPlaneAnchorCount += newHorizontalCount
+            guard confirmedPlaneID == nil else {
+                prunePlaneVisualizationsToConfirmed()
+                return
+            }
+            for anchor in anchors {
+                guard let plane = anchor as? ARPlaneAnchor,
+                      plane.alignment == .horizontal else { continue }
+                addPlaneVisualization(for: plane)
+            }
         }
 
-        private func placeOrMoveCollectible(using worldTransform: simd_float4x4, modelAssetName: String) {
-            guard let arView else { return }
+        func session(_ session: ARSession, didUpdate anchors: [ARAnchor]) {
+            guard confirmedPlaneID == nil else {
+                prunePlaneVisualizationsToConfirmed()
+                return
+            }
+            for anchor in anchors {
+                guard let plane = anchor as? ARPlaneAnchor,
+                      plane.alignment == .horizontal else { continue }
+                updatePlaneVisualization(for: plane)
+            }
+        }
 
-            let translation = worldTransform.translation
-            let targetPosition = SIMD3<Float>(translation.x, translation.y, translation.z)
+        func session(_ session: ARSession, didRemove anchors: [ARAnchor]) {
+            for anchor in anchors {
+                guard let plane = anchor as? ARPlaneAnchor else { continue }
+                removePlaneVisualization(for: plane.identifier)
+            }
+        }
 
-            if collectibleAnchor == nil {
-                let anchor = AnchorEntity(world: targetPosition)
-                collectibleAnchor = anchor
-                arView.scene.addAnchor(anchor)
+        func session(_ session: ARSession, didUpdate frame: ARFrame) {
+            guard confirmedPlaneID == nil else { return }
+            guard latestModelAssetName != nil else { return }
+            let now = CACurrentMediaTime()
+
+            var currentPlanes: [UUID: ARPlaneAnchor] = [:]
+            for anchor in frame.anchors {
+                if let plane = anchor as? ARPlaneAnchor, plane.alignment == .horizontal {
+                    currentPlanes[plane.identifier] = plane
+                }
             }
 
-            guard collectibleEntity == nil || currentModelAssetName != modelAssetName else { return }
+            let stableCandidates = planeVisualizations
+                .compactMap { (id, viz) -> (ARPlaneAnchor, PlaneVisualization)? in
+                    guard let plane = currentPlanes[id] else { return nil }
+                    let age = now - viz.firstSeen
+                    let area = plane.planeExtent.width * plane.planeExtent.height
+                    guard age >= planeStableDuration, area >= minPlaneArea else { return nil }
+                    return (plane, viz)
+                }
 
-            collectibleAnchor?.children.removeAll()
-            collectibleEntity = nil
-            currentModelAssetName = modelAssetName
+            let chosen: (ARPlaneAnchor, PlaneVisualization)?
+            switch placementMode {
+            case .firstStable:
+                chosen = stableCandidates.min { $0.1.firstSeen < $1.1.firstSeen }
+            case .viewportPrioritized:
+                if let arView {
+                    chosen = stableCandidates
+                        .filter { $0.0.identifier != excludedPlaneID }
+                        .compactMap { (plane, viz) -> (ARPlaneAnchor, PlaneVisualization, Float)? in
+                            guard let score = viewportProminenceScore(for: plane, in: arView) else { return nil }
+                            return (plane, viz, score)
+                        }
+                        .max { $0.2 < $1.2 }
+                        .map { ($0.0, $0.1) }
+                } else {
+                    chosen = nil
+                }
+            }
+
+            if let (plane, viz) = chosen {
+                confirmPlane(plane, viz: viz)
+            }
+        }
+
+        // MARK: - Confirmation + Spawn
+
+        private func confirmPlane(_ plane: ARPlaneAnchor, viz: PlaneVisualization) {
+            guard let modelAssetName = latestModelAssetName else { return }
+            confirmedPlaneID = plane.identifier
+
+            viz.modelEntity.model?.materials = [translucentMaterial(color: .systemBlue, alpha: 0.45)]
+
+            for (id, otherViz) in planeVisualizations where id != plane.identifier {
+                otherViz.anchorEntity.removeFromParent()
+            }
+            planeVisualizations = [plane.identifier: viz]
+
+            var localTranslation = matrix_identity_float4x4
+            localTranslation.columns.3 = SIMD4<Float>(plane.center.x, 0, plane.center.z, 1)
+            let world = matrix_multiply(plane.transform, localTranslation)
+            placeCollectible(at: world, modelAssetName: modelAssetName)
+
+            placementMode = .firstStable
+            excludedPlaneID = nil
+
+            DispatchQueue.main.async { [weak self] in
+                self?.didConfirmPlacement?()
+            }
+        }
+
+        // MARK: - Collectible Placement
+
+        private func placeCollectible(at worldTransform: simd_float4x4, modelAssetName: String) {
+            guard let arView, collectibleAnchor == nil else { return }
+
+            let translation = worldTransform.translation
+            let anchor = AnchorEntity(world: SIMD3<Float>(translation.x, translation.y, translation.z))
+            arView.scene.addAnchor(anchor)
+            collectibleAnchor = anchor
+
+            attachRarityHalo(to: anchor, rarity: latestRarity ?? "Common")
 
             loadCancellable = Entity.loadModelAsync(named: modelAssetName)
-                // Thread-safety measure: ensure model completion handlers mutate @State on MainThread
                 .receive(on: DispatchQueue.main)
                 .sink(receiveCompletion: { [weak self] completion in
                     guard let self else { return }
@@ -685,28 +774,21 @@ struct ARPlacementView: UIViewRepresentable {
                     }
                 }, receiveValue: { [weak self] entity in
                     guard let self else { return }
-
-                    entity.name = self.collectibleEntityName
-                    let targetDimension = self.targetMaxDimension(for: modelAssetName)
-                    entity.scale = self.normalizedScale(for: entity, targetMaxDimension: targetDimension)
-                    entity.generateCollisionShapes(recursive: true)
-                    self.installTapTarget(for: entity)
-
-                    self.collectibleAnchor?.addChild(entity)
-                    self.collectibleEntity = entity
+                    self.attachCollectible(entity: entity, modelAssetName: modelAssetName)
                 })
         }
 
-        private func placeCollectibleInFrontOfCamera(modelAssetName: String) {
-            guard let arView else { return }
-            let cameraTransform = arView.cameraTransform.matrix
-            let forward = SIMD3<Float>(-cameraTransform.columns.2.x, -cameraTransform.columns.2.y, -cameraTransform.columns.2.z)
-            let cameraPosition = SIMD3<Float>(cameraTransform.columns.3.x, cameraTransform.columns.3.y, cameraTransform.columns.3.z)
-            let fallbackPosition = cameraPosition + normalize(forward) * AppConstants.AR.forcedSpawnDistanceMeters
+        private func attachCollectible(entity: Entity, modelAssetName: String) {
+            entity.name = collectibleEntityName
+            let targetDimension = targetMaxDimension(for: modelAssetName)
+            entity.scale = normalizedScale(for: entity, targetMaxDimension: targetDimension)
+            entity.position = SIMD3<Float>(0, 0, 0)
+            entity.generateCollisionShapes(recursive: true)
+            installTapTarget(for: entity)
 
-            var fallbackTransform = matrix_identity_float4x4
-            fallbackTransform.columns.3 = SIMD4<Float>(fallbackPosition.x, fallbackPosition.y, fallbackPosition.z, 1)
-            placeOrMoveCollectible(using: fallbackTransform, modelAssetName: modelAssetName)
+            collectibleAnchor?.addChild(entity)
+            collectibleEntity = entity
+            playPlacementPulse()
         }
 
         private func installFallbackEntity() {
@@ -714,11 +796,55 @@ struct ARPlacementView: UIViewRepresentable {
             let fallbackMaterial = SimpleMaterial(color: .gray, roughness: 0.3, isMetallic: false)
             let fallbackEntity = ModelEntity(mesh: fallbackMesh, materials: [fallbackMaterial])
             fallbackEntity.name = collectibleEntityName
-            fallbackEntity.scale = SIMD3<Float>(repeating: 1.0)
+            fallbackEntity.position = SIMD3<Float>(0, 0, 0)
             fallbackEntity.generateCollisionShapes(recursive: true)
             installTapTarget(for: fallbackEntity)
             collectibleAnchor?.addChild(fallbackEntity)
             collectibleEntity = fallbackEntity
+            playPlacementPulse()
+        }
+
+        // Smooth ~0.5s swell — a wave that crests then fades, not a tap.
+        // Falls back to .success notification on simulator / non-haptic devices.
+        private func playPlacementPulse() {
+            guard CHHapticEngine.capabilitiesForHardware().supportsHaptics else {
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                return
+            }
+            do {
+                if hapticEngine == nil {
+                    let engine = try CHHapticEngine()
+                    engine.isAutoShutdownEnabled = true
+                    engine.resetHandler = { [weak engine] in
+                        try? engine?.start()
+                    }
+                    hapticEngine = engine
+                }
+                try hapticEngine?.start()
+
+                let intensity = CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.9)
+                let sharpness = CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.3)
+                let event = CHHapticEvent(
+                    eventType: .hapticContinuous,
+                    parameters: [intensity, sharpness],
+                    relativeTime: 0,
+                    duration: 0.5
+                )
+                let intensityCurve = CHHapticParameterCurve(
+                    parameterID: .hapticIntensityControl,
+                    controlPoints: [
+                        .init(relativeTime: 0.0, value: 0.0),
+                        .init(relativeTime: 0.08, value: 1.0),
+                        .init(relativeTime: 0.5, value: 0.0)
+                    ],
+                    relativeTime: 0
+                )
+                let pattern = try CHHapticPattern(events: [event], parameterCurves: [intensityCurve])
+                let player = try hapticEngine?.makePlayer(with: pattern)
+                try player?.start(atTime: 0)
+            } catch {
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            }
         }
 
         private func installTapTarget(for entity: Entity) {
@@ -758,58 +884,60 @@ struct ARPlacementView: UIViewRepresentable {
             if let mapped = AppConstants.AR.ModelSizing.targetDimensionByModelAsset[modelAssetName] {
                 return mapped
             }
-
             if modelAssetName.contains("toy_") {
                 return AppConstants.AR.ModelSizing.smallTargetMaxDimension
             }
-
             if modelAssetName.contains("robot") || modelAssetName.contains("biplane") {
                 return AppConstants.AR.ModelSizing.largeTargetMaxDimension
             }
-
             return AppConstants.AR.ModelSizing.defaultTargetMaxDimension
         }
 
-        private func removeCollectibleIfNeeded() {
+        // MARK: - Rarity Halo
+
+        private func attachRarityHalo(to anchor: AnchorEntity, rarity: String) {
+            removeHalo()
+            let radius: Float = 0.08
+            let mesh = MeshResource.generatePlane(
+                width: radius * 2,
+                depth: radius * 2,
+                cornerRadius: radius
+            )
+            let material = translucentMaterial(color: haloColor(for: rarity), alpha: 0.55)
+            let halo = ModelEntity(mesh: mesh, materials: [material])
+            halo.position = SIMD3<Float>(0, 0.001, 0)
+            anchor.addChild(halo)
+            haloEntity = halo
+        }
+
+        private func haloColor(for rarity: String) -> UIColor {
+            switch rarity.lowercased() {
+            case "legendary":
+                return UIColor(named: "UMDGold") ?? .systemYellow
+            case "epic":
+                return .systemPurple
+            case "rare":
+                return .systemBlue
+            default:
+                return UIColor.white.withAlphaComponent(0.85)
+            }
+        }
+
+        private func removeHalo() {
+            haloEntity?.removeFromParent()
+            haloEntity = nil
+        }
+
+        private func removeCollectible() {
             collectibleEntity = nil
             tapTargetEntity = nil
-            currentModelAssetName = nil
             loadCancellable?.cancel()
             loadCancellable = nil
-            resetPlacementCandidate()
 
-            if let collectibleAnchor {
-                collectibleAnchor.removeFromParent()
-                self.collectibleAnchor = nil
-            }
-        }
-
-        private func updatePlacementCandidate(using worldTransform: simd_float4x4) -> Double {
-            let translation = worldTransform.translation
-            let newPosition = SIMD3<Float>(translation.x, translation.y, translation.z)
-            let now = CACurrentMediaTime()
-
-            if let candidatePosition {
-                let drift = simd_distance(candidatePosition, newPosition)
-                if drift <= AppConstants.AR.placementCandidateDriftToleranceMeters {
-                    self.candidatePosition = (candidatePosition + newPosition) * 0.5
-                } else {
-                    self.candidatePosition = newPosition
-                    candidateStableSince = now
-                }
-            } else {
-                candidatePosition = newPosition
-                candidateStableSince = now
-            }
-
-            let stableSince = candidateStableSince ?? now
-            let elapsed = now - stableSince
-            return min(max(elapsed / AppConstants.AR.stablePlacementHoldSeconds, 0), 1)
-        }
-
-        private func resetPlacementCandidate() {
-            candidatePosition = nil
-            candidateStableSince = nil
+            removeHalo()
+            collectibleAnchor?.removeFromParent()
+            collectibleAnchor = nil
+            confirmedPlaneID = nil
         }
 
         @objc private func handleTap(_ recognizer: UITapGestureRecognizer) {
@@ -834,6 +962,8 @@ struct ARPlacementView: UIViewRepresentable {
 
             isCollectAnimationRunning = true
             playTapFeedback()
+            removeAllPlaneVisualizations()
+            removeHalo()
 
             let cameraMatrix = arView.cameraTransform.matrix
             let cameraPosition = SIMD3<Float>(
@@ -883,132 +1013,6 @@ struct ARPlacementView: UIViewRepresentable {
             generator.impactOccurred(intensity: 0.95)
             AudioServicesPlaySystemSound(SystemSoundID(AppConstants.AR.collectTapSoundID))
         }
-    }
-}
-
-private struct ScoutGuidanceBanner: View {
-    enum Mode {
-        case scan
-        case holdSteady(progress: Double)
-    }
-
-    let mode: Mode
-    let title: String
-    let subtitle: String
-
-    @State private var pulse = false
-
-    var body: some View {
-        VStack(spacing: 16) {
-            switch mode {
-            case .scan:
-                HStack(spacing: 16) {
-                    ScoutPennant(icon: "sparkles", delay: 0.0)
-                    BouncingArrow(delay: 0.08)
-                    BouncingArrow(delay: 0.16)
-                    BouncingArrow(delay: 0.24)
-                    ScoutPennant(icon: "flag.fill", delay: 0.12)
-                }
-            case .holdSteady(let progress):
-                ZStack {
-                    Circle()
-                        .stroke(Color.white.opacity(0.22), lineWidth: 12)
-                        .frame(width: 104, height: 104)
-
-                    Circle()
-                        .trim(from: 0, to: max(progress, 0.08))
-                        .stroke(
-                            AngularGradient(
-                                colors: [Color("UMDGold"), Color.white, Color("UMDRed")],
-                                center: .center
-                            ),
-                            style: StrokeStyle(lineWidth: 10, lineCap: .round)
-                        )
-                        .rotationEffect(.degrees(-90))
-                        .frame(width: 104, height: 104)
-
-                    ForEach(0..<4, id: \.self) { index in
-                        Image(systemName: "sparkle")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(Color("UMDGold"))
-                            .offset(y: -66)
-                            .rotationEffect(.degrees(Double(index) * 90))
-                    }
-
-                    Image(systemName: "scope")
-                        .font(.system(size: 30, weight: .black))
-                        .foregroundStyle(.white)
-                        .scaleEffect(pulse ? 1.04 : 0.96)
-                }
-                .frame(maxWidth: .infinity)
-            }
-
-            VStack(spacing: 6) {
-                Text(title)
-                    .font(.headline.weight(.bold))
-                    .foregroundStyle(.white)
-                Text(subtitle)
-                    .font(.subheadline)
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.white.opacity(0.88))
-            }
-        }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 18)
-        .background(
-            LinearGradient(
-                colors: [Color.black.opacity(0.68), Color(red: 0.33, green: 0.07, blue: 0.08).opacity(0.82)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(Color.white.opacity(0.14), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .shadow(color: .black.opacity(0.22), radius: 16, x: 0, y: 8)
-        .onAppear {
-            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
-                pulse = true
-            }
-        }
-    }
-}
-
-private struct BouncingArrow: View {
-    let delay: Double
-    @State private var offsetY: CGFloat = -4
-
-    var body: some View {
-        Image(systemName: "chevron.down.circle.fill")
-            .font(.system(size: 24, weight: .bold))
-            .foregroundStyle(Color("UMDGold"))
-            .shadow(color: Color("UMDGold").opacity(0.35), radius: 6, x: 0, y: 4)
-            .offset(y: offsetY)
-            .onAppear {
-                withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true).delay(delay)) {
-                    offsetY = 6
-                }
-            }
-    }
-}
-
-private struct ScoutPennant: View {
-    let icon: String
-    let delay: Double
-    @State private var rotate = -7.0
-
-    var body: some View {
-        Image(systemName: icon)
-            .font(.system(size: 18, weight: .bold))
-            .foregroundStyle(.white.opacity(0.92))
-            .rotationEffect(.degrees(rotate))
-            .onAppear {
-                withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true).delay(delay)) {
-                    rotate = 7
-                }
-            }
     }
 }
 

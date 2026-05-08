@@ -5,29 +5,34 @@ struct ProximityAlertBanner: View {
     let distance: Double
     let collectibleName: String
     let rarity: String
+    let tier: ProximityMonitor.ProximityTier
     let onViewAR: () -> Void
     let onDismiss: () -> Void
 
     @State private var isPulsing = false
 
     private var pulseDuration: Double {
-        max(0.4, distance / 10.0 * 1.2)
+        let floor = tier == .inner ? 0.25 : 0.4
+        return max(floor, distance / 10.0 * 1.2)
     }
 
     private var distanceLabel: String {
-        "\(Int(distance.rounded()))m away"
+        switch tier {
+        case .inner: return "Tap to view in AR"
+        case .outer: return "\(Int(distance.rounded()))m away"
+        }
     }
 
     private var rarityBorderColor: Color {
         switch rarity {
         case "Legendary": return .yellow
         case "Rare": return .blue
-        default: return .clear
+        default: return pin.pinType.headerColor
         }
     }
 
     private var hasGlow: Bool {
-        rarity == "Rare" || rarity == "Legendary"
+        tier == .inner || rarity == "Rare" || rarity == "Legendary"
     }
 
     var body: some View {
@@ -68,12 +73,13 @@ struct ProximityAlertBanner: View {
                 onViewAR()
             } label: {
                 Text("View in AR")
-                    .font(.caption.weight(.bold))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+                    .font((tier == .inner ? Font.footnote : Font.caption).weight(.bold))
+                    .padding(.horizontal, tier == .inner ? 14 : 12)
+                    .padding(.vertical, tier == .inner ? 9 : 8)
                     .background(pin.pinType.headerColor)
                     .foregroundStyle(.white)
                     .clipShape(Capsule())
+                    .shadow(color: tier == .inner ? pin.pinType.headerColor.opacity(0.5) : .clear, radius: 6)
             }
 
             Button {

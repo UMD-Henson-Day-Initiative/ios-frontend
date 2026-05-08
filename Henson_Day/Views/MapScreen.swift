@@ -12,12 +12,9 @@
 import SwiftUI
 import MapKit
 import CoreLocation
-import RealityKit
-import Combine
+import UIKit
 
 struct MapScreen: View {
-    private let isInTestingMode = AppConstants.Debug.isMapTeleportTestingEnabled
-
     @EnvironmentObject private var modelController: ModelController
     @EnvironmentObject private var tabRouter: TabRouter
     @EnvironmentObject private var cameraPermission: CameraPermissionManager
@@ -26,8 +23,23 @@ struct MapScreen: View {
     @State private var selectedPinID: UUID?
     @State private var isDetailPresented = false
     @State private var arPin: PinEntity?
-    @State private var teleportPreloadCancellable: AnyCancellable?
     @State private var arLaunchTask: Task<Void, Never>?
+    @StateObject private var proximityMonitor = ProximityMonitor()
+    @State private var destinationPin: PinEntity?
+    @State private var hasCelebratedBattleReady = false
+
+    private var distanceToDestination: CLLocationDistance? {
+        guard let pin = destinationPin else { return nil }
+        return straightLineDistance(
+            from: locationManager.effectiveCoordinate,
+            to: CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)
+        )
+    }
+
+    private var liveDestinationPin: PinEntity? {
+        guard let pin = destinationPin else { return nil }
+        return modelController.pins.first(where: { $0.id == pin.id })
+    }
 
     private var collectedCollectibleNames: Set<String> {
         Set(modelController.collectionItemsForCurrentUser().map(\.collectibleName))
@@ -65,6 +77,26 @@ struct MapScreen: View {
                     Spacer()
                 }
 
+                if !isDetailPresented,
+                   let nearbyPin = proximityMonitor.nearbyPin,
+                   let distance = proximityMonitor.distanceToNearbyPin,
+                   let collectibleName = proximityMonitor.nearbyCollectibleName,
+                   let rarity = proximityMonitor.nearbyCollectibleRarity,
+                   let tier = proximityMonitor.tier {
+                    ProximityAlertBanner(
+                        pin: nearbyPin,
+                        distance: distance,
+                        collectibleName: collectibleName,
+                        rarity: rarity,
+                        tier: tier,
+                        onViewAR: { launchARExperience(for: nearbyPin) },
+                        onDismiss: { proximityMonitor.dismiss(pin: nearbyPin) }
+                    )
+                    .padding(.bottom, 8)
+                    .animation(.spring(response: 0.45, dampingFraction: 0.85), value: proximityMonitor.nearbyPin?.id)
+                    .animation(.easeInOut(duration: 0.25), value: proximityMonitor.tier)
+                }
+
                 if let selectedPin, isDetailPresented {
                     let hasEventDetails = modelController.scheduleEventID(matchingPinTitle: selectedPin.title) != nil
 
@@ -89,7 +121,11 @@ struct MapScreen: View {
                         },
                         onDetails: hasEventDetails ? {
                             openEventDetails(for: selectedPin)
-                        } : nil
+                        } : nil,
+                        onSetDestination: {
+                            toggleDestination(selectedPin)
+                        },
+                        isCurrentDestination: destinationPin?.id == selectedPin.id
                     )
                 }
             }
@@ -107,10 +143,25 @@ struct MapScreen: View {
             modelController.refreshPublishedData()
             cameraPermission.requestIfNeeded()
             locationManager.requestWhenInUseAuthorizationIfNeeded()
+            proximityMonitor.startMonitoring(locationManager: locationManager, modelController: modelController)
+        }
+        .onChange(of: destinationPin?.id) { _, _ in
+            hasCelebratedBattleReady = false
+        }
+        .onChange(of: distanceToDestination) { _, newDistance in
+            guard let d = newDistance else {
+                hasCelebratedBattleReady = false
+                return
+            }
+            if d > AppConstants.AR.collectibleProximityMeters {
+                hasCelebratedBattleReady = false
+            } else if !hasCelebratedBattleReady {
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                hasCelebratedBattleReady = true
+            }
         }
         .onDisappear {
             arLaunchTask?.cancel()
-            teleportPreloadCancellable?.cancel()
         }
     }
 
@@ -148,19 +199,26 @@ struct MapScreen: View {
                         }
                 }
                 Spacer()
+                if let pin = liveDestinationPin {
+                    DestinationTrackerPill(
+                        pin: pin,
+                        distanceMeters: distanceToDestination,
+                        onClear: { destinationPin = nil }
+                    )
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
             }
+            .animation(.spring(response: 0.4, dampingFraction: 0.85), value: liveDestinationPin?.id)
 
-
-            if isInTestingMode {
+            if AppConstants.Debug.isMapTeleportTestingEnabled {
                 HStack {
-                    Button("Teleport to a collectible location") {
-                        teleportToUncollectedCollectiblePin()
-                    }
-                    .font(.caption.weight(.semibold))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(.thinMaterial)
-                    .clipShape(Capsule())
+                    Label("Test mode • AR unlocked anywhere", systemImage: "wrench.and.screwdriver.fill")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(.thinMaterial)
+                        .clipShape(Capsule())
                     Spacer()
                 }
             }
@@ -223,45 +281,6 @@ struct MapScreen: View {
         tabRouter.selectedTab = .schedule
     }
 
-    private func teleportToUncollectedCollectiblePin() {
-        // Testing flow: always teleport to the Stadium Stomper pin and then
-        // open the collectible experience after a short delay.
-        let targetPin = modelController.pins.first { pin in
-            modelController.collectibles(for: pin).contains {
-                $0.name == "Stadium Stomper" || $0.id == "c1"
-            }
-        }
-
-        guard let targetPin else {
-            return
-        }
-
-        let targetCoordinate = CLLocationCoordinate2D(
-            latitude: targetPin.latitude,
-            longitude: targetPin.longitude
-        )
-        locationManager.setTestingCoordinate(targetCoordinate)
-
-        let modelAssetName = modelAssetNameForPin(targetPin) ?? "robot"
-
-        arLaunchTask?.cancel()
-        teleportPreloadCancellable?.cancel()
-
-        // Preload before launching AR so model decode doesn't block initial collectible screen.
-        teleportPreloadCancellable = Entity.loadModelAsync(named: modelAssetName)
-            // Thread-safety measure: ensure model completion handlers dispatch to MainThread
-            .receive(on: DispatchQueue.main)
-            .sink(receiveCompletion: { _ in
-                teleportPreloadCancellable = nil
-            }, receiveValue: { _ in })
-
-        launchARExperience(for: targetPin)
-    }
-
-    private func modelAssetNameForPin(_ pin: PinEntity) -> String? {
-        return modelController.preferredCollectible(for: pin)?.modelFileName
-    }
-
     private func launchARExperience(for pin: PinEntity) {
         arLaunchTask?.cancel()
         arLaunchTask = Task { @MainActor in
@@ -273,8 +292,14 @@ struct MapScreen: View {
 
     private func finishARLaunchCleanup() {
         arLaunchTask?.cancel()
-        teleportPreloadCancellable?.cancel()
-        teleportPreloadCancellable = nil
+    }
+
+    private func toggleDestination(_ pin: PinEntity) {
+        if destinationPin?.id == pin.id {
+            destinationPin = nil
+        } else {
+            destinationPin = pin
+        }
     }
 }
 
