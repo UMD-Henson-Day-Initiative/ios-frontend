@@ -50,7 +50,7 @@ struct CollectiblesScreen: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
+            ZStack(alignment: .top) {
                 Color.white.ignoresSafeArea()
 
                 ScrollView {
@@ -61,7 +61,6 @@ struct CollectiblesScreen: View {
                             catalogCount: modelController.collectibleCatalog.count,
                             totalPoints: totalPoints
                         )
-                        .ignoresSafeArea(edges: .top)
 
                         // Unified Badges section
                         BadgesSectionView(
@@ -84,7 +83,13 @@ struct CollectiblesScreen: View {
                             .padding(.bottom, 12)
                     }
                 }
-                .ignoresSafeArea(edges: .top)
+
+                // Paints behind the status bar icons; must sit above the white background.
+                CT.hensRed
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 0)
+                    .background(CT.hensRed.ignoresSafeArea(edges: .top))
+                    .allowsHitTesting(false)
             }
             .navigationBarHidden(true)
         }
@@ -99,26 +104,23 @@ private struct FestiveBannerHeaderView: View {
     let totalPoints: Int
 
     var body: some View {
-        VStack(spacing: 0){
+        VStack(spacing: 0) {
+            // Bunting / flag garland
+            BuntingView()
 
-            VStack(spacing: 0) {
-                // Bunting / flag garland
-                BuntingView()
+            // Title pennant
+            PennantTitleView(title: "My Collection")
+                .padding(.top, 8)
 
-                // Title pennant
-                PennantTitleView(title: "My Collection")
-                    .padding(.top, 8)
-
-                // Stat chips
-                HStack(spacing: 10) {
-                    FestiveStatChip(label: "Collected", value: "\(collectedCount)/\(catalogCount)")
-                    FestiveStatChip(label: "Points",    value: "\(totalPoints)")
-                    FestiveStatChip(label: "Badges",    value: "3/3")
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .padding(.bottom, 18)
+            // Stat chips
+            HStack(spacing: 10) {
+                FestiveStatChip(label: "Collected", value: "\(collectedCount)/\(catalogCount)")
+                FestiveStatChip(label: "Points",    value: "\(totalPoints)")
+                FestiveStatChip(label: "Badges",    value: "3/3")
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 18)
         }
     }
 }

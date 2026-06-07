@@ -14,6 +14,10 @@ import MapKit
 import CoreLocation
 import UIKit
 
+private enum MapScreenStyle {
+    static let statusBarRed = Color(red: 0.85, green: 0.15, blue: 0.15)
+}
+
 struct MapScreen: View {
     @EnvironmentObject private var modelController: ModelController
     @EnvironmentObject private var tabRouter: TabRouter
@@ -128,6 +132,13 @@ struct MapScreen: View {
                         isCurrentDestination: destinationPin?.id == selectedPin.id
                     )
                 }
+            }
+            .overlay(alignment: .top) {
+                MapScreenStyle.statusBarRed
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 0)
+                    .background(MapScreenStyle.statusBarRed.ignoresSafeArea(edges: .top))
+                    .allowsHitTesting(false)
             }
             .toolbar(.hidden, for: .navigationBar)
         }
