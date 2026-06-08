@@ -68,7 +68,8 @@ struct ScheduleScreen: View {
                     // Scope toggle
                     ScheduleScopeToggleView(viewingAddedOnly: $viewingAddedOnly)
                         .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
+                        .padding(.top, -20)
+                        .padding(.bottom, 5)
                         .background(ST.hensBackground)
 
                     // Day pill strip
@@ -137,7 +138,7 @@ private struct ScheduleFestiveBannerView: View {
             ScheduleBuntingView()
 
             SchedulePennantTitleView(title: "Schedule")
-                .padding(.top, 8)
+                .padding(.top, 32)  // increased from 8 — more gap between banner and title card
 
             HStack(spacing: 10) {
                 ScheduleStatChip(label: "Day",    value: "\(selectedDay) of 7")
@@ -146,7 +147,7 @@ private struct ScheduleFestiveBannerView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
-            .padding(.bottom, 18)
+            .padding(.bottom, 0)  // decreased from 18 — less space under the title card
         }
     }
 }
@@ -185,7 +186,7 @@ private struct ScheduleBuntingView: View {
                 context.stroke(flag, with: .color(ST.hensYellow.opacity(0.6)), lineWidth: 1)
             }
         }
-        .frame(height: 60)
+        .frame(height: 78)  // increased from 60 — taller red banner
         .background(ST.hensRed.opacity(0.85))
     }
 }
