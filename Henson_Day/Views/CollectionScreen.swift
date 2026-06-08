@@ -84,12 +84,7 @@ struct CollectiblesScreen: View {
                     }
                 }
 
-                // Paints behind the status bar icons; must sit above the white background.
-                CT.hensRed
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 0)
-                    .background(CT.hensRed.ignoresSafeArea(edges: .top))
-                    .allowsHitTesting(false)
+                StatusBarBackground(color: CT.hensRed)
             }
             .navigationBarHidden(true)
         }

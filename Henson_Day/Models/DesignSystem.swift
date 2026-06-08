@@ -13,6 +13,8 @@ enum DS {
     enum Color {
         /// Terp Crimson — primary actions, active states, key CTAs
         static let primary = SwiftUI.Color(r: 200, g: 16, b: 46)
+        /// Festive banner / status bar backdrop red used on map and collection screens
+        static let festiveRed = SwiftUI.Color(red: 0.85, green: 0.15, blue: 0.15)
         /// Barely-there blush — filled backgrounds behind rarity badges, stat cards
         static let primaryTint = SwiftUI.Color(r: 255, g: 240, b: 240)
         /// Henson Gold — collectible highlights, earned states, first-place
@@ -112,6 +114,32 @@ extension String {
         case "rare":      return "diamond.fill"
         case "epic":      return "seal.fill"
         default:          return "leaf.fill"
+        }
+    }
+}
+
+// MARK: - Status bar backdrop
+
+/// Paints a fixed strip behind the system status bar using the device's top safe-area inset.
+struct StatusBarBackground: View {
+    let color: Color
+
+    var body: some View {
+        GeometryReader { proxy in
+            color
+                .frame(width: proxy.size.width, height: proxy.safeAreaInsets.top)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .ignoresSafeArea(edges: .top)
+        }
+        .frame(height: 0)
+        .allowsHitTesting(false)
+    }
+}
+
+extension View {
+    func statusBarBackground(_ color: Color) -> some View {
+        overlay(alignment: .top) {
+            StatusBarBackground(color: color)
         }
     }
 }
