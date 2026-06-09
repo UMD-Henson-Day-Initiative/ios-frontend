@@ -26,28 +26,28 @@ private enum LT {
 
 struct LeaderboardScreen: View {
     @EnvironmentObject private var modelController: ModelController
-    @State private var filter: Filter = .all
+//    @State private var filter: Filter = .all
     @State private var selectedUser: PlayerEntity?
     @State private var profileUser: PlayerEntity?
-    @Namespace private var filterNS
+//    @Namespace private var filterNS
 
-    enum Filter: CaseIterable {
-        case all, friends, club
-        var label: String {
-            switch self {
-            case .all:     return "All Campus"
-            case .friends: return "Friends"
-            case .club:    return "Club"
-            }
-        }
-        var icon: String {
-            switch self {
-            case .all:     return "person.3.fill"
-            case .friends: return "star.fill"
-            case .club:    return "trophy.fill"
-            }
-        }
-    }
+//    enum Filter: CaseIterable {
+//        case all, friends, club
+//        var label: String {
+//            switch self {
+//            case .all:     return "All Campus"
+//            case .friends: return "Friends"
+//            case .club:    return "Club"
+//            }
+//        }
+//        var icon: String {
+//            switch self {
+//            case .all:     return "person.3.fill"
+//            case .friends: return "star.fill"
+//            case .club:    return "trophy.fill"
+//            }
+//        }
+//    }
 
     var displayedUsers: [PlayerEntity] {
         modelController.leaderboardUsers.sorted { $0.totalPoints > $1.totalPoints }
@@ -55,30 +55,31 @@ struct LeaderboardScreen: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
+            ZStack(alignment: .top){
                 LT.hensBackground.ignoresSafeArea()
 
                 ScrollView {
                     VStack(spacing: 0) {
                         // Festive banner header
                         LeaderboardFestiveBannerView(playerCount: displayedUsers.count)
-                            .ignoresSafeArea(edges: .top)
+                            //.ignoresSafeArea(edges: .top)
 
-                        // Filter chips
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                ForEach(Filter.allCases, id: \.label) { f in
-                                    LeaderboardFilterChipView(
-                                        filter: f,
-                                        current: $filter,
-                                        namespace: filterNS
-                                    )
-                                }
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
-                        }
-                        .background(LT.hensBackground)
+                        // Filter chips -> commented to for now, to only show All Campus
+                        
+//                        ScrollView(.horizontal, showsIndicators: false) {
+//                            HStack(spacing: 8) {
+//                                ForEach(Filter.allCases, id: \.label) { f in
+//                                    LeaderboardFilterChipView(
+//                                        filter: f,
+//                                        current: $filter,
+//                                        namespace: filterNS
+//                                    )
+//                                }
+//                            }
+//                            .padding(.horizontal, 16)
+//                            .padding(.vertical, 12)
+//                        }
+//                        .background(LT.hensBackground)
 
                         // Podium
                         if displayedUsers.count >= 3 {
@@ -124,7 +125,7 @@ struct LeaderboardScreen: View {
                             .padding(.bottom, 16)
                     }
                 }
-                .ignoresSafeArea(edges: .top)
+                StatusBarBackground(color: LT.hensRed)
             }
             .navigationBarHidden(true)
             .sheet(item: $selectedUser) { user in
@@ -143,6 +144,7 @@ struct LeaderboardScreen: View {
                 PublicProfileView(user: user, rank: (displayedUsers.firstIndex(where: { $0.id == user.id }) ?? 0) + 1)
             }
         }
+        .navigationBarHidden(true)
     }
 }
 
@@ -205,7 +207,7 @@ private struct LeaderboardBuntingView: View {
             }
         }
         .frame(height: 60)
-        .background(LT.hensRed.opacity(0.85))
+        //.background(LT.hensRed)
     }
 }
 
@@ -263,44 +265,44 @@ private struct LeaderboardStatChip: View {
     }
 }
 
-// MARK: - Filter Chip
+// MARK: - Filter Chip -> COMMENTED OUT TO ONLY SHOWCASE ALL CAMPUS
 
-struct LeaderboardFilterChip: View {
-    let filter: LeaderboardScreen.Filter
-    @Binding var current: LeaderboardScreen.Filter
-    let namespace: Namespace.ID
-
-    private var isSelected: Bool { current == filter }
-
-    var body: some View {
-        Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                current = filter
-            }
-        } label: {
-            Label(filter.label, systemImage: filter.icon)
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-                .foregroundStyle(isSelected ? LT.hensRed : LT.hensDimText)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background {
-                    if isSelected {
-                        Capsule()
-                            .fill(LT.hensYellow)
-                            .overlay(Capsule().strokeBorder(LT.hensRed.opacity(0.3), lineWidth: 1.2))
-                            .matchedGeometryEffect(id: "filterChip", in: namespace)
-                    } else {
-                        Capsule()
-                            .fill(LT.hensWarm)
-                            .overlay(Capsule().strokeBorder(LT.hensYellow.opacity(0.7), lineWidth: 1.2))
-                    }
-                }
-        }
-    }
-}
-
-// Typealiased to satisfy internal call sites
-private typealias LeaderboardFilterChipView = LeaderboardFilterChip
+//struct LeaderboardFilterChip: View {
+//    let filter: LeaderboardScreen.Filter
+//    @Binding var current: LeaderboardScreen.Filter
+//    let namespace: Namespace.ID
+//
+//    private var isSelected: Bool { current == filter }
+//
+//    var body: some View {
+//        Button {
+//            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+//                current = filter
+//            }
+//        } label: {
+//            Label(filter.label, systemImage: filter.icon)
+//                .font(.system(size: 12, weight: .bold, design: .rounded))
+//                .foregroundStyle(isSelected ? LT.hensRed : LT.hensDimText)
+//                .padding(.horizontal, 14)
+//                .padding(.vertical, 8)
+//                .background {
+//                    if isSelected {
+//                        Capsule()
+//                            .fill(LT.hensYellow)
+//                            .overlay(Capsule().strokeBorder(LT.hensRed.opacity(0.3), lineWidth: 1.2))
+//                            .matchedGeometryEffect(id: "filterChip", in: namespace)
+//                    } else {
+//                        Capsule()
+//                            .fill(LT.hensWarm)
+//                            .overlay(Capsule().strokeBorder(LT.hensYellow.opacity(0.7), lineWidth: 1.2))
+//                    }
+//                }
+//        }
+//    }
+//}
+//
+//// Typealiased to satisfy internal call sites
+//private typealias LeaderboardFilterChipView = LeaderboardFilterChip
 
 // MARK: - Podium
 
