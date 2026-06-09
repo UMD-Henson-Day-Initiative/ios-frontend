@@ -135,10 +135,15 @@ private struct ScheduleFestiveBannerView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            
+            Rectangle()
+                .fill(ST.hensRed.opacity(0.85))
+                .frame(height: 70)
+            
             ScheduleBuntingView()
 
             SchedulePennantTitleView(title: "Schedule")
-                .padding(.top, 32)  // increased from 8 — more gap between banner and title card
+                .padding(.top, 20)  // increased from 8 — more gap between banner and title card
 
             HStack(spacing: 10) {
                 ScheduleStatChip(label: "Day",    value: "\(selectedDay) of 7")
@@ -162,7 +167,7 @@ private struct ScheduleBuntingView: View {
     var body: some View {
         Canvas { context, size in
             let spacing = size.width / CGFloat(flagCount)
-            let ropeY: CGFloat = 18
+            let ropeY: CGFloat = 23
 
             var rope = Path()
             rope.move(to: CGPoint(x: 0, y: ropeY))
@@ -186,8 +191,8 @@ private struct ScheduleBuntingView: View {
                 context.stroke(flag, with: .color(ST.hensYellow.opacity(0.6)), lineWidth: 1)
             }
         }
-        .frame(height: 78)  // increased from 60 — taller red banner
-        .background(ST.hensRed.opacity(0.85))
+        .frame(height: 60)
+        .background(Color.white)
     }
 }
 
@@ -836,3 +841,4 @@ private extension Color {
         .environmentObject(ModelController())
         .environmentObject(TabRouter())
 }
+
