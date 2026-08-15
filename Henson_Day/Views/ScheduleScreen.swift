@@ -8,6 +8,7 @@ import SwiftUI
 
 struct ScheduleScreen: View {
     @EnvironmentObject private var appSession: AppSession
+    @EnvironmentObject private var tabRouter: TabRouter
 
     private var daySections: [(day: Date, events: [EventItem])] {
         let calendar = Calendar.current
@@ -42,7 +43,13 @@ struct ScheduleScreen: View {
 
                                     VStack(spacing: DS.Spacing.card) {
                                         ForEach(section.events) { event in
-                                            ScheduleEventRow(event: event)
+                                            Button {
+                                                tabRouter.focusedEventID = event.id
+                                                tabRouter.selectedTab = .map
+                                            } label: {
+                                                ScheduleEventRow(event: event)
+                                            }
+                                            .buttonStyle(.plain)
                                         }
                                     }
                                     .padding(.horizontal, DS.Spacing.screenH)
@@ -137,4 +144,5 @@ private struct ScheduleEventRow: View {
 #Preview {
     ScheduleScreen()
         .environmentObject(AppSession(authManager: AuthManager()))
+        .environmentObject(TabRouter())
 }

@@ -2,8 +2,15 @@ import SwiftUI
 import MapKit
 import CoreLocation
 
+extension CLLocationCoordinate2D: Equatable {
+    public static func == (lhs: CLLocationCoordinate2D, rhs: CLLocationCoordinate2D) -> Bool {
+        lhs.latitude == rhs.latitude && lhs.longitude == rhs.longitude
+    }
+}
+
 struct MapView: View {
     let events: [EventItem]
+    var focusCoordinate: CLLocationCoordinate2D?
     var onEventTapped: (EventItem) -> Void = { _ in }
 
     static let minLat = AppConstants.Map.campusBoundsMinLat
@@ -46,27 +53,8 @@ struct MapView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             Map(position: $cameraPosition, bounds: MapView.campusBounds) {
-                if let location = locationManager.location {
-                    Annotation("", coordinate: location.coordinate, anchor: .center) {
-                        PlayerMarkerView(heading: playerHeading)
-                    }
-                }
-
-                ForEach(events) { event in
-                    let coord = CLLocationCoordinate2D(latitude: event.latitude, longitude: event.longitude)
-                    Annotation("", coordinate: coord, anchor: .bottom) {
-                        EventMarkerView(
-                            event: event,
-                            isSelected: selectedEventID == event.id
-                        )
-                        .onTapGesture {
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                selectedEventID = selectedEventID == event.id ? nil : event.id
-                            }
-                            onEventTapped(event)
-                        }
-                    }
-                }
+                playerAnnotation
+                eventAnnotations
             }
             .mapStyle(.hybrid(elevation: .realistic, pointsOfInterest: .including([
                 .university, .library, .museum, .theater, .cafe, .restaurant, .park
@@ -101,6 +89,19 @@ struct MapView: View {
                             isFollowingUser = false
                         }
                     }
+                }
+            }
+            .onChange(of: focusCoordinate) { _, newCoordinate in
+                guard let newCoordinate else { return }
+                isFollowingUser = false
+                let camera = MapCamera(
+                    centerCoordinate: newCoordinate,
+                    distance: AppConstants.Map.defaultCameraDistance,
+                    heading: 0,
+                    pitch: AppConstants.Map.defaultCameraPitch
+                )
+                withAnimation(.easeInOut(duration: 0.6)) {
+                    cameraPosition = .camera(camera)
                 }
             }
 
@@ -140,6 +141,34 @@ struct MapView: View {
         }
         .onAppear {
             locationManager.requestWhenInUseAuthorizationIfNeeded()
+        }
+    }
+
+    @MapContentBuilder
+    private var playerAnnotation: some MapContent {
+        if let location = locationManager.location {
+            Annotation("", coordinate: location.coordinate, anchor: .center) {
+                PlayerMarkerView(heading: playerHeading)
+            }
+        }
+    }
+
+    @MapContentBuilder
+    private var eventAnnotations: some MapContent {
+        ForEach(events) { event in
+            let coord = CLLocationCoordinate2D(latitude: event.latitude, longitude: event.longitude)
+            Annotation("", coordinate: coord, anchor: .bottom) {
+                EventMarkerView(
+                    event: event,
+                    isSelected: selectedEventID == event.id
+                )
+                .onTapGesture {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        selectedEventID = selectedEventID == event.id ? nil : event.id
+                    }
+                    onEventTapped(event)
+                }
+            }
         }
     }
 

@@ -20,6 +20,7 @@ struct MapScreen: View {
     @State private var selectedEventID: String?
     @State private var isDetailPresented = false
     @State private var arEvent: EventItem?
+    @State private var focusCoordinate: CLLocationCoordinate2D?
 
     private var days: [Date] {
         let calendar = Calendar.current
@@ -40,7 +41,7 @@ struct MapScreen: View {
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
-                MapView(events: eventsForSelectedDay) { event in
+                MapView(events: eventsForSelectedDay, focusCoordinate: focusCoordinate) { event in
                     selectedEventID = event.id
                     isDetailPresented = true
                 }
@@ -86,12 +87,26 @@ struct MapScreen: View {
             if appSession.events.isEmpty {
                 Task { await appSession.loadEvents() }
             }
+            focusOnEvent(withID: tabRouter.focusedEventID)
         }
         .onChange(of: appSession.events.count) { _, _ in
             if selectedDay == nil {
                 selectedDay = days.first
             }
         }
+        .onChange(of: tabRouter.focusedEventID) { _, newValue in
+            focusOnEvent(withID: newValue)
+        }
+    }
+
+    private func focusOnEvent(withID eventID: String?) {
+        guard let eventID, let event = appSession.events.first(where: { $0.id == eventID }) else { return }
+
+        selectedDay = Calendar.current.startOfDay(for: event.startTime)
+        selectedEventID = event.id
+        isDetailPresented = true
+        focusCoordinate = CLLocationCoordinate2D(latitude: event.latitude, longitude: event.longitude)
+        tabRouter.focusedEventID = nil
     }
 
     private var daySelector: some View {

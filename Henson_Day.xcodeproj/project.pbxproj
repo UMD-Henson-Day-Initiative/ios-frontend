@@ -38,9 +38,22 @@
 		DBEDE3E02F7DB472007BB55E /* Henson_Day.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = Henson_Day.xcodeproj; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		7017FA223030107000E607A4 /* Exceptions for "Henson_Day" folder in "Henson_Day" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"Henson-Day-Info.plist",
+			);
+			target = DBB3AA5E2F52A0FD00F99705 /* Henson_Day */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		DBB3AA612F52A0FD00F99705 /* Henson_Day */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				7017FA223030107000E607A4 /* Exceptions for "Henson_Day" folder in "Henson_Day" target */,
+			);
 			path = Henson_Day;
 			sourceTree = "<group>";
 		};
@@ -456,10 +469,7 @@
 				DEVELOPMENT_TEAM = FFV9ZAPNUZ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_HENSON_ANON_KEY = sb_publishable_RUEsOvbun6NnCNKqFHYGog_zd4uHrUd;
-				INFOPLIST_KEY_HENSON_API_BASE_URL = "http://localhost:5000";
-				INFOPLIST_KEY_HENSON_GOOGLE_IOS_CLIENT_ID = "8477921433-v52u5ojulmgk7dug9074f0babdcmev96.apps.googleusercontent.com";
-				INFOPLIST_KEY_HENSON_SUPABASE_URL = "https://ysxejgyoitphtavtwcdd.supabase.co";
+				INFOPLIST_FILE = "Henson-Day-Info.plist";
 				INFOPLIST_KEY_NSCameraUsageDescription = CAMERA_USAGE_DESCRIPTION;
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Henson Day uses your location to show nearby events on the map and confirm you're close enough to collect a coin.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -499,10 +509,7 @@
 				DEVELOPMENT_TEAM = FFV9ZAPNUZ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_HENSON_ANON_KEY = sb_publishable_RUEsOvbun6NnCNKqFHYGog_zd4uHrUd;
-				INFOPLIST_KEY_HENSON_API_BASE_URL = "https://api.hensonday.app";
-				INFOPLIST_KEY_HENSON_GOOGLE_IOS_CLIENT_ID = "8477921433-v52u5ojulmgk7dug9074f0babdcmev96.apps.googleusercontent.com";
-				INFOPLIST_KEY_HENSON_SUPABASE_URL = "https://ysxejgyoitphtavtwcdd.supabase.co";
+				INFOPLIST_FILE = "Henson-Day-Info.plist";
 				INFOPLIST_KEY_NSCameraUsageDescription = CAMERA_USAGE_DESCRIPTION;
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Henson Day uses your location to show nearby events on the map and confirm you're close enough to collect a coin.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
