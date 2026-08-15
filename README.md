@@ -1,149 +1,101 @@
 # Henson Day iOS App
 
-Henson Day is a SwiftUI + SwiftData + RealityKit app for a campus AR scavenger hunt. Users browse map pins, open event details, capture AR collectibles, and track leaderboard/collection progress.
+Henson Day is a SwiftUI app for a campus event/scavenger-hunt at the University of Maryland. Users sign in with a UMD Google account, browse the schedule and map, collect an AR coin at each event's location for points, and check the leaderboard.
 
-## Planning Docs
-
-- docs/real-functionality-roadmap.md
+> `docs/real-functionality-roadmap.md` describes an earlier, larger backend rollout plan and is now superseded — the backend and this app were rebuilt directly against the simplified spec below rather than following that plan step by step. Keeping it around for historical context only.
 
 ## Architecture Overview
 
-- App entry: HensonDayApp.swift
-- App startup gate: Views/LaunchGateView.swift
-- Single app state source: Models/ModelController.swift
-- Navigation routing: Models/TabRouter.swift
-- Persistence models: Models/PersistenceModels.swift
-- Seed/fallback data: Models/Database.swift
-- AR map flow: Views/MapScreen.swift, Views/ARCameraView.swift, Views/ARCollectibleExperienceView.swift
+- App entry: `HensonDayApp.swift` — injects `AuthManager`/`AppSession`/`TabRouter`/`LocationManager`/`CameraPermissionManager`, and gates between `SignInScreen` and `RootTabView` based on Supabase auth state.
+- Auth: `Models/AuthManager.swift` (Supabase Auth + native Google sign-in)
+- Backend data: `Models/AppSession.swift` (state) + `Models/BackendAPI.swift` (REST client) + `Models/BackendModels.swift` (DTOs)
+- Navigation: `Models/TabRouter.swift`
+- Map + AR: `Views/MapScreen.swift`, `Views/MapView.swift`, `Views/PinDetailBottomSheet.swift`, `Views/ARCoinCollectView.swift`
+
+There is no local persistence layer (no SwiftData) — every screen fetches from the Flask backend (see `../backend/henson-backend`) on appearance or pull-to-refresh.
 
 ## State Management
 
-ModelController is the single source of truth for:
+`AppSession` is the single source of truth for backend-fetched state:
 
-- current user
-- map pins
+- signed-in user's profile (name, email, points, events attended)
+- event schedule
 - leaderboard
-- schedule events
-- collectible catalog
-- startup/runtime error state
 
-The app no longer uses AppState.swift.
+`AuthManager` is the single source of truth for auth state (the current Supabase `Session`, or nil if signed out).
 
-## Error Handling Strategy
+## Auth Flow
 
-### Startup failures
-
-ModelController exposes startupErrorMessage when SwiftData cannot initialize or seed. LaunchGateView blocks entry and shows a Retry button.
-
-### Runtime failures
-
-ModelController publishes userFacingError for non-startup failures (fetch/save/refresh issues). RootTabView renders this as a user-visible alert.
+1. iOS signs in with Google via `GoogleSignIn-iOS`, getting an ID token.
+2. `AuthManager` exchanges that token for a Supabase session via `signInWithIdToken`.
+3. Every backend request attaches the session's access token as `Authorization: Bearer <token>`.
+4. The backend enforces the `@umd.edu` / `@terpmail.umd.edu` domain restriction (Supabase itself doesn't restrict by domain) — a rejection here signs the user back out automatically (see `AppSession.wrongDomainDetected` and `HensonDayApp`'s `RootGateView`).
+5. Sign-out calls Supabase's `signOut()` directly.
 
 ## Constants and Configuration
 
-Centralized constants live in Models/AppConstants.swift:
+`Models/AppConstants.swift`:
 
-- map region defaults
-- AR timing values
-- AR placement sizing and limits
-- SceneKit portal defaults
+- map region/camera defaults
+- `Collect.radiusMeters` — 0.1 mile, matching the backend's own proximity check
+- AR coin sizing/timing constants
 
-Campus config abstraction lives in Models/CampusConfigProvider.swift:
-
-- CampusConfigProvider.active can be swapped for a backend implementation later
-- Database.campusCenterFallback remains the local fallback value
-
-## Threading Model
-
-- ModelController is @MainActor because it owns UI-observed published state
-- Delay-based UI flows use Task.sleep with cancellable Task handles
-- Delegate callbacks hop to MainActor before mutating observable state
+`Models/AppEnvironment.swift` reads Supabase URL/anon key, the Google iOS client ID, and the Flask backend base URL from Info.plist — see `CLAUDE.md` for the exact keys and how to add the required Swift Package dependencies.
 
 ## Local Development
 
-1. Open Henson_Day.xcodeproj in Xcode.
-2. Select a simulator/device with camera/location capability as needed.
-3. Build and run.
+1. Open `Henson_Day.xcodeproj` in Xcode.
+2. Add the two Swift Package dependencies (`supabase-swift`, `GoogleSignIn-iOS`) via File → Add Package Dependencies — see `CLAUDE.md`.
+3. Add a URL Type in the target's Info tab for the Google iOS client's reversed client ID (needed for the sign-in callback).
+4. Point `HENSON_API_BASE_URL` at your locally-running Flask backend (`http://localhost:5000` for Simulator, or your Mac's LAN IP for a physical device — required for testing AR, since ARKit doesn't run in Simulator).
+5. Build and run.
 
 ## Validation Checklist
 
 Use this checklist after major changes:
 
-1. Launch and verify startup gate behavior.
-2. Permissions flow:
-   - camera permission prompt/denied behavior
-   - location permission prompt/denied behavior
-3. Map to AR flow:
-   - open pin details
-   - open event details
-   - launch AR collectible experience
-4. Capture flow:
-   - collectible capture increments points/collection
-   - collection tab reflects new item
-5. Leaderboard flow:
-   - leaderboard renders and sorts correctly
-6. Error surfaces:
-   - startup failure shows retry UI
-   - runtime failures show alert banner/dialog
+1. Sign-in flow: Google sign-in succeeds, non-UMD accounts get rejected and signed back out.
+2. Schedule: every event shows with its correct day and time.
+3. Map: day selector shows one pin per event for that day; tapping a pin shows details.
+4. Pin detail: Navigate opens Apple Maps with the event as destination; Collect is disabled until within 0.1 miles.
+5. AR collect flow: plane detection → coin placement → tap to collect → backend awards points → profile/leaderboard reflect the new total.
+6. Leaderboard: top 10 renders correctly, sorted by points.
+7. Profile: name/email/points/events attended are correct; sign out actually signs out.
 
 ## File Reference
 
 ### Henson_Day/ (App Root)
+
 | File | Description |
-|------|-------------|
-| `HensonDayApp.swift` | App entry point; creates and injects all environment objects into the view hierarchy |
+|------|------|
+| `HensonDayApp.swift` | App entry point; injects environment objects and gates sign-in vs. main app |
 
 ### Henson_Day/Models/
+
 | File | Description |
-|------|-------------|
-| `AppConstants.swift` | Centralized configuration constants for map, AR, routing, URLs, and debug flags |
-| `BadgeModel.swift` | Badge data model for the achievement/badge system |
-| `CampusConfigProvider.swift` | Protocol abstraction for campus coordinates; swap for backend implementation when ready |
-| `CollectibleModel.swift` | Data model for individual collectible items |
-| `Database.swift` | Static seed data (pins, events, collectibles, players) used for first-launch SwiftData seeding |
-| `EventModel.swift` | Data model for schedule events |
-| `Extensions.swift` | SceneKit and RealityKit utility extensions |
-| `FilterChip.swift` | Reusable filter chip UI model for schedule and collection filtering |
-| `LeaderboardModel.swift` | Data model for leaderboard entries |
-| `LocationManager.swift` | CLLocationManager wrapper publishing live GPS location and heading |
-| `MapPinDetail.swift` | View-model bridging PinEntity to PinDetailBottomSheet; also defines PinType enum with colors and icons |
-| `ModelController.swift` | Central data controller using SwiftData; owns all published app state and persistence |
-| `PersistenceModels.swift` | SwiftData @Model entities: PlayerEntity, PinEntity, BadgeEntity, CollectedItemEntity |
-| `ProximityMonitor.swift` | Monitors user's distance to collectible pins and publishes proximity alerts |
-| `RouteManager.swift` | Calculates and tracks in-app walking directions using MapKit |
-| `TabRouter.swift` | Cross-tab navigation state; supports deep-linking from map pins to schedule events |
-| `UserDatabase.swift` | Convenience helpers that derive view-ready snapshots from ModelController |
-| `UserModel.swift` | Plain user data model used before SwiftData seeding |
+|------|------|
+| `AppConstants.swift` | Map defaults, the 0.1-mile collect radius, and AR coin sizing/timing constants |
+| `AppEnvironment.swift` | Reads Supabase URL/key, Google client ID, and API base URL from Info.plist |
+| `AppSession.swift` | Single source of truth for backend-fetched state: profile, events, leaderboard |
+| `AuthManager.swift` | Supabase Auth + native Google sign-in wrapper |
+| `BackendAPI.swift` | Thin REST client for the Flask backend, attaches Bearer token automatically |
+| `BackendModels.swift` | Codable DTOs matching the backend's JSON: `Profile`, `EventItem`, `LeaderboardEntry`, `CollectResult`, `BackendError` |
+| `DesignSystem.swift` | Central design token registry (colors, typography, radii, spacing, shadows) |
+| `Extensions.swift` | `straightLineDistance` helper |
+| `LocationManager.swift` | The single app-wide `CLLocationManager` wrapper + `CameraPermissionManager` |
+| `TabRouter.swift` | Selected-tab state for the 5-tab root navigation |
 
 ### Henson_Day/Views/
+
 | File | Description |
-|------|-------------|
-| `ARCameraView.swift` | RealityKit AR camera view with tap-to-place collectibles and world anchor persistence |
-| `ARCanvasView.swift` | AR canvas for free-form placement experiments |
-| `ARCaptureScreen.swift` | UI screen shown during AR collectible capture sequence |
-| `ARCollectibleExperienceView.swift` | Full-screen AR state machine: approach → surface detect → place → tap → collect |
-| `ARMapContainerView.swift` | Container toggling between full-screen AR and map with overlay swap |
-| `CollectionScreen.swift` | Displays collected items and full collectible catalog with collected/uncollected status |
-| `EventDetailScreen.swift` | Detail view for a single schedule event with map navigation and collection links |
-| `HomeScreen.swift` | Home tab with summary stats, recent activity, and quick navigation |
-| `LaunchGateView.swift` | Startup permission gate for camera and location; blocks entry until both are granted |
-| `LeaderboardScreen.swift` | Campus-wide leaderboard sorted by total points |
-| `MapScreen.swift` | Primary map + camera split view; handles pin selection, AR launch, and teleport testing |
-| `MapView.swift` | MapKit map with 3D camera, animated pins, compass follow toggle, and campus bounds |
-| `MiniMapView.swift` | Compact map view used as the swap overlay in the AR/map split view |
-| `MinimalLeaderboardSheet.swift` | Compact leaderboard sheet presented from the map screen |
-| `MyCollectionSheet.swift` | Quick-view collection sheet presented from the map screen |
-| `PinDetailBottomSheet.swift` | Bottom sheet shown when a map pin is tapped; supports drag-to-dismiss and contextual actions |
-| `ProfileScreen.swift` | User profile with avatar customization, stats, and badge display |
-| `ProximityAlertBanner.swift` | Animated banner shown when the user is near a collectible pin |
-| `RootTabView.swift` | 5-tab root navigation: Home, Schedule, Map, Collection, Profile |
-| `ScheduleScreen.swift` | Day-filtered event schedule with deep-link support from map pins |
-
-## Future Backend Integration
-
-To replace local campus fallback with backend config:
-
-1. Add a new CampusConfigProviding implementation.
-2. Fetch remote campus center and expose it via campusCenter.
-3. Assign CampusConfigProvider.active at app launch.
-4. Keep Database.campusCenterFallback for offline fallback mode.
+|------|------|
+| `SignInScreen.swift` | Google-only sign-in gate, shows camera/location permission status |
+| `RootTabView.swift` | 5-tab root navigation: Home, Schedule, Map, Leaderboard, Profile |
+| `HomeScreen.swift` | Static feature explainer — what each tab does |
+| `ScheduleScreen.swift` | Every event, grouped by day, with time/location/points |
+| `MapScreen.swift` | Day selector + map of that day's event pins |
+| `MapView.swift` | MapKit view with 3D camera, player marker, and event pins |
+| `PinDetailBottomSheet.swift` | Pin tap detail sheet: Navigate (Apple Maps) + distance-gated Collect |
+| `ARCoinCollectView.swift` | AR plane-detection + single procedural coin + backend collect call |
+| `LeaderboardScreen.swift` | Top 10 players by points |
+| `ProfileScreen.swift` | Name, email, points, events attended, sign out |

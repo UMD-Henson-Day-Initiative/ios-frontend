@@ -1,9 +1,5 @@
-.claude/worktrees/
-.claude
-CLAUDE.md
+.claude/
 .DS_Store
 **/.DS_Store
 *.xcuserstate
 **/xcuserdata/
-**/templates
-.fake

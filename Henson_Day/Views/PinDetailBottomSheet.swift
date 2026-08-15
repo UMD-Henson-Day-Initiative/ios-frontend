@@ -1,34 +1,24 @@
 //  PinDetailBottomSheet.swift
 //  Henson_Day
 //
-//  File Description: This file defines a SwiftUI bottom sheet view for displaying detailed
-//  information about a map pin within the app. The sheet includes the pin's
-//  title, description, metadata, and any associated AR collectibles. It
-//  supports primary actions (e.g., view in AR, start battle), navigation,
-//  and an optional "Details" button. The sheet can be dismissed via a
-//  drag gesture or programmatically.
-//
+//  Bottom sheet shown when a map pin is tapped. Shows the event's info, a
+//  Navigate button (opens Apple Maps with the event as destination), and a
+//  Collect button that's only enabled within AppConstants.Collect.radiusMeters
+//  of the event. Supports drag-to-resize/dismiss.
 
 import SwiftUI
 import CoreLocation
-import UIKit
+import MapKit
 
-/// Bottom sheet shown when a map pin is tapped. Displays pin info (type, title,
-/// time, location, description) and offers contextual actions: navigate in Apple Maps,
-/// open AR collectible, view event details, etc. Supports drag-to-dismiss gesture.
 struct PinDetailBottomSheet: View {
-    let detail: MapPinDetail
-    let pinCoordinate: CLLocationCoordinate2D
+    let event: EventItem
     var userLocation: CLLocationCoordinate2D? = nil
     @Binding var isPresented: Bool
-    var onPrimaryAction: () -> Void = {}
-    var onDetails: (() -> Void)? = nil
-    var onSetDestination: (() -> Void)? = nil
-    var isCurrentDestination: Bool = false
+    var onCollect: () -> Void = {}
 
     @State private var dragTranslation: CGFloat = 0
     @State private var currentDetent: SheetDetent = .medium
-    @State private var showProximityAlert = false
+    @State private var showTooFarAlert = false
     @State private var scrollOffset: CGFloat = 0
     @State private var isOverscrollDragging = false
 
@@ -38,52 +28,40 @@ struct PinDetailBottomSheet: View {
 
         func height(in geometry: GeometryProxy) -> CGFloat {
             switch self {
-            case .medium:
-                return max(geometry.size.height * 0.62, 440)
-            case .large:
-                return geometry.size.height * 0.92
+            case .medium: return max(geometry.size.height * 0.55, 380)
+            case .large: return geometry.size.height * 0.9
             }
         }
+    }
+
+    private var pinCoordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: event.latitude, longitude: event.longitude)
     }
 
     private var distanceMeters: CLLocationDistance? {
         straightLineDistance(from: userLocation, to: pinCoordinate)
     }
 
-    private var isBattleRelevant: Bool {
-        detail.hasARCollectible || detail.pinType == .battle
-    }
-
-    private var isBattleReady: Bool {
+    private var isCloseEnoughToCollect: Bool {
         guard let d = distanceMeters else { return false }
-        return d <= AppConstants.AR.collectibleProximityMeters
+        return d <= AppConstants.Collect.radiusMeters
     }
 
-    private var metersToBattle: Int {
+    private var metersToCollect: Int {
         guard let d = distanceMeters else { return 0 }
-        return max(0, Int((d - AppConstants.AR.collectibleProximityMeters).rounded()))
+        return max(0, Int((d - AppConstants.Collect.radiusMeters).rounded()))
+    }
+
+    private var timeRangeText: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        guard let endTime = event.endTime else { return formatter.string(from: event.startTime) }
+        return "\(formatter.string(from: event.startTime)) – \(formatter.string(from: endTime))"
     }
 
     private var dismissDragOpacity: Double {
         let progress = min(1.0, max(0, Double(dragTranslation)) / 220.0)
         return 1.0 - progress * 0.85
-    }
-
-    private var primaryActionTitle: String? {
-        guard detail.availability.isActive else { return nil }
-
-        switch detail.pinType {
-        case .event:
-            return detail.hasARCollectible ? "View in AR" : nil
-        case .collectible:
-            return "View in AR"
-        case .battle:
-            return "Start Battle"
-        case .homebase:
-            return "View Perks"
-        case .site, .concert:
-            return nil
-        }
     }
 
     var body: some View {
@@ -147,36 +125,27 @@ struct PinDetailBottomSheet: View {
     }
 
     private var heroHeader: some View {
-        let tint = detail.pinType.headerColor
-
-        return HStack(alignment: .top, spacing: 14) {
+        HStack(alignment: .top, spacing: 14) {
             ZStack {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(.white.opacity(0.22))
                     .frame(width: 56, height: 56)
-                Image(systemName: detail.pinType.icon)
+                Image(systemName: "star.fill")
                     .font(.system(size: 26, weight: .bold))
                     .foregroundStyle(.white)
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(detail.pinType.displayLabel.uppercased())
-                    .font(.caption2.weight(.heavy))
-                    .tracking(1.4)
-                    .foregroundStyle(.white.opacity(0.85))
-
-                Text(detail.title)
+                Text(event.title)
                     .font(.title2.weight(.bold))
                     .foregroundStyle(.white)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
 
-                if !detail.metadataLine.isEmpty {
-                    Text(detail.metadataLine)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.85))
-                        .lineLimit(2)
-                }
+                Text("\(timeRangeText) • \(event.locationName)")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .lineLimit(2)
             }
 
             Spacer(minLength: 0)
@@ -186,7 +155,7 @@ struct PinDetailBottomSheet: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             LinearGradient(
-                colors: [tint, tint.opacity(0.82)],
+                colors: [DS.Color.primary, DS.Color.primary.opacity(0.82)],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -204,20 +173,12 @@ struct PinDetailBottomSheet: View {
                         distanceRow
                     }
 
-                    availabilityChip
-
-                    Text(detail.description)
+                    Text(event.description)
                         .font(.body)
                         .foregroundStyle(.primary)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    if let availabilityMessage = detail.availability.message {
-                        availabilityCard(message: availabilityMessage)
-                    }
-
-                    if detail.hasARCollectible {
-                        collectibleCard
-                    }
+                    pointsCard
 
                     Color.clear.frame(height: 4)
                 }
@@ -243,101 +204,13 @@ struct PinDetailBottomSheet: View {
         .simultaneousGesture(overscrollDismissGesture)
     }
 
-    private var overscrollDismissGesture: some Gesture {
-        DragGesture(minimumDistance: 3)
-            .onChanged { value in
-                // Switch into overscroll-drag mode the first time we detect
-                // "at top + dragging down" — this locks the ScrollView so its
-                // bounce stops fighting the sheet movement.
-                if !isOverscrollDragging
-                    && scrollOffset >= 0
-                    && value.translation.height > 0 {
-                    isOverscrollDragging = true
-                }
-
-                guard isOverscrollDragging else { return }
-
-                var transaction = Transaction()
-                transaction.disablesAnimations = true
-                withTransaction(transaction) {
-                    dragTranslation = max(0, value.translation.height)
-                }
-            }
-            .onEnded { value in
-                guard isOverscrollDragging else { return }
-                isOverscrollDragging = false
-                handleDragEnd(value)
-            }
-    }
-
-    private var actionFooter: some View {
-        VStack(spacing: 0) {
-            Rectangle()
-                .fill(Color.primary.opacity(0.08))
-                .frame(height: 1)
-
-            VStack(spacing: 10) {
-                HStack(spacing: 10) {
-                    if let primaryActionTitle {
-                        actionButton(
-                            title: primaryActionTitle,
-                            fill: detail.pinType.headerColor,
-                            foreground: .white
-                        ) {
-                            if primaryActionTitle == "View in AR" {
-                                checkProximityAndLaunchAR()
-                            } else {
-                                onPrimaryAction()
-                            }
-                        }
-                    }
-
-                    actionButton(title: "Navigate", fill: Color(.systemGray6), foreground: .primary) {
-                        openInMaps()
-                    }
-
-                    if let onDetails {
-                        actionButton(title: "Details", fill: Color(.systemGray6), foreground: .primary) {
-                            onDetails()
-                        }
-                    }
-                }
-                .alert("Not Close Enough", isPresented: $showProximityAlert) {
-                    Button("OK", role: .cancel) {}
-                } message: {
-                    Text("Please navigate to the location to collect the muppet.")
-                }
-
-                if onSetDestination != nil {
-                    destinationToggleButton
-                }
-            }
-            .padding(.horizontal, 18)
-            .padding(.top, 12)
-            .padding(.bottom, 14)
-        }
-        .background(Color(.systemBackground))
-    }
-
-    private var collectibleCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(detail.availability.isActive ? "Available Collectible" : "Collectible Status")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-
-            HStack(spacing: 6) {
-                Text(detail.collectibleName ?? "Unknown")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-
-                if let rarity = detail.collectibleRarity, !rarity.isEmpty {
-                    Text("•")
-                        .foregroundStyle(.secondary)
-                    Text(rarity)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-            }
+    private var pointsCard: some View {
+        HStack(spacing: 6) {
+            Image(systemName: event.collected ? "checkmark.seal.fill" : "circle.grid.cross.fill")
+                .foregroundStyle(DS.Color.gold)
+            Text(event.collected ? "Coin already collected" : "Worth +\(event.points) points")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -345,27 +218,14 @@ struct PinDetailBottomSheet: View {
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
-    private var availabilityChip: some View {
-        Label(detail.availability.label, systemImage: detail.availability.symbolName)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(detail.availability.tint)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(detail.availability.tint.opacity(0.12))
-            .clipShape(Capsule())
-    }
-
     @ViewBuilder
     private var distanceRow: some View {
         let meters = distanceMeters ?? 0
         let metersInt = Int(meters.rounded())
-        let ready = isBattleReady
-        let tint: Color = isBattleRelevant ? (ready ? .green : .orange) : .secondary
+        let ready = isCloseEnoughToCollect
+        let tint: Color = ready ? .green : .orange
         let symbol: String = ready ? "figure.walk" : "location.north.line.fill"
-        let statusText: String = {
-            guard isBattleRelevant else { return "Away from you" }
-            return ready ? "Battle-ready" : "Walk \(metersToBattle)m closer to battle"
-        }()
+        let statusText: String = ready ? "Close enough to collect" : "Walk \(metersToCollect)m closer to collect"
 
         HStack(spacing: 12) {
             ZStack {
@@ -408,18 +268,82 @@ struct PinDetailBottomSheet: View {
         .animation(.easeInOut(duration: 0.25), value: ready)
     }
 
-    private func availabilityCard(message: String) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: detail.availability.symbolName)
-                .foregroundStyle(detail.availability.tint)
-            Text(message)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+    private var actionFooter: some View {
+        VStack(spacing: 0) {
+            Rectangle()
+                .fill(Color.primary.opacity(0.08))
+                .frame(height: 1)
+
+            VStack(spacing: 10) {
+                HStack(spacing: 10) {
+                    if !event.collected {
+                        actionButton(
+                            title: "Collect",
+                            fill: isCloseEnoughToCollect ? DS.Color.primary : Color(.systemGray5),
+                            foreground: isCloseEnoughToCollect ? .white : .secondary
+                        ) {
+                            if isCloseEnoughToCollect {
+                                onCollect()
+                            } else {
+                                showTooFarAlert = true
+                            }
+                        }
+                    }
+
+                    actionButton(title: "Navigate", fill: Color(.systemGray6), foreground: .primary) {
+                        openInAppleMaps()
+                    }
+                }
+                .alert("Not close enough yet", isPresented: $showTooFarAlert) {
+                    Button("OK", role: .cancel) {}
+                } message: {
+                    Text("Get within 0.1 miles of \(event.locationName) to collect its coin.")
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 12)
+            .padding(.bottom, 14)
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.primary.opacity(0.05))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(Color(.systemBackground))
+    }
+
+    private func actionButton(title: String, fill: Color, foreground: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 13)
+                .background(fill)
+                .foregroundStyle(foreground)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var overscrollDismissGesture: some Gesture {
+        DragGesture(minimumDistance: 3)
+            .onChanged { value in
+                if !isOverscrollDragging
+                    && scrollOffset >= 0
+                    && value.translation.height > 0 {
+                    isOverscrollDragging = true
+                }
+
+                guard isOverscrollDragging else { return }
+
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    dragTranslation = max(0, value.translation.height)
+                }
+            }
+            .onEnded { value in
+                guard isOverscrollDragging else { return }
+                isOverscrollDragging = false
+                handleDragEnd(value)
+            }
     }
 
     private var dismissDragGesture: some Gesture {
@@ -453,90 +377,11 @@ struct PinDetailBottomSheet: View {
         }
     }
 
-    @ViewBuilder
-    private var destinationToggleButton: some View {
-        let hasLocation = userLocation != nil
-        let tracking = isCurrentDestination
-        let tint = detail.pinType.headerColor
-        let title: String = {
-            if !hasLocation { return "Location needed" }
-            return tracking ? "Tracking" : "Set as Destination"
-        }()
-        let icon: String = tracking ? "checkmark.circle.fill" : "flag.fill"
-        let fill: Color = tracking ? tint.opacity(0.18) : Color(.systemGray6)
-        let stroke: Color = tracking ? tint.opacity(0.6) : .clear
-        let foreground: Color = tracking ? tint : .primary
-
-        Button {
-            onSetDestination?()
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.subheadline.weight(.bold))
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 11)
-            .background(fill)
-            .foregroundStyle(foreground)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(stroke, lineWidth: 1)
-            )
-            .opacity(hasLocation ? 1.0 : 0.5)
-        }
-        .buttonStyle(.plain)
-        .disabled(!hasLocation)
-        .animation(.easeInOut(duration: 0.2), value: tracking)
-    }
-
-    private func actionButton(title: String, fill: Color, foreground: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 13)
-                .background(fill)
-                .foregroundStyle(foreground)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func checkProximityAndLaunchAR() {
-        if AppConstants.Debug.isMapTeleportTestingEnabled {
-            onPrimaryAction()
-            return
-        }
-        guard let userLoc = userLocation else {
-            onPrimaryAction()
-            return
-        }
-        let userCL = CLLocation(latitude: userLoc.latitude, longitude: userLoc.longitude)
-        let pinCL  = CLLocation(latitude: pinCoordinate.latitude, longitude: pinCoordinate.longitude)
-        if userCL.distance(from: pinCL) <= AppConstants.AR.collectibleProximityMeters {
-            onPrimaryAction()
-        } else {
-            showProximityAlert = true
-        }
-    }
-
-    private func openInMaps() {
-        let lat = pinCoordinate.latitude
-        let lng = pinCoordinate.longitude
-        let google = URL(string: "comgooglemaps://?daddr=\(lat),\(lng)&directionsmode=walking")
-        let apple  = URL(string: "http://maps.apple.com/?daddr=\(lat),\(lng)&dirflg=w")
-        if let url = google, UIApplication.shared.canOpenURL(url) {
-            UIApplication.shared.open(url)
-        } else if let url = apple {
-            UIApplication.shared.open(url)
-        }
+    private func openInAppleMaps() {
+        let placemark = MKPlacemark(coordinate: pinCoordinate)
+        let mapItem = MKMapItem(placemark: placemark)
+        mapItem.name = event.locationName
+        mapItem.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeWalking])
     }
 }
 
@@ -555,20 +400,18 @@ private struct ScrollOffsetKey: PreferenceKey {
             .ignoresSafeArea()
 
         PinDetailBottomSheet(
-            detail: MapPinDetail(
-                id: "stadium-spirit-rally",
-                pinType: .event,
-                availability: .active,
+            event: EventItem(
+                id: "1",
                 title: "Stadium Spirit Rally",
-                dayLabel: "Day 1",
-                timeRange: "5:00 PM – 7:00 PM",
-                locationName: "Maryland Stadium",
                 description: "Show your Terp pride at the opening rally, featuring music and performances.",
-                collectibleName: "Stadium Stomper",
-                collectibleRarity: "Rare",
-                hasARCollectible: true
+                locationName: "Maryland Stadium",
+                latitude: 38.9889,
+                longitude: -76.9442,
+                startTime: .now,
+                endTime: .now.addingTimeInterval(7200),
+                points: 25,
+                collected: false
             ),
-            pinCoordinate: CLLocationCoordinate2D(latitude: 38.9889, longitude: -76.9442),
             userLocation: nil,
             isPresented: $isPresented
         )

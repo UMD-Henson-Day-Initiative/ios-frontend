@@ -3,9 +3,8 @@ import MapKit
 import CoreLocation
 
 struct MapView: View {
-    let pins: [PinEntity]
-    let collectedPinIDs: Set<UUID>
-    var onPinTapped: (PinEntity) -> Void = { _ in }
+    let events: [EventItem]
+    var onEventTapped: (EventItem) -> Void = { _ in }
 
     static let minLat = AppConstants.Map.campusBoundsMinLat
     static let maxLat = AppConstants.Map.campusBoundsMaxLat
@@ -29,7 +28,7 @@ struct MapView: View {
         maximumDistance: AppConstants.Map.cameraMaxDistance
     )
 
-    @StateObject private var locationManager = LocationManager()
+    @EnvironmentObject private var locationManager: LocationManager
 
     @State private var cameraDistance: Double = AppConstants.Map.defaultCameraDistance
     @State private var cameraPosition: MapCameraPosition = .camera(
@@ -42,33 +41,30 @@ struct MapView: View {
     )
     @State private var isFollowingUser = true
     @State private var playerHeading: Double = 0
-    @State private var selectedPinID: UUID?
+    @State private var selectedEventID: String?
 
     var body: some View {
         ZStack(alignment: .bottom) {
             Map(position: $cameraPosition, bounds: MapView.campusBounds) {
-                // Player character
                 if let location = locationManager.location {
                     Annotation("", coordinate: location.coordinate, anchor: .center) {
                         PlayerMarkerView(heading: playerHeading)
                     }
                 }
 
-                // Waypoint markers
-                ForEach(pins) { pin in
-                    let coord = CLLocationCoordinate2D(latitude: pin.latitude, longitude: pin.longitude)
+                ForEach(events) { event in
+                    let coord = CLLocationCoordinate2D(latitude: event.latitude, longitude: event.longitude)
                     Annotation("", coordinate: coord, anchor: .bottom) {
-                        WaypointMarkerView(
-                            pin: pin,
-                            isSelected: selectedPinID == pin.id,
-                            isCollected: collectedPinIDs.contains(pin.id)
+                        EventMarkerView(
+                            event: event,
+                            isSelected: selectedEventID == event.id
                         )
-                            .onTapGesture {
-                                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                    selectedPinID = selectedPinID == pin.id ? nil : pin.id
-                                }
-                                onPinTapped(pin)
+                        .onTapGesture {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                selectedEventID = selectedEventID == event.id ? nil : event.id
                             }
+                            onEventTapped(event)
+                        }
                     }
                 }
             }
@@ -108,7 +104,6 @@ struct MapView: View {
                 }
             }
 
-            // Recenter button — top left, below the avatar strip
             Button {
                 cameraDistance = AppConstants.Map.defaultCameraDistance
                 isFollowingUser = true
@@ -144,7 +139,7 @@ struct MapView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .onAppear {
-            locationManager.requestAuthorization()
+            locationManager.requestWhenInUseAuthorizationIfNeeded()
         }
     }
 
@@ -169,13 +164,13 @@ struct PlayerMarkerView: View {
     var body: some View {
         ZStack {
             Triangle()
-                .fill(Color.red.opacity(0.85))
+                .fill(DS.Color.primary.opacity(0.85))
                 .frame(width: 16, height: 20)
                 .offset(y: -22)
                 .rotationEffect(.degrees(heading))
 
             Circle()
-                .fill(Color.red)
+                .fill(DS.Color.primary)
                 .frame(width: 28, height: 28)
                 .overlay(
                     Text("T")
@@ -202,56 +197,44 @@ struct Triangle: Shape {
     }
 }
 
-// MARK: - Waypoint Marker
+// MARK: - Event Marker
 
-struct WaypointMarkerView: View {
-    let pin: PinEntity
+struct EventMarkerView: View {
+    let event: EventItem
     let isSelected: Bool
-    let isCollected: Bool
     @State private var isPulsing = false
     @State private var appeared = false
-
-    private var pinColor: Color { pin.pinType.mapMarkerColor }
-    private var availability: PinAvailabilityState { pin.availabilityState() }
-    private var markerOpacity: Double { availability.isActive ? 1.0 : 0.5 }
 
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
-                // Ground glow
                 Ellipse()
-                    .fill(pinColor.opacity(0.3))
+                    .fill(DS.Color.primary.opacity(0.3))
                     .frame(width: 36, height: 12)
                     .blur(radius: 4)
                     .offset(y: 24)
-                    .opacity(markerOpacity)
 
-                // Pulse ring
                 Circle()
-                    .fill(pinColor.opacity(0.2))
+                    .fill(DS.Color.primary.opacity(0.2))
                     .frame(width: 48, height: 48)
                     .scaleEffect(isPulsing ? 1.4 : 1.0)
                     .opacity(isPulsing ? 0.0 : 0.5)
-                    .opacity(availability.isActive ? 1.0 : 0.0)
 
-                // Outer ring
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [pinColor.opacity(0.8), pinColor],
+                            colors: [DS.Color.primary.opacity(0.8), DS.Color.primary],
                             startPoint: .top,
                             endPoint: .bottom
                         )
                     )
                     .frame(width: isSelected ? 42 : 38, height: isSelected ? 42 : 38)
                     .shadow(color: .black.opacity(0.4), radius: 6, y: 4)
-                    .opacity(markerOpacity)
 
-                // Inner face
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [pinColor.opacity(0.6), pinColor, pinColor.opacity(0.9)],
+                            colors: [DS.Color.primary.opacity(0.6), DS.Color.primary, DS.Color.primary.opacity(0.9)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -269,7 +252,7 @@ struct WaypointMarkerView: View {
                             )
                     )
                     .overlay(
-                        Image(systemName: pin.pinType.icon)
+                        Image(systemName: "star.fill")
                             .font(.system(size: isSelected ? 16 : 14, weight: .bold))
                             .foregroundStyle(.white)
                             .shadow(color: .black.opacity(0.3), radius: 1, y: 1)
@@ -279,26 +262,15 @@ struct WaypointMarkerView: View {
                             .stroke(.white.opacity(0.6), lineWidth: 2)
                     )
 
-                if !availability.isActive {
-                    Image(systemName: availability.symbolName)
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.white)
-                        .padding(4)
-                        .background(Color.black.opacity(0.65))
-                        .clipShape(Circle())
-                        .offset(x: 16, y: -16)
-                }
-
-                if pin.hasARCollectible && isCollected {
+                if event.collected {
                     Image(systemName: "checkmark.seal.fill")
                         .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(Color("UMDGold"), .white)
+                        .foregroundStyle(DS.Color.gold, .white)
                         .padding(4)
                         .background(Color.black.opacity(0.65))
                         .clipShape(Circle())
                         .overlay(
-                            Circle()
-                                .stroke(Color("UMDGold").opacity(0.7), lineWidth: 1)
+                            Circle().stroke(DS.Color.gold.opacity(0.7), lineWidth: 1)
                         )
                         .offset(x: -16, y: -16)
                 }
@@ -306,20 +278,16 @@ struct WaypointMarkerView: View {
             .scaleEffect(appeared ? 1.0 : 0.3)
             .scaleEffect(isSelected ? 1.15 : 1.0)
 
-            // Pin stem
             Triangle()
-                .fill(pinColor)
+                .fill(DS.Color.primary)
                 .frame(width: 12, height: 8)
                 .rotationEffect(.degrees(180))
                 .shadow(color: .black.opacity(0.3), radius: 2, y: 2)
                 .offset(y: -2)
-                .opacity(markerOpacity)
         }
         .onAppear {
-            if availability.isActive {
-                withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: false)) {
-                    isPulsing = true
-                }
+            withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: false)) {
+                isPulsing = true
             }
             withAnimation(.spring(response: 0.5, dampingFraction: 0.6)) {
                 appeared = true
@@ -328,6 +296,7 @@ struct WaypointMarkerView: View {
     }
 }
 
-#Preview(){
-    MapView(pins: [], collectedPinIDs: [])
+#Preview {
+    MapView(events: [])
+        .environmentObject(LocationManager())
 }

@@ -1,12 +1,11 @@
-//  ARCollectibleExperienceView.swift
+//  ARCoinCollectView.swift
 //  Henson_Day
 //
-//  File Description: This file defines the ARCollectibleExperienceView, which manages the full
-//  AR collectible experience for a given pin. It handles proximity detection, surface scanning,
-//  collectible spawning, tap-to-collect interactions, and capture animations. It also defines
-//  ARPlacementView, a UIViewRepresentable that bridges RealityKit's ARView for placing and
-//  animating 3D collectible models in the real world.
-//
+//  Full-screen AR flow for collecting an event's coin: every detected
+//  horizontal plane gets a translucent overlay; once one has been stable for
+//  a moment it auto-confirms and a gold coin spawns on it. Tapping the coin
+//  submits a collect request to the backend (which re-validates proximity
+//  server-side) and awards points on success.
 
 import SwiftUI
 import RealityKit
@@ -15,89 +14,50 @@ import Combine
 import AudioToolbox
 import UIKit
 import CoreHaptics
+import CoreLocation
 
-/// Full-screen AR experience for finding and collecting a muppet at a map pin.
-///
-/// Flow: every detected horizontal plane gets a translucent white overlay; once one
-/// plane has been observed for `planeStableDuration` and exceeds `minPlaneArea`, it
-/// auto-confirms (turns translucent blue) and the muppet spawns at its center.
-struct ARCollectibleExperienceView: View {
-    enum FlowState {
+struct ARCoinCollectView: View {
+    enum FlowState: Equatable {
         case searching
         case confirming
         case placed
-        case alreadyCollected
         case collecting
-        case captured
-        case noCollectiblesConfigured
+        case captured(pointsAwarded: Int)
+        case failed(message: String)
     }
 
-    let pin: PinEntity
-    @EnvironmentObject private var modelController: ModelController
-    @EnvironmentObject private var tabRouter: TabRouter
-    @EnvironmentObject private var locationManager: LocationPermissionManager
+    let event: EventItem
+    @EnvironmentObject private var appSession: AppSession
+    @EnvironmentObject private var locationManager: LocationManager
     @Environment(\.dismiss) private var dismiss
 
     @State private var flowState: FlowState = .searching
     @State private var hasPlaced = false
     @State private var hasDetectedPlane = false
     @State private var didTapCollectible = false
-    @State private var activeCollectible: DatabaseCollectible?
     @State private var pointsBurstProgress: CGFloat = 1
     @State private var collectFlowTask: Task<Void, Never>?
     @State private var replaceToken = UUID()
 
-    private var collectibleName: String {
-        activeCollectible?.name ?? (pin.collectibleName ?? pin.title)
-    }
-
-    private var collectibleModelAssetName: String {
-        activeCollectible?.modelFileName ?? "robot"
-    }
-
-    private var collectibleRarity: String {
-        activeCollectible?.rarity ?? (pin.collectibleRarity ?? "Common")
-    }
-
-    private var collectiblePoints: Int {
-        activeCollectible?.points ?? AppConstants.AR.defaultCollectiblePoints
-    }
-
-    private var currentTotalPoints: Int {
-        modelController.currentUser?.totalPoints ?? 0
-    }
-
-    private var alreadyCollected: Bool {
-        if let activeCollectible {
-            return modelController.isCollectibleUnlocked(id: activeCollectible.id, name: activeCollectible.name)
-        }
-        return modelController.hasCollectedCollectible(named: collectibleName)
-    }
-
-    private var canSpawnCollectible: Bool {
-        activeCollectible != nil && !alreadyCollected
-    }
-
     private var isCapturing: Bool {
-        flowState == .collecting || flowState == .captured
+        switch flowState {
+        case .collecting, .captured: return true
+        default: return false
+        }
     }
 
     private var shouldShowGuidanceCard: Bool {
         switch flowState {
-        case .searching, .confirming, .alreadyCollected, .noCollectiblesConfigured:
-            return true
-        case .placed, .collecting, .captured:
-            return false
+        case .searching, .confirming, .failed: return true
+        case .placed, .collecting, .captured: return false
         }
     }
 
     var body: some View {
         ZStack {
             ARPlacementView(
-                canSpawnCollectible: canSpawnCollectible,
+                canSpawnCollectible: !isCapturing,
                 isCapturing: isCapturing,
-                modelAssetName: collectibleModelAssetName,
-                rarity: collectibleRarity,
                 replaceToken: replaceToken,
                 hasPlaced: $hasPlaced,
                 hasDetectedPlane: $hasDetectedPlane,
@@ -107,7 +67,7 @@ struct ARCollectibleExperienceView: View {
 
             VStack {
                 HStack(alignment: .top) {
-                    Text(collectibleName)
+                    Text(event.title)
                         .font(.headline.weight(.bold))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 7)
@@ -149,20 +109,15 @@ struct ARCollectibleExperienceView: View {
             }
         }
         .onAppear {
-            chooseCollectibleForCurrentPin()
             recalculateFlow()
         }
         .onDisappear {
             collectFlowTask?.cancel()
         }
-        .onChange(of: hasPlaced) { _, _ in
-            recalculateFlow()
-        }
-        .onChange(of: hasDetectedPlane) { _, _ in
-            recalculateFlow()
-        }
+        .onChange(of: hasPlaced) { _, _ in recalculateFlow() }
+        .onChange(of: hasDetectedPlane) { _, _ in recalculateFlow() }
         .onChange(of: didTapCollectible) { _, tapped in
-            guard tapped, flowState == .placed, !alreadyCollected else { return }
+            guard tapped, flowState == .placed else { return }
             handleCollectTapped()
         }
     }
@@ -170,48 +125,39 @@ struct ARCollectibleExperienceView: View {
     @ViewBuilder
     private var overlayCard: some View {
         switch flowState {
-        case .noCollectiblesConfigured:
-            promptCard(
-                title: "No collectibles configured for this pin",
-                subtitle: "This pin does not currently map to any active collectible content."
-            )
         case .searching:
-            promptCard(
-                title: collectibleName,
-                subtitle: "Looking for a flat surface — pan your camera around the floor."
-            )
+            promptCard(title: event.title, subtitle: "Looking for a flat surface — pan your camera around the floor.")
         case .confirming:
+            promptCard(title: event.title, subtitle: "Hold steady — locking onto a surface.")
+        case .collecting:
+            promptCard(title: "Collecting…", subtitle: "Confirming with the server.")
+        case .captured(let points):
             promptCard(
-                title: collectibleName,
-                subtitle: "Hold steady — locking onto a surface."
+                title: "You collected the coin! +\(points) pts",
+                subtitle: "Total points: \(appSession.profile?.totalPoints ?? 0)."
             )
-        case .placed:
-            promptCard(title: collectibleName, subtitle: "Tap the 3D model to collect +\(collectiblePoints) points.")
-        case .alreadyCollected:
+        case .failed(let message):
             VStack(alignment: .leading, spacing: 10) {
-                Text("Already collected")
+                Text("Couldn't collect")
                     .font(.headline)
-                Text("You already captured \(collectibleName).")
+                Text(message)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                Button("Go to Gallery") {
-                    tabRouter.selectedTab = .collection
-                    dismiss()
+                Button("Try Again") {
+                    flowState = .searching
+                    hasPlaced = false
+                    hasDetectedPlane = false
+                    replaceToken = UUID()
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(Color("UMDRed"))
+                .tint(DS.Color.primary)
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(.ultraThinMaterial)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        case .collecting:
-            promptCard(title: "Collecting \(collectibleName)...", subtitle: "Nice find. Finalizing your capture.")
-        case .captured:
-            promptCard(
-                title: "You collected \(collectibleName)! +\(collectiblePoints) pts",
-                subtitle: "Unlocked in the UMD Index. Total points: \(currentTotalPoints)."
-            )
+        case .placed:
+            EmptyView()
         }
     }
 
@@ -228,12 +174,11 @@ struct ARCollectibleExperienceView: View {
             .background(.black.opacity(0.55), in: Capsule())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Re-place the collectible's platform")
+        .accessibilityLabel("Re-place the coin")
     }
 
     private func triggerReplace() {
-        let generator = UIImpactFeedbackGenerator(style: .soft)
-        generator.impactOccurred()
+        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
         replaceToken = UUID()
         hasPlaced = false
         hasDetectedPlane = false
@@ -244,28 +189,24 @@ struct ARCollectibleExperienceView: View {
         ZStack {
             Color.black.opacity(0.4).ignoresSafeArea()
             VStack(spacing: 20) {
-                Text("+\(collectiblePoints)")
-                    .font(.system(size: 36, weight: .black, design: .rounded))
-                    .foregroundStyle(Color("UMDGold"))
-                    .shadow(color: Color("UMDGold").opacity(0.45), radius: 14, x: 0, y: 4)
-                    .scaleEffect(0.72 + (0.48 * pointsBurstProgress))
-                    .offset(y: -18 - (72 * pointsBurstProgress))
-                    .opacity(1 - pointsBurstProgress)
+                if case .captured(let points) = flowState {
+                    Text("+\(points)")
+                        .font(.system(size: 36, weight: .black, design: .rounded))
+                        .foregroundStyle(DS.Color.gold)
+                        .shadow(color: DS.Color.gold.opacity(0.45), radius: 14, x: 0, y: 4)
+                        .scaleEffect(0.72 + (0.48 * pointsBurstProgress))
+                        .offset(y: -18 - (72 * pointsBurstProgress))
+                        .opacity(1 - pointsBurstProgress)
+                }
 
                 VStack(spacing: 14) {
                     Image(systemName: "sparkles")
                         .font(.system(size: 54, weight: .bold))
-                        .foregroundStyle(Color("UMDGold"))
-                        .scaleEffect(flowState == .collecting ? 1.15 : 1.0)
-                        .animation(.easeInOut(duration: 0.6).repeatCount(2, autoreverses: true), value: flowState)
+                        .foregroundStyle(DS.Color.gold)
 
-                    Text("Collected!")
+                    Text(isFinalCaptured ? "Collected!" : "Collecting…")
                         .font(.title2.weight(.bold))
                         .foregroundStyle(.white)
-
-                    Text(collectibleName)
-                        .font(.headline)
-                        .foregroundStyle(.white.opacity(0.9))
                 }
             }
             .padding(26)
@@ -274,25 +215,14 @@ struct ARCollectibleExperienceView: View {
         }
     }
 
-    private func chooseCollectibleForCurrentPin() {
-        let candidates = modelController.collectibles(for: pin)
-        let notCollected = candidates.filter {
-            !modelController.isCollectibleUnlocked(id: $0.id, name: $0.name)
-        }
-        activeCollectible = (notCollected.isEmpty ? candidates : notCollected).randomElement()
+    private var isFinalCaptured: Bool {
+        if case .captured = flowState { return true }
+        return false
     }
 
     private func recalculateFlow() {
         if isCapturing { return }
-
-        guard activeCollectible != nil else {
-            flowState = .noCollectiblesConfigured
-            return
-        }
-        if alreadyCollected {
-            flowState = .alreadyCollected
-            return
-        }
+        if case .failed = flowState { return }
         if hasPlaced {
             flowState = .placed
             return
@@ -302,25 +232,22 @@ struct ARCollectibleExperienceView: View {
 
     private func handleCollectTapped() {
         flowState = .collecting
-        playCaptureSuccessFeedback()
-        runPointsBurstAnimation()
-
-        if let activeCollectible {
-            modelController.captureCollectible(collectible: activeCollectible, foundAtTitle: pin.title)
-        } else {
-            modelController.captureCollectible(
-                collectibleName: collectibleName,
-                rarity: collectibleRarity,
-                foundAtTitle: pin.title,
-                points: collectiblePoints
-            )
-        }
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
 
         collectFlowTask?.cancel()
         collectFlowTask = Task { @MainActor in
+            let coordinate = locationManager.coordinate
+                ?? CLLocationCoordinate2D(latitude: event.latitude, longitude: event.longitude)
+
+            guard let result = await appSession.collectCoin(for: event, at: coordinate) else {
+                flowState = .failed(message: appSession.errorMessage ?? "Something went wrong.")
+                return
+            }
+
+            runPointsBurstAnimation()
+            flowState = .captured(pointsAwarded: result.pointsAwarded)
+
             try? await Task.sleep(nanoseconds: UInt64(AppConstants.AR.collectRevealDelaySeconds * 1_000_000_000))
-            flowState = .captured
-            tabRouter.selectedTab = .collection
             try? await Task.sleep(nanoseconds: UInt64(AppConstants.AR.collectDismissDelaySeconds * 1_000_000_000))
             dismiss()
         }
@@ -331,11 +258,6 @@ struct ARCollectibleExperienceView: View {
         withAnimation(.easeOut(duration: AppConstants.AR.pointsBurstAnimationSeconds)) {
             pointsBurstProgress = 1
         }
-    }
-
-    private func playCaptureSuccessFeedback() {
-        let generator = UINotificationFeedbackGenerator()
-        generator.notificationOccurred(.success)
     }
 
     private func promptCard(title: String, subtitle: String) -> some View {
@@ -357,8 +279,6 @@ struct ARCollectibleExperienceView: View {
 struct ARPlacementView: UIViewRepresentable {
     let canSpawnCollectible: Bool
     let isCapturing: Bool
-    let modelAssetName: String
-    let rarity: String
     let replaceToken: UUID
     @Binding var hasPlaced: Bool
     @Binding var hasDetectedPlane: Bool
@@ -379,14 +299,16 @@ struct ARPlacementView: UIViewRepresentable {
             arView: uiView,
             canSpawnCollectible: canSpawnCollectible,
             isCapturing: isCapturing,
-            modelAssetName: modelAssetName,
-            rarity: rarity,
             hasPlaced: $hasPlaced,
             hasDetectedPlane: $hasDetectedPlane
         )
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
+
+    static func dismantleUIView(_ uiView: ARView, coordinator: Coordinator) {
+        uiView.session.pause()
+    }
 
     private func wireCoordinatorCallbacks(_ coordinator: Coordinator) {
         coordinator.didTapCollectible = { didTapCollectible = true }
@@ -398,11 +320,8 @@ struct ARPlacementView: UIViewRepresentable {
     final class Coordinator: NSObject, ARSessionDelegate {
         private weak var arView: ARView?
 
-        private var collectibleAnchor: AnchorEntity?
-        private var collectibleEntity: Entity?
-        private var tapTargetEntity: ModelEntity?
-        private var haloEntity: ModelEntity?
-        private var loadCancellable: AnyCancellable?
+        private var coinAnchor: AnchorEntity?
+        private var coinEntity: ModelEntity?
         private var isCollectAnimationRunning = false
         private var hapticEngine: CHHapticEngine?
 
@@ -413,8 +332,6 @@ struct ARPlacementView: UIViewRepresentable {
         }
         private var planeVisualizations: [UUID: PlaneVisualization] = [:]
         private var confirmedPlaneID: UUID?
-        private var latestModelAssetName: String?
-        private var latestRarity: String?
 
         private enum PlacementMode { case firstStable, viewportPrioritized }
         private var placementMode: PlacementMode = .firstStable
@@ -423,7 +340,7 @@ struct ARPlacementView: UIViewRepresentable {
         private let planeStableDuration: CFTimeInterval = 1.0
         private let minPlaneArea: Float = 0.1   // m²
 
-        private let collectibleEntityName = "ar.collectible.entity"
+        private let coinEntityName = "ar.coin.entity"
 
         var didTapCollectible: (() -> Void)?
         var didConfirmPlacement: (() -> Void)?
@@ -439,8 +356,6 @@ struct ARPlacementView: UIViewRepresentable {
 
             let configuration = ARWorldTrackingConfiguration()
             configuration.planeDetection = [.horizontal]
-            // Match Camera-app 1x FOV by using the full wide-sensor format
-            // (default ARKit format uses a tighter sensor crop).
             if let wideFormat = ARWorldTrackingConfiguration.recommendedVideoFormatForHighResolutionFrameCapturing {
                 configuration.videoFormat = wideFormat
             }
@@ -454,26 +369,21 @@ struct ARPlacementView: UIViewRepresentable {
             arView: ARView,
             canSpawnCollectible: Bool,
             isCapturing: Bool,
-            modelAssetName: String,
-            rarity: String,
             hasPlaced: Binding<Bool>,
             hasDetectedPlane: Binding<Bool>
         ) {
             self.arView = arView
-            latestModelAssetName = modelAssetName
-            latestRarity = rarity
-
             if isCapturing { return }
 
             if !canSpawnCollectible {
                 removeAllPlaneVisualizations()
-                removeCollectible()
+                removeCoin()
                 if hasPlaced.wrappedValue { hasPlaced.wrappedValue = false }
                 if hasDetectedPlane.wrappedValue { hasDetectedPlane.wrappedValue = false }
                 return
             }
 
-            if collectibleAnchor != nil {
+            if coinAnchor != nil {
                 if !hasPlaced.wrappedValue { hasPlaced.wrappedValue = true }
                 prunePlaneVisualizationsToConfirmed()
                 return
@@ -497,10 +407,7 @@ struct ARPlacementView: UIViewRepresentable {
 
         private func localTransform(for plane: ARPlaneAnchor) -> Transform {
             let center = SIMD3<Float>(plane.center.x, 0, plane.center.z)
-            let rotation = simd_quatf(
-                angle: plane.planeExtent.rotationOnYAxis,
-                axis: SIMD3<Float>(0, 1, 0)
-            )
+            let rotation = simd_quatf(angle: plane.planeExtent.rotationOnYAxis, axis: SIMD3<Float>(0, 1, 0))
             return Transform(scale: .one, rotation: rotation, translation: center)
         }
 
@@ -513,10 +420,7 @@ struct ARPlacementView: UIViewRepresentable {
                 SIMD3<Float>( halfW, 0, -halfD),
                 SIMD3<Float>(-halfW, 0, -halfD)
             ]
-            let yRot = simd_quatf(
-                angle: plane.planeExtent.rotationOnYAxis,
-                axis: SIMD3<Float>(0, 1, 0)
-            )
+            let yRot = simd_quatf(angle: plane.planeExtent.rotationOnYAxis, axis: SIMD3<Float>(0, 1, 0))
             return localOffsets.map { offset in
                 let local = plane.center + yRot.act(offset)
                 let world4 = plane.transform * SIMD4<Float>(local.x, local.y, local.z, 1)
@@ -557,10 +461,7 @@ struct ARPlacementView: UIViewRepresentable {
         }
 
         private func makePlaneEntity(for plane: ARPlaneAnchor) -> ModelEntity {
-            let mesh = MeshResource.generatePlane(
-                width: plane.planeExtent.width,
-                depth: plane.planeExtent.height
-            )
+            let mesh = MeshResource.generatePlane(width: plane.planeExtent.width, depth: plane.planeExtent.height)
             let material = translucentMaterial(color: .white, alpha: 0.3)
             let entity = ModelEntity(mesh: mesh, materials: [material])
             entity.transform = localTransform(for: plane)
@@ -596,20 +497,17 @@ struct ARPlacementView: UIViewRepresentable {
                 return
             }
             guard plane.identifier != confirmedPlaneID else { return }
-            viz.modelEntity.model?.mesh = MeshResource.generatePlane(
-                width: plane.planeExtent.width,
-                depth: plane.planeExtent.height
-            )
+            viz.modelEntity.model?.mesh = MeshResource.generatePlane(width: plane.planeExtent.width, depth: plane.planeExtent.height)
             viz.modelEntity.transform = localTransform(for: plane)
         }
 
         private func removePlaneVisualization(for id: UUID) {
             guard let viz = planeVisualizations.removeValue(forKey: id) else { return }
             viz.anchorEntity.removeFromParent()
-            if confirmedPlaneID == id && collectibleAnchor == nil {
+            if confirmedPlaneID == id && coinAnchor == nil {
                 confirmedPlaneID = nil
             }
-            if planeVisualizations.isEmpty && collectibleAnchor == nil {
+            if planeVisualizations.isEmpty && coinAnchor == nil {
                 DispatchQueue.main.async { [weak self] in
                     self?.didLoseAllPlanes?()
                 }
@@ -645,7 +543,7 @@ struct ARPlacementView: UIViewRepresentable {
         private func resetPlacement() {
             excludedPlaneID = confirmedPlaneID
             placementMode = .viewportPrioritized
-            removeCollectible()
+            removeCoin()
             removeAllPlaneVisualizations()
         }
 
@@ -657,8 +555,7 @@ struct ARPlacementView: UIViewRepresentable {
                 return
             }
             for anchor in anchors {
-                guard let plane = anchor as? ARPlaneAnchor,
-                      plane.alignment == .horizontal else { continue }
+                guard let plane = anchor as? ARPlaneAnchor, plane.alignment == .horizontal else { continue }
                 addPlaneVisualization(for: plane)
             }
         }
@@ -669,8 +566,7 @@ struct ARPlacementView: UIViewRepresentable {
                 return
             }
             for anchor in anchors {
-                guard let plane = anchor as? ARPlaneAnchor,
-                      plane.alignment == .horizontal else { continue }
+                guard let plane = anchor as? ARPlaneAnchor, plane.alignment == .horizontal else { continue }
                 updatePlaneVisualization(for: plane)
             }
         }
@@ -684,7 +580,6 @@ struct ARPlacementView: UIViewRepresentable {
 
         func session(_ session: ARSession, didUpdate frame: ARFrame) {
             guard confirmedPlaneID == nil else { return }
-            guard latestModelAssetName != nil else { return }
             let now = CACurrentMediaTime()
 
             var currentPlanes: [UUID: ARPlaneAnchor] = [:]
@@ -730,7 +625,6 @@ struct ARPlacementView: UIViewRepresentable {
         // MARK: - Confirmation + Spawn
 
         private func confirmPlane(_ plane: ARPlaneAnchor, viz: PlaneVisualization) {
-            guard let modelAssetName = latestModelAssetName else { return }
             confirmedPlaneID = plane.identifier
 
             viz.modelEntity.model?.materials = [translucentMaterial(color: .systemBlue, alpha: 0.45)]
@@ -743,7 +637,7 @@ struct ARPlacementView: UIViewRepresentable {
             var localTranslation = matrix_identity_float4x4
             localTranslation.columns.3 = SIMD4<Float>(plane.center.x, 0, plane.center.z, 1)
             let world = matrix_multiply(plane.transform, localTranslation)
-            placeCollectible(at: world, modelAssetName: modelAssetName)
+            placeCoin(at: world)
 
             placementMode = .firstStable
             excludedPlaneID = nil
@@ -753,55 +647,49 @@ struct ARPlacementView: UIViewRepresentable {
             }
         }
 
-        // MARK: - Collectible Placement
+        // MARK: - Coin Placement
 
-        private func placeCollectible(at worldTransform: simd_float4x4, modelAssetName: String) {
-            guard let arView, collectibleAnchor == nil else { return }
+        private func placeCoin(at worldTransform: simd_float4x4) {
+            guard let arView, coinAnchor == nil else { return }
 
             let translation = worldTransform.translation
             let anchor = AnchorEntity(world: SIMD3<Float>(translation.x, translation.y, translation.z))
             arView.scene.addAnchor(anchor)
-            collectibleAnchor = anchor
+            coinAnchor = anchor
 
-            attachRarityHalo(to: anchor, rarity: latestRarity ?? "Common")
+            let mesh = MeshResource.generateCylinder(
+                height: AppConstants.AR.coinThicknessMeters,
+                radius: AppConstants.AR.coinRadiusMeters
+            )
+            var material = SimpleMaterial()
+            material.color = .init(tint: UIColor(DS.Color.gold), texture: nil)
+            material.metallic = .init(floatLiteral: 1.0)
+            material.roughness = .init(floatLiteral: 0.25)
 
-            loadCancellable = Entity.loadModelAsync(named: modelAssetName)
-                .receive(on: DispatchQueue.main)
-                .sink(receiveCompletion: { [weak self] completion in
-                    guard let self else { return }
-                    if case .failure = completion {
-                        self.installFallbackEntity()
-                    }
-                }, receiveValue: { [weak self] entity in
-                    guard let self else { return }
-                    self.attachCollectible(entity: entity, modelAssetName: modelAssetName)
-                })
-        }
+            let coin = ModelEntity(mesh: mesh, materials: [material])
+            coin.name = coinEntityName
+            coin.generateCollisionShapes(recursive: true)
+            coin.components.set(InputTargetComponent())
 
-        private func attachCollectible(entity: Entity, modelAssetName: String) {
-            entity.name = collectibleEntityName
-            let targetDimension = targetMaxDimension(for: modelAssetName)
-            entity.scale = normalizedScale(for: entity, targetMaxDimension: targetDimension)
-            entity.position = SIMD3<Float>(0, 0, 0)
-            entity.generateCollisionShapes(recursive: true)
-            installTapTarget(for: entity)
+            let tapMesh = MeshResource.generateSphere(radius: AppConstants.AR.coinTapTargetRadiusMeters)
+            let transparentMaterial = SimpleMaterial(color: UIColor.white.withAlphaComponent(0.001), roughness: 1.0, isMetallic: false)
+            let tapTarget = ModelEntity(mesh: tapMesh, materials: [transparentMaterial])
+            tapTarget.name = coinEntityName
+            tapTarget.generateCollisionShapes(recursive: true)
+            tapTarget.components.set(InputTargetComponent())
+            coin.addChild(tapTarget)
 
-            collectibleAnchor?.addChild(entity)
-            collectibleEntity = entity
+            anchor.addChild(coin)
+            coinEntity = coin
+
             playPlacementPulse()
         }
 
-        private func installFallbackEntity() {
-            let fallbackMesh = MeshResource.generateSphere(radius: AppConstants.AR.fallbackSphereRadius)
-            let fallbackMaterial = SimpleMaterial(color: .gray, roughness: 0.3, isMetallic: false)
-            let fallbackEntity = ModelEntity(mesh: fallbackMesh, materials: [fallbackMaterial])
-            fallbackEntity.name = collectibleEntityName
-            fallbackEntity.position = SIMD3<Float>(0, 0, 0)
-            fallbackEntity.generateCollisionShapes(recursive: true)
-            installTapTarget(for: fallbackEntity)
-            collectibleAnchor?.addChild(fallbackEntity)
-            collectibleEntity = fallbackEntity
-            playPlacementPulse()
+        private func removeCoin() {
+            coinEntity = nil
+            coinAnchor?.removeFromParent()
+            coinAnchor = nil
+            confirmedPlaneID = nil
         }
 
         // Smooth ~0.5s swell — a wave that crests then fades, not a tap.
@@ -824,12 +712,7 @@ struct ARPlacementView: UIViewRepresentable {
 
                 let intensity = CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.9)
                 let sharpness = CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.3)
-                let event = CHHapticEvent(
-                    eventType: .hapticContinuous,
-                    parameters: [intensity, sharpness],
-                    relativeTime: 0,
-                    duration: 0.5
-                )
+                let event = CHHapticEvent(eventType: .hapticContinuous, parameters: [intensity, sharpness], relativeTime: 0, duration: 0.5)
                 let intensityCurve = CHHapticParameterCurve(
                     parameterID: .hapticIntensityControl,
                     controlPoints: [
@@ -847,115 +730,22 @@ struct ARPlacementView: UIViewRepresentable {
             }
         }
 
-        private func installTapTarget(for entity: Entity) {
-            tapTargetEntity?.removeFromParent()
-
-            entity.components.set(InputTargetComponent())
-
-            let tapTargetMesh = MeshResource.generateSphere(radius: AppConstants.AR.collectibleTapTargetRadius)
-            let transparentMaterial = SimpleMaterial(
-                color: UIColor.white.withAlphaComponent(0.001),
-                roughness: 1.0,
-                isMetallic: false
-            )
-            let tapTarget = ModelEntity(mesh: tapTargetMesh, materials: [transparentMaterial])
-            tapTarget.name = collectibleEntityName
-            tapTarget.generateCollisionShapes(recursive: true)
-            tapTarget.components.set(InputTargetComponent())
-
-            entity.addChild(tapTarget)
-            tapTargetEntity = tapTarget
-        }
-
-        private func normalizedScale(for entity: Entity, targetMaxDimension: Float) -> SIMD3<Float> {
-            let bounds = entity.visualBounds(relativeTo: nil)
-            let extents = bounds.extents
-            let maxDimension = max(extents.x, max(extents.y, extents.z))
-            guard maxDimension.isFinite, maxDimension > 0 else {
-                return SIMD3<Float>(repeating: AppConstants.AR.fallbackUniformScale)
-            }
-
-            let uniformScale = (targetMaxDimension / maxDimension) * AppConstants.AR.collectibleVisualScaleMultiplier
-            let clampedScale = min(max(uniformScale, AppConstants.AR.minScale), AppConstants.AR.maxScale)
-            return SIMD3<Float>(repeating: clampedScale)
-        }
-
-        private func targetMaxDimension(for modelAssetName: String) -> Float {
-            if let mapped = AppConstants.AR.ModelSizing.targetDimensionByModelAsset[modelAssetName] {
-                return mapped
-            }
-            if modelAssetName.contains("toy_") {
-                return AppConstants.AR.ModelSizing.smallTargetMaxDimension
-            }
-            if modelAssetName.contains("robot") || modelAssetName.contains("biplane") {
-                return AppConstants.AR.ModelSizing.largeTargetMaxDimension
-            }
-            return AppConstants.AR.ModelSizing.defaultTargetMaxDimension
-        }
-
-        // MARK: - Rarity Halo
-
-        private func attachRarityHalo(to anchor: AnchorEntity, rarity: String) {
-            removeHalo()
-            let radius: Float = 0.08
-            let mesh = MeshResource.generatePlane(
-                width: radius * 2,
-                depth: radius * 2,
-                cornerRadius: radius
-            )
-            let material = translucentMaterial(color: haloColor(for: rarity), alpha: 0.55)
-            let halo = ModelEntity(mesh: mesh, materials: [material])
-            halo.position = SIMD3<Float>(0, 0.001, 0)
-            anchor.addChild(halo)
-            haloEntity = halo
-        }
-
-        private func haloColor(for rarity: String) -> UIColor {
-            switch rarity.lowercased() {
-            case "legendary":
-                return UIColor(named: "UMDGold") ?? .systemYellow
-            case "epic":
-                return .systemPurple
-            case "rare":
-                return .systemBlue
-            default:
-                return UIColor.white.withAlphaComponent(0.85)
-            }
-        }
-
-        private func removeHalo() {
-            haloEntity?.removeFromParent()
-            haloEntity = nil
-        }
-
-        private func removeCollectible() {
-            collectibleEntity = nil
-            tapTargetEntity = nil
-            loadCancellable?.cancel()
-            loadCancellable = nil
-
-            removeHalo()
-            collectibleAnchor?.removeFromParent()
-            collectibleAnchor = nil
-            confirmedPlaneID = nil
-        }
-
         @objc private func handleTap(_ recognizer: UITapGestureRecognizer) {
             guard let arView else { return }
             let location = recognizer.location(in: arView)
             guard let hitEntity = arView.entity(at: location) else { return }
 
-            let tappedCollectible = sequence(first: hitEntity, next: { $0.parent })
-                .contains(where: { $0.name == collectibleEntityName })
+            let tappedCoin = sequence(first: hitEntity, next: { $0.parent })
+                .contains(where: { $0.name == coinEntityName })
 
-            if tappedCollectible {
-                animateCollectibleTowardCameraAndCollect()
+            if tappedCoin {
+                animateCoinTowardCameraAndCollect()
             }
         }
 
-        private func animateCollectibleTowardCameraAndCollect() {
+        private func animateCoinTowardCameraAndCollect() {
             guard !isCollectAnimationRunning else { return }
-            guard let arView, let collectibleEntity else {
+            guard let arView, let coinEntity else {
                 didTapCollectible?()
                 return
             }
@@ -963,46 +753,28 @@ struct ARPlacementView: UIViewRepresentable {
             isCollectAnimationRunning = true
             playTapFeedback()
             removeAllPlaneVisualizations()
-            removeHalo()
 
             let cameraMatrix = arView.cameraTransform.matrix
-            let cameraPosition = SIMD3<Float>(
-                cameraMatrix.columns.3.x,
-                cameraMatrix.columns.3.y,
-                cameraMatrix.columns.3.z
-            )
-            let forward = normalize(SIMD3<Float>(
-                -cameraMatrix.columns.2.x,
-                -cameraMatrix.columns.2.y,
-                -cameraMatrix.columns.2.z
-            ))
-            let up = normalize(SIMD3<Float>(
-                cameraMatrix.columns.1.x,
-                cameraMatrix.columns.1.y,
-                cameraMatrix.columns.1.z
-            ))
+            let cameraPosition = SIMD3<Float>(cameraMatrix.columns.3.x, cameraMatrix.columns.3.y, cameraMatrix.columns.3.z)
+            let forward = normalize(SIMD3<Float>(-cameraMatrix.columns.2.x, -cameraMatrix.columns.2.y, -cameraMatrix.columns.2.z))
+            let up = normalize(SIMD3<Float>(cameraMatrix.columns.1.x, cameraMatrix.columns.1.y, cameraMatrix.columns.1.z))
 
             let targetPosition = cameraPosition + (forward * 0.18) - (up * 0.06)
-            let currentScale = collectibleEntity.scale(relativeTo: nil)
+            let currentScale = coinEntity.scale(relativeTo: nil)
             let targetScale = currentScale * SIMD3<Float>(repeating: 0.05)
             let targetTransform = Transform(
                 scale: targetScale,
-                rotation: collectibleEntity.orientation(relativeTo: nil),
+                rotation: coinEntity.orientation(relativeTo: nil),
                 translation: targetPosition
             )
 
-            collectibleEntity.move(
-                to: targetTransform,
-                relativeTo: nil,
-                duration: 0.45,
-                timingFunction: .easeInOut
-            )
+            coinEntity.move(to: targetTransform, relativeTo: nil, duration: 0.45, timingFunction: .easeInOut)
 
             Task { @MainActor [weak self] in
                 try? await Task.sleep(nanoseconds: UInt64(AppConstants.AR.collectibleAnimationCompletionDelaySeconds * 1_000_000_000))
                 guard let self else { return }
-                collectibleEntity.removeFromParent()
-                self.collectibleEntity = nil
+                coinEntity.removeFromParent()
+                self.coinEntity = nil
                 self.didTapCollectible?()
                 self.isCollectAnimationRunning = false
             }

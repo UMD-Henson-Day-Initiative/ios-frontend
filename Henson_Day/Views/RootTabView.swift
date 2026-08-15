@@ -1,30 +1,21 @@
 //  RootTabView.swift
 //  Henson_Day
 //
-//  File Description: This file defines the main tab-based navigation view of the Henson_Day
-//  app. It provides a TabView containing the primary sections of the app: Home,
-//  Schedule, Map, Collection, and Profile. Each tab is associated with an
-//  AppTab enum value to manage selection state. Additionally, it listens
-//  for user-facing errors from the ModelController and presents them in an alert.
-
-
-// RootTabView.swift
+//  File Description: 5-tab root navigation: Home, Schedule, Map, Leaderboard, Profile.
 
 import SwiftUI
 
 struct RootTabView: View {
-    @EnvironmentObject private var modelController: ModelController
     @EnvironmentObject private var tabRouter: TabRouter
+    @EnvironmentObject private var appSession: AppSession
 
     var body: some View {
         VStack(spacing: 0) {
-            // Content area
             Group {
                 switch tabRouter.selectedTab {
                 case .home:        HomeScreen()
                 case .schedule:    ScheduleScreen()
                 case .map:         MapScreen()
-                case .collection:  CollectionScreen()
                 case .leaderboard: LeaderboardScreen()
                 case .profile:     ProfileScreen()
                 }
@@ -35,21 +26,17 @@ struct RootTabView: View {
         }
         .ignoresSafeArea(.keyboard)
         .alert(
-            modelController.userFacingError?.title ?? "Error",
+            "Something went wrong",
             isPresented: Binding(
-                get: { modelController.userFacingError != nil },
+                get: { appSession.errorMessage != nil },
                 set: { isPresented in
-                    if !isPresented {
-                        modelController.clearUserFacingError()
-                    }
+                    if !isPresented { appSession.errorMessage = nil }
                 }
             )
         ) {
-            Button("Dismiss", role: .cancel) {
-                modelController.clearUserFacingError()
-            }
+            Button("Dismiss", role: .cancel) { appSession.errorMessage = nil }
         } message: {
-            Text(modelController.userFacingError?.message ?? "")
+            Text(appSession.errorMessage ?? "")
         }
     }
 }
@@ -61,11 +48,11 @@ struct HensonBottomBar: View {
     @Namespace private var tabNS
 
     private let tabs: [(tab: AppTab, label: String, icon: String, iconFilled: String)] = [
-        (.home,        "Home",       "house",       "house.fill"),
-        (.schedule,    "Schedule",   "calendar",    "calendar"),
-        (.map,         "Map",        "map",         "map.fill"),
-        (.collection,  "Index",      "star.square", "star.square.fill"),
-        (.leaderboard, "Board",      "trophy",      "trophy.fill"),
+        (.home,        "Home",      "house",       "house.fill"),
+        (.schedule,    "Schedule",  "calendar",    "calendar"),
+        (.map,         "Map",       "map",         "map.fill"),
+        (.leaderboard, "Board",     "trophy",      "trophy.fill"),
+        (.profile,     "Profile",   "person.crop.circle", "person.crop.circle.fill"),
     ]
 
     var body: some View {
@@ -107,13 +94,10 @@ struct HensonBottomBar: View {
     }
 }
 
-
 #Preview {
     RootTabView()
-        .environmentObject(ModelController())
         .environmentObject(TabRouter())
+        .environmentObject(AppSession(authManager: AuthManager()))
+        .environmentObject(LocationManager())
         .environmentObject(CameraPermissionManager())
-        .environmentObject(LocationPermissionManager())
 }
-
-
