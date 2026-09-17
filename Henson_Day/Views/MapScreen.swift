@@ -100,12 +100,13 @@ struct MapScreen: View {
     }
 
     private func focusOnEvent(withID eventID: String?) {
-        guard let eventID, let event = appSession.events.first(where: { $0.id == eventID }) else { return }
+        guard let eventID, let event = appSession.events.first(where: { $0.id == eventID }),
+              let coordinate = event.coordinate else { return }
 
         selectedDay = Calendar.current.startOfDay(for: event.startTime)
         selectedEventID = event.id
         isDetailPresented = true
-        focusCoordinate = CLLocationCoordinate2D(latitude: event.latitude, longitude: event.longitude)
+        focusCoordinate = coordinate
         tabRouter.focusedEventID = nil
     }
 

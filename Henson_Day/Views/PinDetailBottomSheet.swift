@@ -34,8 +34,10 @@ struct PinDetailBottomSheet: View {
         }
     }
 
+    // This sheet only ever opens from a tapped map pin, and only non-virtual
+    // events get pins — so `event.coordinate` is expected to be non-nil here.
     private var pinCoordinate: CLLocationCoordinate2D {
-        CLLocationCoordinate2D(latitude: event.latitude, longitude: event.longitude)
+        event.coordinate ?? CLLocationCoordinate2D(latitude: 0, longitude: 0)
     }
 
     private var distanceMeters: CLLocationDistance? {
@@ -438,6 +440,7 @@ private struct ScrollOffsetKey: PreferenceKey {
                 locationName: "Maryland Stadium",
                 latitude: 38.9889,
                 longitude: -76.9442,
+                isVirtual: false,
                 startTime: .now,
                 endTime: .now.addingTimeInterval(7200),
                 points: 25,

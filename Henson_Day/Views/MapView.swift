@@ -155,8 +155,9 @@ struct MapView: View {
 
     @MapContentBuilder
     private var eventAnnotations: some MapContent {
-        ForEach(events) { event in
-            let coord = CLLocationCoordinate2D(latitude: event.latitude, longitude: event.longitude)
+        // Virtual events have no coordinate, so they get no pin.
+        ForEach(events.filter { $0.coordinate != nil }) { event in
+            let coord = event.coordinate!
             Annotation("", coordinate: coord, anchor: .bottom) {
                 EventMarkerView(
                     event: event,

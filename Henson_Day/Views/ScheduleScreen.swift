@@ -7,13 +7,16 @@
 //  events, otherwise the nearest upcoming day. Backed entirely by
 //  AppSession.events (fetched from GET /events).
 
+import CoreLocation
 import SwiftUI
 
 struct ScheduleScreen: View {
     @EnvironmentObject private var appSession: AppSession
     @EnvironmentObject private var tabRouter: TabRouter
+    @EnvironmentObject private var locationManager: LocationManager
 
     @State private var selectedDay: Date?
+    @State private var collectingEventID: String?
 
     private var days: [Date] {
         let calendar = Calendar.current
@@ -63,13 +66,21 @@ struct ScheduleScreen: View {
 
                                 VStack(spacing: DS.Spacing.card) {
                                     ForEach(eventsForSelectedDay) { event in
-                                        Button {
-                                            tabRouter.focusedEventID = event.id
-                                            tabRouter.selectedTab = .map
-                                        } label: {
-                                            ScheduleEventRow(event: event)
+                                        if event.isVirtual {
+                                            ScheduleEventRow(
+                                                event: event,
+                                                isCollecting: collectingEventID == event.id,
+                                                onCollect: event.collected ? nil : { collectVirtualEvent(event) }
+                                            )
+                                        } else {
+                                            Button {
+                                                tabRouter.focusedEventID = event.id
+                                                tabRouter.selectedTab = .map
+                                            } label: {
+                                                ScheduleEventRow(event: event)
+                                            }
+                                            .buttonStyle(.plain)
                                         }
-                                        .buttonStyle(.plain)
                                     }
                                 }
                                 .padding(.horizontal, DS.Spacing.screenH)
@@ -93,6 +104,22 @@ struct ScheduleScreen: View {
         }
         .onChange(of: appSession.events.count) { _, _ in
             updateSelectedDayIfNeeded()
+        }
+    }
+
+    /// Virtual events have no location to point a map pin or an AR camera at,
+    /// so there's no map/AR flow to collect them through — this collects
+    /// directly from the schedule row instead. The backend doesn't apply a
+    /// proximity check for virtual events, so any coordinate (or none) works.
+    private func collectVirtualEvent(_ event: EventItem) {
+        guard collectingEventID == nil else { return }
+        collectingEventID = event.id
+        Task {
+            _ = await appSession.collectCoin(
+                for: event,
+                at: locationManager.coordinate ?? CLLocationCoordinate2D(latitude: 0, longitude: 0)
+            )
+            collectingEventID = nil
         }
     }
 
@@ -189,6 +216,8 @@ private struct ScheduleDayPill: View {
 
 private struct ScheduleEventRow: View {
     let event: EventItem
+    var isCollecting: Bool = false
+    var onCollect: (() -> Void)? = nil
 
     private var timeRangeText: String {
         let formatter = DateFormatter()
@@ -215,9 +244,18 @@ private struct ScheduleEventRow: View {
                 .foregroundStyle(DS.Color.neutral)
 
                 HStack(spacing: 6) {
-                    Image(systemName: "mappin")
+                    Image(systemName: event.isVirtual ? "globe" : "mappin")
                         .font(.caption)
                     Text(event.locationName)
+                    if event.isVirtual {
+                        Text("VIRTUAL")
+                            .font(.system(size: 9, weight: .heavy, design: .rounded))
+                            .foregroundStyle(DS.Color.primary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(DS.Color.primaryTint)
+                            .clipShape(Capsule())
+                    }
                 }
                 .font(DS.Typography.caption)
                 .foregroundStyle(DS.Color.neutral)
@@ -243,6 +281,25 @@ private struct ScheduleEventRow: View {
                     Image(systemName: "checkmark.seal.fill")
                         .foregroundStyle(DS.Color.statusCompleted)
                         .padding(.top, 2)
+                } else if let onCollect {
+                    Button(action: onCollect) {
+                        if isCollecting {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                                .frame(height: 20)
+                        } else {
+                            Text("Collect")
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(DS.Color.heroGradient)
+                                .clipShape(Capsule())
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isCollecting)
+                    .padding(.top, 2)
                 }
             }
         }
@@ -257,4 +314,5 @@ private struct ScheduleEventRow: View {
     ScheduleScreen()
         .environmentObject(AppSession(authManager: AuthManager()))
         .environmentObject(TabRouter())
+        .environmentObject(LocationManager())
 }

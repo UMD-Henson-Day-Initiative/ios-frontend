@@ -1,3 +1,4 @@
+import CoreLocation
 import Foundation
 
 /// The signed-in user's profile, as returned by `GET /me`.
@@ -28,8 +29,10 @@ struct EventItem: Codable, Equatable, Identifiable {
     let title: String
     let description: String
     let locationName: String
-    let latitude: Double
-    let longitude: Double
+    /// Nil for virtual events — see `isVirtual`.
+    let latitude: Double?
+    let longitude: Double?
+    var isVirtual: Bool
     let startTime: Date
     let endTime: Date?
     let points: Int
@@ -39,6 +42,7 @@ struct EventItem: Codable, Equatable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case id, title, description, latitude, longitude, points, collected, link
         case locationName = "location_name"
+        case isVirtual = "is_virtual"
         case startTime = "start_time"
         case endTime = "end_time"
     }
@@ -49,6 +53,13 @@ struct EventItem: Codable, Equatable, Identifiable {
         guard let link, !link.isEmpty, let url = URL(string: link),
               url.scheme == "http" || url.scheme == "https" else { return nil }
         return url
+    }
+
+    /// Nil for virtual events, or (defensively) if a physical event is ever
+    /// missing coordinates.
+    var coordinate: CLLocationCoordinate2D? {
+        guard let latitude, let longitude else { return nil }
+        return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }
 }
 

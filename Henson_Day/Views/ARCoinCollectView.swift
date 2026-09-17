@@ -237,7 +237,8 @@ struct ARCoinCollectView: View {
         collectFlowTask?.cancel()
         collectFlowTask = Task { @MainActor in
             let coordinate = locationManager.coordinate
-                ?? CLLocationCoordinate2D(latitude: event.latitude, longitude: event.longitude)
+                ?? event.coordinate
+                ?? CLLocationCoordinate2D(latitude: 0, longitude: 0)
 
             guard let result = await appSession.collectCoin(for: event, at: coordinate) else {
                 flowState = .failed(message: appSession.errorMessage ?? "Something went wrong.")
