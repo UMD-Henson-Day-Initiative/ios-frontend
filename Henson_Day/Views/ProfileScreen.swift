@@ -17,39 +17,44 @@ struct ProfileScreen: View {
             ZStack {
                 DS.Color.surface.ignoresSafeArea()
 
-                if appSession.isLoadingProfile && appSession.profile == nil {
-                    ProgressView("Loading profile…")
-                } else {
-                    ScrollView(showsIndicators: false) {
-                        VStack(spacing: DS.Spacing.section) {
-                            avatarSection
+                VStack(spacing: 0) {
+                    ScreenHeaderBanner(title: "Profile")
 
-                            StatsCard(profile: appSession.profile)
-                                .padding(.horizontal, DS.Spacing.screenH)
+                    if appSession.isLoadingProfile && appSession.profile == nil {
+                        Spacer()
+                        ProgressView("Loading profile…")
+                        Spacer()
+                    } else {
+                        ScrollView(showsIndicators: false) {
+                            VStack(spacing: DS.Spacing.section) {
+                                avatarSection
 
-                            personalInfoCard
-                                .padding(.horizontal, DS.Spacing.screenH)
+                                StatsCard(profile: appSession.profile)
+                                    .padding(.horizontal, DS.Spacing.screenH)
 
-                            Button {
-                                showSignOutAlert = true
-                            } label: {
-                                if isSigningOut {
-                                    ProgressView()
-                                } else {
-                                    Text("Sign out")
-                                        .font(DS.Typography.body)
-                                        .foregroundStyle(DS.Color.neutral)
+                                personalInfoCard
+                                    .padding(.horizontal, DS.Spacing.screenH)
+
+                                Button {
+                                    showSignOutAlert = true
+                                } label: {
+                                    if isSigningOut {
+                                        ProgressView()
+                                    } else {
+                                        Text("Sign out")
+                                            .font(DS.Typography.body)
+                                            .foregroundStyle(DS.Color.neutral)
+                                    }
                                 }
+                                .disabled(isSigningOut)
+                                .padding(.bottom, DS.Spacing.section)
                             }
-                            .disabled(isSigningOut)
-                            .padding(.bottom, DS.Spacing.section)
+                            .padding(.top, DS.Spacing.section)
                         }
-                        .padding(.top, DS.Spacing.card)
                     }
                 }
             }
-            .navigationTitle("Profile")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarHidden(true)
             .alert("Sign out of HensonGo?", isPresented: $showSignOutAlert) {
                 Button("Cancel", role: .cancel) {}
                 Button("Sign Out", role: .destructive) {
@@ -69,8 +74,12 @@ struct ProfileScreen: View {
                 .font(.system(size: 38, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 96, height: 96)
-                .background(DS.Color.primary)
+                .background(DS.Color.heroGradient)
                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.heroCard))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.Radius.heroCard)
+                        .stroke(DS.Color.gold, lineWidth: 3)
+                )
                 .shadow(color: DS.Color.primary.opacity(0.35), radius: 10, x: 0, y: 4)
 
             Text(appSession.profile?.fullName.isEmpty == false ? appSession.profile!.fullName : "Terp")
@@ -78,11 +87,11 @@ struct ProfileScreen: View {
                 .foregroundStyle(DS.Color.campusNight)
 
             Text("Henson Day Explorer")
-                .font(DS.Typography.caption)
-                .foregroundStyle(.white)
+                .font(DS.Typography.caption.weight(.bold))
+                .foregroundStyle(DS.Color.campusNight)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 5)
-                .background(DS.Color.primary)
+                .background(DS.Color.goldGradient)
                 .clipShape(Capsule())
         }
     }

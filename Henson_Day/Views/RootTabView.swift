@@ -66,22 +66,24 @@ struct HensonBottomBar: View {
                 } label: {
                     VStack(spacing: 4) {
                         Image(systemName: isActive ? item.iconFilled : item.icon)
-                            .font(.system(size: 18, weight: isActive ? .semibold : .regular))
+                            .font(.system(size: 18, weight: isActive ? .bold : .regular))
                             .symbolRenderingMode(.monochrome)
 
                         Text(item.label)
-                            .font(.system(size: 10, weight: isActive ? .bold : .medium))
+                            .font(.system(size: 10, weight: isActive ? .bold : .medium, design: .rounded))
                     }
-                    .foregroundStyle(isActive ? DS.Color.primary : DS.Color.neutral)
+                    .foregroundStyle(isActive ? .white : DS.Color.neutral)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
                     .background {
                         if isActive {
-                            DS.Color.primaryTint
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                            DS.Color.heroGradient
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                                .shadow(color: DS.Color.primary.opacity(0.35), radius: 6, x: 0, y: 3)
                                 .matchedGeometryEffect(id: "activeTab", in: tabNS)
                         }
                     }
+                    .padding(.vertical, 6)
                     .contentShape(Rectangle())
                 }
             }

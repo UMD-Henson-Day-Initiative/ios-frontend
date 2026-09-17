@@ -47,49 +47,28 @@ struct HomeScreen: View {
             ZStack {
                 DS.Color.surface.ignoresSafeArea()
 
-                ScrollView {
-                    VStack(spacing: DS.Spacing.section) {
-                        header
+                VStack(spacing: 0) {
+                    ScreenHeaderBanner(
+                        title: "HENSON DAY",
+                        subtitle: "University of Maryland · Campus Scavenger Hunt"
+                    )
 
+                    ScrollView {
                         VStack(spacing: DS.Spacing.card) {
-                            ForEach(features) { feature in
-                                FeatureCard(feature: feature) {
+                            ForEach(Array(features.enumerated()), id: \.element.id) { index, feature in
+                                FeatureCard(feature: feature, useGoldAccent: index.isMultiple(of: 2) == false) {
                                     tabRouter.selectedTab = feature.tab
                                 }
                             }
                         }
                         .padding(.horizontal, DS.Spacing.screenH)
+                        .padding(.top, DS.Spacing.section)
+                        .padding(.bottom, DS.Spacing.section)
                     }
-                    .padding(.bottom, DS.Spacing.section)
                 }
             }
             .navigationBarHidden(true)
         }
-    }
-
-    private var header: some View {
-        VStack(spacing: 8) {
-            Text("HENSON DAY")
-                .font(DS.Typography.display)
-                .foregroundStyle(.white)
-                .tracking(2)
-
-            Text("University of Maryland · Campus Scavenger Hunt")
-                .font(DS.Typography.label)
-                .foregroundStyle(.white.opacity(0.9))
-                .multilineTextAlignment(.center)
-        }
-        .padding(.horizontal, DS.Spacing.screenH)
-        .padding(.top, 56)
-        .padding(.bottom, 28)
-        .frame(maxWidth: .infinity)
-        .background(
-            LinearGradient(
-                colors: [DS.Color.primary, DS.Color.primary.opacity(0.85)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
     }
 }
 
@@ -104,6 +83,7 @@ private struct HomeFeature: Identifiable {
 
 private struct FeatureCard: View {
     let feature: HomeFeature
+    var useGoldAccent: Bool = false
     let action: () -> Void
 
     var body: some View {
@@ -111,11 +91,11 @@ private struct FeatureCard: View {
             HStack(alignment: .top, spacing: DS.Spacing.card) {
                 ZStack {
                     RoundedRectangle(cornerRadius: DS.Radius.statTile, style: .continuous)
-                        .fill(DS.Color.primaryTint)
+                        .fill(useGoldAccent ? DS.Color.goldTint : DS.Color.primaryTint)
                         .frame(width: 48, height: 48)
                     Image(systemName: feature.icon)
                         .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(DS.Color.primary)
+                        .foregroundStyle(useGoldAccent ? DS.Color.gold : DS.Color.primary)
                 }
 
                 VStack(alignment: .leading, spacing: 4) {

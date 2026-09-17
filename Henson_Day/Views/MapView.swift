@@ -127,7 +127,7 @@ struct MapView: View {
                     .frame(width: 40, height: 40)
                     .background {
                         if isFollowingUser {
-                            Color.blue
+                            DS.Color.heroGradient
                         } else {
                             Rectangle().fill(.ultraThinMaterial)
                         }

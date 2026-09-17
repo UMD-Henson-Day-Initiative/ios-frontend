@@ -17,13 +17,21 @@ struct SignInScreen: View {
         ZStack {
             DS.Color.surface.ignoresSafeArea()
 
+            RadialGradient(
+                colors: [DS.Color.goldTint, DS.Color.surface.opacity(0)],
+                center: .top,
+                startRadius: 10,
+                endRadius: 340
+            )
+            .ignoresSafeArea()
+
             VStack(spacing: 28) {
                 Spacer()
 
                 VStack(spacing: 10) {
                     Text("HensonGo")
                         .font(DS.Typography.display)
-                        .foregroundStyle(DS.Color.primary)
+                        .foregroundStyle(DS.Color.heroGradient)
                     Text("University of Maryland\nCampus Scavenger Hunt")
                         .font(DS.Typography.body)
                         .foregroundStyle(DS.Color.neutral)
@@ -66,14 +74,16 @@ struct SignInScreen: View {
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .frame(height: 52)
-                        .background(DS.Color.primary)
+                        .background(DS.Color.heroGradient)
                         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.button))
+                        .shadow(color: DS.Color.gold.opacity(0.4), radius: 10, x: 0, y: 4)
                     }
                     .disabled(isSigningIn)
 
                     Text("UMD accounts only — @umd.edu or @terpmail.umd.edu")
-                        .font(DS.Typography.caption)
-                        .foregroundStyle(DS.Color.neutral)
+                        .font(DS.Typography.label.weight(.bold))
+                        .foregroundStyle(DS.Color.primary)
+                        .multilineTextAlignment(.center)
                 }
                 .padding(.horizontal, DS.Spacing.screenH)
 

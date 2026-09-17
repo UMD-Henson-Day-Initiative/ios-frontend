@@ -13,18 +13,37 @@ enum DS {
     enum Color {
         /// Terp Crimson — primary actions, active states, key CTAs
         static let primary = SwiftUI.Color(r: 200, g: 16, b: 46)
+        /// Deeper crimson — gradient partners, pressed states
+        static let primaryDeep = SwiftUI.Color(r: 156, g: 10, b: 36)
         /// Barely-there blush — filled backgrounds behind rarity badges, stat cards
-        static let primaryTint = SwiftUI.Color(r: 255, g: 240, b: 240)
+        static let primaryTint = SwiftUI.Color(r: 255, g: 235, b: 234)
         /// Henson Gold — collectible highlights, earned states, first-place
-        static let gold = SwiftUI.Color(r: 245, g: 197, b: 24)
+        static let gold = SwiftUI.Color(r: 247, g: 181, b: 0)
+        /// Bright marigold — gradient partner for gold, sparkle accents
+        static let goldBright = SwiftUI.Color(r: 255, g: 214, b: 64)
+        /// Soft butter tint — filled backgrounds behind gold badges/highlights
+        static let goldTint = SwiftUI.Color(r: 255, g: 246, b: 214)
         /// Campus Night — body text, card backgrounds in dark contexts
         static let campusNight = SwiftUI.Color(r: 26, g: 26, b: 46)
-        /// Warm white app background
-        static let surface = SwiftUI.Color(r: 250, g: 250, b: 248)
+        /// Warm cream app background — sunnier than plain white
+        static let surface = SwiftUI.Color(r: 255, g: 250, b: 238)
         /// True white for elevated cards on the warm background
         static let surfaceElevated = SwiftUI.Color.white
-        /// Secondary labels, timestamps, empty states
-        static let neutral = SwiftUI.Color(r: 138, g: 138, b: 142)
+        /// Secondary labels, timestamps, empty states — warm taupe, not cold gray
+        static let neutral = SwiftUI.Color(r: 143, g: 122, b: 102)
+
+        /// Diagonal red → gold banner gradient, used for headers/hero surfaces
+        static let heroGradient = LinearGradient(
+            colors: [primary, primaryDeep, gold],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        /// Gold → marigold gradient for celebratory accents (badges, avatars, CTAs)
+        static let goldGradient = LinearGradient(
+            colors: [goldBright, gold],
+            startPoint: .top,
+            endPoint: .bottom
+        )
 
         // Status
         static let statusInProgress = SwiftUI.Color(r: 255, g: 149, b: 0)   // amber

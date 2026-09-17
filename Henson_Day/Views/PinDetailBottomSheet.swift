@@ -103,11 +103,11 @@ struct PinDetailBottomSheet: View {
         }
         .frame(maxWidth: .infinity)
         .frame(height: liveHeight, alignment: .top)
-        .background(Color(.systemBackground))
+        .background(DS.Color.surfaceElevated)
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                .stroke(DS.Color.gold.opacity(0.25), lineWidth: 1.5)
         )
         .shadow(color: .black.opacity(0.22), radius: 28, x: 0, y: -6)
         .padding(.horizontal, 8)
@@ -116,7 +116,7 @@ struct PinDetailBottomSheet: View {
 
     private var grabber: some View {
         Capsule()
-            .fill(Color.primary.opacity(0.18))
+            .fill(DS.Color.neutral.opacity(0.3))
             .frame(width: 44, height: 5)
             .padding(.top, 10)
             .padding(.bottom, 12)
@@ -132,7 +132,7 @@ struct PinDetailBottomSheet: View {
                     .frame(width: 56, height: 56)
                 Image(systemName: "star.fill")
                     .font(.system(size: 26, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(DS.Color.goldBright)
             }
 
             VStack(alignment: .leading, spacing: 4) {
@@ -153,13 +153,7 @@ struct PinDetailBottomSheet: View {
         .padding(.horizontal, 18)
         .padding(.vertical, 18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            LinearGradient(
-                colors: [DS.Color.primary, DS.Color.primary.opacity(0.82)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
+        .background(DS.Color.heroGradient)
         .contentShape(Rectangle())
     }
 
@@ -205,17 +199,21 @@ struct PinDetailBottomSheet: View {
     }
 
     private var pointsCard: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 8) {
             Image(systemName: event.collected ? "checkmark.seal.fill" : "circle.grid.cross.fill")
-                .foregroundStyle(DS.Color.gold)
+                .foregroundStyle(event.collected ? DS.Color.statusCompleted : DS.Color.gold)
             Text(event.collected ? "Coin already collected" : "Worth +\(event.points) points")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.primary)
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(DS.Color.campusNight)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.primary.opacity(0.06))
+        .background(DS.Color.goldTint)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(DS.Color.gold.opacity(0.4), lineWidth: 1)
+        )
     }
 
     @ViewBuilder
@@ -223,7 +221,7 @@ struct PinDetailBottomSheet: View {
         let meters = distanceMeters ?? 0
         let metersInt = Int(meters.rounded())
         let ready = isCloseEnoughToCollect
-        let tint: Color = ready ? .green : .orange
+        let tint: Color = ready ? DS.Color.statusCompleted : DS.Color.gold
         let symbol: String = ready ? "figure.walk" : "location.north.line.fill"
         let statusText: String = ready ? "Close enough to collect" : "Walk \(metersToCollect)m closer to collect"
 
@@ -271,7 +269,7 @@ struct PinDetailBottomSheet: View {
     private var actionFooter: some View {
         VStack(spacing: 0) {
             Rectangle()
-                .fill(Color.primary.opacity(0.08))
+                .fill(DS.Color.gold.opacity(0.2))
                 .frame(height: 1)
 
             VStack(spacing: 10) {
@@ -279,8 +277,9 @@ struct PinDetailBottomSheet: View {
                     if !event.collected {
                         actionButton(
                             title: "Collect",
-                            fill: isCloseEnoughToCollect ? DS.Color.primary : Color(.systemGray5),
-                            foreground: isCloseEnoughToCollect ? .white : .secondary
+                            fill: isCloseEnoughToCollect ? AnyShapeStyle(DS.Color.heroGradient) : AnyShapeStyle(DS.Color.surface),
+                            foreground: isCloseEnoughToCollect ? .white : DS.Color.neutral,
+                            glow: isCloseEnoughToCollect
                         ) {
                             if isCloseEnoughToCollect {
                                 onCollect()
@@ -290,7 +289,12 @@ struct PinDetailBottomSheet: View {
                         }
                     }
 
-                    actionButton(title: "Navigate", fill: Color(.systemGray6), foreground: .primary) {
+                    actionButton(
+                        title: "Navigate",
+                        fill: AnyShapeStyle(DS.Color.goldTint),
+                        foreground: DS.Color.campusNight,
+                        glow: false
+                    ) {
                         openInAppleMaps()
                     }
                 }
@@ -304,13 +308,13 @@ struct PinDetailBottomSheet: View {
             .padding(.top, 12)
             .padding(.bottom, 14)
         }
-        .background(Color(.systemBackground))
+        .background(DS.Color.surfaceElevated)
     }
 
-    private func actionButton(title: String, fill: Color, foreground: Color, action: @escaping () -> Void) -> some View {
+    private func actionButton(title: String, fill: AnyShapeStyle, foreground: Color, glow: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.subheadline.weight(.semibold))
+                .font(.subheadline.weight(.bold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
                 .frame(maxWidth: .infinity)
@@ -318,6 +322,7 @@ struct PinDetailBottomSheet: View {
                 .background(fill)
                 .foregroundStyle(foreground)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .shadow(color: glow ? DS.Color.gold.opacity(0.4) : .clear, radius: 8, x: 0, y: 3)
         }
         .buttonStyle(.plain)
     }
