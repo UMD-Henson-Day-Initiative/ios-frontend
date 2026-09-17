@@ -172,6 +172,10 @@ struct PinDetailBottomSheet: View {
                         .foregroundStyle(.primary)
                         .fixedSize(horizontal: false, vertical: true)
 
+                    if let linkURL = event.linkURL {
+                        linkRow(linkURL)
+                    }
+
                     pointsCard
 
                     Color.clear.frame(height: 4)
@@ -196,6 +200,28 @@ struct PinDetailBottomSheet: View {
         }
         .scrollDisabled(isOverscrollDragging)
         .simultaneousGesture(overscrollDismissGesture)
+    }
+
+    private func linkRow(_ url: URL) -> some View {
+        Link(destination: url) {
+            HStack(spacing: 8) {
+                Image(systemName: "link")
+                    .foregroundStyle(DS.Color.primary)
+                Text(url.host ?? url.absoluteString)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(DS.Color.primary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer(minLength: 0)
+                Image(systemName: "arrow.up.right")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(DS.Color.primary)
+            }
+            .padding(12)
+            .background(DS.Color.primaryTint)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 
     private var pointsCard: some View {
@@ -415,7 +441,8 @@ private struct ScrollOffsetKey: PreferenceKey {
                 startTime: .now,
                 endTime: .now.addingTimeInterval(7200),
                 points: 25,
-                collected: false
+                collected: false,
+                link: "https://umd.edu"
             ),
             userLocation: nil,
             isPresented: $isPresented

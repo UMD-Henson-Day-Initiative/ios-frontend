@@ -34,12 +34,21 @@ struct EventItem: Codable, Equatable, Identifiable {
     let endTime: Date?
     let points: Int
     var collected: Bool
+    var link: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, title, description, latitude, longitude, points, collected
+        case id, title, description, latitude, longitude, points, collected, link
         case locationName = "location_name"
         case startTime = "start_time"
         case endTime = "end_time"
+    }
+
+    /// The event's link, if it's a non-empty, well-formed URL. The backend
+    /// always sends `link` as a string (possibly empty), never omits it.
+    var linkURL: URL? {
+        guard let link, !link.isEmpty, let url = URL(string: link),
+              url.scheme == "http" || url.scheme == "https" else { return nil }
+        return url
     }
 }
 
