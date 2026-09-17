@@ -25,6 +25,6 @@ struct AppEnvironment {
         supabaseURL: URL(string: "https://ysxejgyoitphtavtwcdd.supabase.co")!,
         supabaseAnonKey: "sb_publishable_RUEsOvbun6NnCNKqFHYGog_zd4uHrUd",
         googleIOSClientID: "8477921433-v52u5ojulmgk7dug9074f0babdcmev96.apps.googleusercontent.com",
-        apiBaseURL: URL(string: "http://192.168.86.25:5000")!
+        apiBaseURL: URL(string: "https://henson.iancoutinho.net")!
     )
 }
