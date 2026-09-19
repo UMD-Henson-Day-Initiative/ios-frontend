@@ -13,7 +13,7 @@ struct HomeScreen: View {
         HomeFeature(
             icon: "calendar",
             title: "Schedule",
-            description: "Every Henson Day event, with the day and time it happens.",
+            description: "Every Henson Week event, with the day and time it happens.",
             tab: .schedule
         ),
         HomeFeature(
@@ -24,8 +24,8 @@ struct HomeScreen: View {
         ),
         HomeFeature(
             icon: "camera.viewfinder",
-            title: "Collect Testudo",
-            description: "Once you're within 0.1 miles of an event, the Collect button unlocks — it opens your camera so you can grab Testudo and earn points.",
+            title: "Collect Terps",
+            description: "Once you're within 0.1 miles of an event, the Collect button unlocks — it opens your camera so you can grab a Terp and earn points.",
             tab: .map
         ),
         HomeFeature(
@@ -49,9 +49,11 @@ struct HomeScreen: View {
 
                 VStack(spacing: 0) {
                     ScreenHeaderBanner(
-                        title: "HENSON DAY",
+                        title: "HENSON WEEK",
                         subtitle: "University of Maryland · Campus Scavenger Hunt"
                     )
+
+                    AlternatingDotsDivider()
 
                     ScrollView {
                         VStack(spacing: DS.Spacing.card) {
@@ -60,6 +62,8 @@ struct HomeScreen: View {
                                     tabRouter.selectedTab = feature.tab
                                 }
                             }
+
+                            AlternatingDotsDivider()
                         }
                         .padding(.horizontal, DS.Spacing.screenH)
                         .padding(.top, DS.Spacing.section)

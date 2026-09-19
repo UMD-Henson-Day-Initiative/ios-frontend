@@ -68,7 +68,7 @@ private struct SplashView: View {
             DS.Color.surface.ignoresSafeArea()
             VStack(spacing: 14) {
                 ProgressView()
-                Text("Henson Day")
+                Text("Henson Week")
                     .font(DS.Typography.title1)
                     .foregroundStyle(DS.Color.campusNight)
             }

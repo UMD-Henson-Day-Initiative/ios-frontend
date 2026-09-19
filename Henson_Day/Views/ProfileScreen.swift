@@ -20,6 +20,8 @@ struct ProfileScreen: View {
                 VStack(spacing: 0) {
                     ScreenHeaderBanner(title: "Profile")
 
+                    AlternatingDotsDivider()
+
                     if appSession.isLoadingProfile && appSession.profile == nil {
                         Spacer()
                         ProgressView("Loading profile…")
@@ -47,7 +49,9 @@ struct ProfileScreen: View {
                                     }
                                 }
                                 .disabled(isSigningOut)
-                                .padding(.bottom, DS.Spacing.section)
+
+                                AlternatingDotsDivider()
+                                    .padding(.bottom, DS.Spacing.section)
                             }
                             .padding(.top, DS.Spacing.section)
                         }
@@ -86,7 +90,7 @@ struct ProfileScreen: View {
                 .font(DS.Typography.title1)
                 .foregroundStyle(DS.Color.campusNight)
 
-            Text("Henson Day Explorer")
+            Text("Henson Week Explorer")
                 .font(DS.Typography.caption.weight(.bold))
                 .foregroundStyle(DS.Color.campusNight)
                 .padding(.horizontal, 12)
@@ -151,7 +155,7 @@ private struct StatsCard: View {
                 Text("\(profile?.eventsAttended ?? 0)")
                     .font(.system(.largeTitle, design: .rounded, weight: .bold))
                     .foregroundStyle(DS.Color.primary)
-                Text("Events Attended")
+                Text("Terps Collected")
                     .font(DS.Typography.caption)
                     .foregroundStyle(DS.Color.campusNight.opacity(0.6))
             }

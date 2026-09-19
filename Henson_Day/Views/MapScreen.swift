@@ -82,7 +82,7 @@ struct MapScreen: View {
             cameraPermission.requestIfNeeded()
             locationManager.requestWhenInUseAuthorizationIfNeeded()
             if selectedDay == nil {
-                selectedDay = days.first
+                selectedDay = days.closestToToday()
             }
             if appSession.events.isEmpty {
                 Task { await appSession.loadEvents() }
@@ -91,7 +91,7 @@ struct MapScreen: View {
         }
         .onChange(of: appSession.events.count) { _, _ in
             if selectedDay == nil {
-                selectedDay = days.first
+                selectedDay = days.closestToToday()
             }
         }
         .onChange(of: tabRouter.focusedEventID) { _, newValue in

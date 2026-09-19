@@ -26,6 +26,8 @@ struct LeaderboardScreen: View {
                 VStack(spacing: 0) {
                     ScreenHeaderBanner(title: "Leaderboard")
 
+                    AlternatingDotsDivider()
+
                     if appSession.isLoadingLeaderboard && appSession.leaderboard.isEmpty {
                         Spacer()
                         ProgressView("Loading leaderboard…")
@@ -35,7 +37,7 @@ struct LeaderboardScreen: View {
                         ContentUnavailableView(
                             "No rankings yet",
                             systemImage: "trophy",
-                            description: Text("Collect a Testudo to appear on the leaderboard.")
+                            description: Text("Collect a Terp to appear on the leaderboard.")
                         )
                         Spacer()
                     } else {
@@ -51,6 +53,8 @@ struct LeaderboardScreen: View {
                                     }
                                 }
                                 .padding(.horizontal, DS.Spacing.screenH)
+
+                                AlternatingDotsDivider()
                             }
                             .padding(.top, DS.Spacing.card)
                             .padding(.bottom, DS.Spacing.section)

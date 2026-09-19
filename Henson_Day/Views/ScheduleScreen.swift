@@ -40,6 +40,8 @@ struct ScheduleScreen: View {
                 VStack(spacing: 0) {
                     ScreenHeaderBanner(title: "Schedule")
 
+                    AlternatingDotsDivider()
+
                     if appSession.isLoadingEvents && appSession.events.isEmpty {
                         Spacer()
                         ProgressView("Loading schedule…")
@@ -65,25 +67,32 @@ struct ScheduleScreen: View {
                                 }
 
                                 VStack(spacing: DS.Spacing.card) {
-                                    ForEach(eventsForSelectedDay) { event in
-                                        if event.isVirtual {
-                                            ScheduleEventRow(
-                                                event: event,
-                                                isCollecting: collectingEventID == event.id,
-                                                onCollect: event.collected ? nil : { collectVirtualEvent(event) }
-                                            )
-                                        } else {
-                                            Button {
-                                                tabRouter.focusedEventID = event.id
-                                                tabRouter.selectedTab = .map
-                                            } label: {
-                                                ScheduleEventRow(event: event)
+                                    ForEach(Array(eventsForSelectedDay.enumerated()), id: \.element.id) { index, event in
+                                        TimelineRow(
+                                            time: startTime(for: event),
+                                            isLast: index == eventsForSelectedDay.count - 1
+                                        ) {
+                                            if event.isVirtual {
+                                                ScheduleEventRow(
+                                                    event: event,
+                                                    isCollecting: collectingEventID == event.id,
+                                                    onCollect: event.collected ? nil : { collectVirtualEvent(event) }
+                                                )
+                                            } else {
+                                                Button {
+                                                    tabRouter.focusedEventID = event.id
+                                                    tabRouter.selectedTab = .map
+                                                } label: {
+                                                    ScheduleEventRow(event: event)
+                                                }
+                                                .buttonStyle(.plain)
                                             }
-                                            .buttonStyle(.plain)
                                         }
                                     }
                                 }
                                 .padding(.horizontal, DS.Spacing.screenH)
+
+                                AlternatingDotsDivider()
                             }
                             .padding(.top, DS.Spacing.card)
                             .padding(.bottom, DS.Spacing.section)
@@ -125,20 +134,7 @@ struct ScheduleScreen: View {
 
     private func updateSelectedDayIfNeeded() {
         guard selectedDay == nil || !days.contains(where: { Calendar.current.isDate($0, inSameDayAs: selectedDay!) }) else { return }
-        selectedDay = defaultDay
-    }
-
-    /// Today if it has events, otherwise the nearest upcoming day, otherwise the most recent past day.
-    private var defaultDay: Date? {
-        guard !days.isEmpty else { return nil }
-        let today = Calendar.current.startOfDay(for: Date())
-        if let match = days.first(where: { Calendar.current.isDate($0, inSameDayAs: today) }) {
-            return match
-        }
-        if let upcoming = days.first(where: { $0 > today }) {
-            return upcoming
-        }
-        return days.last
+        selectedDay = days.closestToToday()
     }
 
     private var daySelector: some View {
@@ -164,6 +160,48 @@ struct ScheduleScreen: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEEE, MMMM d"
         return formatter.string(from: day)
+    }
+
+    private func startTime(for event: EventItem) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        return formatter.string(from: event.startTime)
+    }
+}
+
+/// Leading vertical-timeline rail: a time label, a dot, and a connecting
+/// line down to the next event (omitted after the last one).
+private struct TimelineRow<Content: View>: View {
+    let time: String
+    let isLast: Bool
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(spacing: 6) {
+                Text(time)
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .foregroundStyle(DS.Color.neutral)
+                    .fixedSize()
+
+                ZStack(alignment: .top) {
+                    if !isLast {
+                        Rectangle()
+                            .fill(DS.Color.gold.opacity(0.35))
+                            .frame(width: 2)
+                            .padding(.top, 12)
+                    }
+                    Circle()
+                        .fill(DS.Color.heroGradient)
+                        .frame(width: 10, height: 10)
+                        .overlay(Circle().stroke(.white, lineWidth: 2))
+                }
+                .frame(maxHeight: .infinity)
+            }
+            .frame(width: 50)
+
+            content()
+        }
     }
 }
 
@@ -219,29 +257,12 @@ private struct ScheduleEventRow: View {
     var isCollecting: Bool = false
     var onCollect: (() -> Void)? = nil
 
-    private var timeRangeText: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        guard let endTime = event.endTime else {
-            return formatter.string(from: event.startTime)
-        }
-        return "\(formatter.string(from: event.startTime)) – \(formatter.string(from: endTime))"
-    }
-
     var body: some View {
         HStack(alignment: .top, spacing: DS.Spacing.card) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(event.title)
                     .font(DS.Typography.title2)
                     .foregroundStyle(DS.Color.campusNight)
-
-                HStack(spacing: 6) {
-                    Image(systemName: "clock")
-                        .font(.caption)
-                    Text(timeRangeText)
-                }
-                .font(DS.Typography.caption)
-                .foregroundStyle(DS.Color.neutral)
 
                 HStack(spacing: 6) {
                     Image(systemName: event.isVirtual ? "globe" : "mappin")

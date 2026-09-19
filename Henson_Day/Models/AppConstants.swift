@@ -28,12 +28,11 @@ enum AppConstants {
         static let coinThicknessMeters: Float = 0.006
         static let coinTapTargetRadiusMeters: Float = 0.09
 
-        /// The collectible models in the app bundle (`Testudo.usdz`,
-        /// `JimHensonPuppet.usdz`) — alternated per event (see
-        /// `ARCoinCollectView.collectibleModelName`) — and the largest
-        /// dimension each is scaled to fit once placed. Falls back to the
-        /// procedural gold coin below if a model fails to load.
-        static let collectibleModelNames = ["Testudo", "JimHensonPuppet"]
+        /// The collectible's name in the app bundle (`Testudo.usdz`, branded
+        /// as "Terp" in the UI), and the largest dimension it's scaled to fit
+        /// once placed. Falls back to the procedural gold coin below if the
+        /// model fails to load.
+        static let collectibleModelName = "Testudo"
         static let collectibleTargetSizeMeters: Float = 0.14
 
         static let collectRevealDelaySeconds: TimeInterval = 0.9

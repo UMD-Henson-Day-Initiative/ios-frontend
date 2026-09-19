@@ -3,10 +3,10 @@
 //
 //  Full-screen AR flow for collecting an event's coin: every detected
 //  horizontal plane gets a translucent overlay; once one has been stable for
-//  a moment it auto-confirms and a Testudo model spawns on it (falling back
-//  to a gold coin if the model hasn't loaded). Tapping it submits a collect
-//  request to the backend (which re-validates proximity server-side) and
-//  awards points on success.
+//  a moment it auto-confirms and a Terp (Testudo) model spawns on it (falling
+//  back to a gold coin if the model hasn't loaded). Tapping it submits a
+//  collect request to the backend (which re-validates proximity server-side)
+//  and awards points on success.
 
 import SwiftUI
 import RealityKit
@@ -54,23 +54,10 @@ struct ARCoinCollectView: View {
         }
     }
 
-    /// Deterministically alternates between the available collectible models
-    /// based on the event's id, so the same event always shows the same
-    /// model (rather than reshuffling every time AR is reopened) while
-    /// different events are spread across both.
-    private var collectibleModelName: String {
-        let names = AppConstants.AR.collectibleModelNames
-        let sum = event.id.unicodeScalars.reduce(0) { $0 + Int($1.value) }
-        return names[sum % names.count]
-    }
-
-    /// User-facing name for whichever model `collectibleModelName` resolved to.
-    private var collectibleDisplayName: String {
-        switch collectibleModelName {
-        case "JimHensonPuppet": return "the Jim Henson puppet"
-        default: return "Testudo"
-        }
-    }
+    /// The user-facing name for the collectible — the underlying 3D asset is
+    /// still `Testudo.usdz` (see `AppConstants.AR.collectibleModelName`), just
+    /// branded as "Terp" in the UI.
+    private let collectibleDisplayName = "the Terp"
 
     var body: some View {
         ZStack {
@@ -78,7 +65,6 @@ struct ARCoinCollectView: View {
                 canSpawnCollectible: !isCapturing,
                 isCapturing: isCapturing,
                 replaceToken: replaceToken,
-                modelName: collectibleModelName,
                 hasPlaced: $hasPlaced,
                 hasDetectedPlane: $hasDetectedPlane,
                 didTapCollectible: $didTapCollectible
@@ -301,7 +287,6 @@ struct ARPlacementView: UIViewRepresentable {
     let canSpawnCollectible: Bool
     let isCapturing: Bool
     let replaceToken: UUID
-    let modelName: String
     @Binding var hasPlaced: Bool
     @Binding var hasDetectedPlane: Bool
     @Binding var didTapCollectible: Bool
@@ -310,7 +295,7 @@ struct ARPlacementView: UIViewRepresentable {
         let arView = ARView(frame: .zero, cameraMode: .ar, automaticallyConfigureSession: false)
         wireCoordinatorCallbacks(context.coordinator)
         context.coordinator.lastSeenReplaceToken = replaceToken
-        context.coordinator.configure(arView, modelName: modelName)
+        context.coordinator.configure(arView)
         return arView
     }
 
@@ -375,7 +360,7 @@ struct ARPlacementView: UIViewRepresentable {
         var didLoseAllPlanes: (() -> Void)?
         var lastSeenReplaceToken: UUID?
 
-        func configure(_ arView: ARView, modelName: String) {
+        func configure(_ arView: ARView) {
             self.arView = arView
             arView.session.delegate = self
 
@@ -393,7 +378,7 @@ struct ARPlacementView: UIViewRepresentable {
 
             collectibleLoadTask?.cancel()
             collectibleLoadTask = Task { [weak self] in
-                guard let self, let entity = try? await Entity(named: modelName) else { return }
+                guard let self, let entity = try? await Entity(named: AppConstants.AR.collectibleModelName) else { return }
                 self.collectibleTemplate = entity
             }
         }

@@ -60,7 +60,7 @@ Backend config is read from Info.plist (`GENERATE_INFOPLIST_FILE = YES`, values 
 
 ### AR Coin Collection
 
-- `ARCoinCollectView` — full-screen AR flow (RealityKit `ARView` bridged via `ARPlacementView`): detects a horizontal plane, spawns one of two 3D models (`Henson_Day/3DModels/Testudo.usdz`, `JimHensonPuppet.usdz`) — which one is deterministic per event (a hash of `event.id`, see `collectibleModelName`), so the same event always shows the same model. Loaded via `Entity(named:)` and scaled to `AppConstants.AR.collectibleTargetSizeMeters`; falls back to a procedurally-generated gold coin if the model hasn't loaded — no per-collectible rarity system. On tap it submits `POST /events/<id>/collect` with the device's current coordinate. The backend re-validates proximity and awards points — the client never mints points itself.
+- `ARCoinCollectView` — full-screen AR flow (RealityKit `ARView` bridged via `ARPlacementView`): detects a horizontal plane, spawns the Testudo 3D model (`Henson_Day/3DModels/Testudo.usdz`, loaded via `Entity(named: AppConstants.AR.collectibleModelName)` and scaled to `AppConstants.AR.collectibleTargetSizeMeters`; falls back to a procedurally-generated gold coin if the model hasn't loaded — no per-collectible rarity system), branded as "the Terp" in user-facing copy. On tap it submits `POST /events/<id>/collect` with the device's current coordinate. The backend re-validates proximity and awards points — the client never mints points itself.
 
 ### Key Patterns
 
