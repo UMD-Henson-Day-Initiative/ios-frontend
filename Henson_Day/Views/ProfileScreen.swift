@@ -37,6 +37,9 @@ struct ProfileScreen: View {
                                 personalInfoCard
                                     .padding(.horizontal, DS.Spacing.screenH)
 
+                                legalCard
+                                    .padding(.horizontal, DS.Spacing.screenH)
+
                                 Button {
                                     showSignOutAlert = true
                                 } label: {
@@ -115,6 +118,35 @@ struct ProfileScreen: View {
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.card, style: .continuous))
             .shadow(color: DS.Shadow.cardColor, radius: DS.Shadow.cardRadius, x: DS.Shadow.cardX, y: DS.Shadow.cardY)
         }
+    }
+
+    private var legalCard: some View {
+        VStack(alignment: .leading, spacing: DS.Spacing.card) {
+            Text("Legal")
+                .font(DS.Typography.title2)
+                .foregroundStyle(DS.Color.campusNight)
+
+            Link(destination: legalDocumentsURL) {
+                HStack {
+                    Label("Privacy Policy, Terms & Data Compliance", systemImage: "doc.text")
+                        .font(DS.Typography.body)
+                        .foregroundStyle(DS.Color.campusNight)
+                    Spacer(minLength: 8)
+                    Image(systemName: "arrow.up.right")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(DS.Color.neutral)
+                }
+                .padding(DS.Spacing.cardPad)
+            }
+            .buttonStyle(.plain)
+            .background(DS.Color.surfaceElevated)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.card, style: .continuous))
+            .shadow(color: DS.Shadow.cardColor, radius: DS.Shadow.cardRadius, x: DS.Shadow.cardX, y: DS.Shadow.cardY)
+        }
+    }
+
+    private var legalDocumentsURL: URL {
+        URL(string: "https://drive.google.com/drive/folders/1BTil7Ne-ClPs2_dwQzu532sJbbPVFqep?usp=sharing")!
     }
 
     private func infoRow(icon: String, label: String, value: String) -> some View {
