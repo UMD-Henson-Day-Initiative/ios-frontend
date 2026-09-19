@@ -230,7 +230,7 @@ struct PinDetailBottomSheet: View {
         HStack(spacing: 8) {
             Image(systemName: event.collected ? "checkmark.seal.fill" : "circle.grid.cross.fill")
                 .foregroundStyle(event.collected ? DS.Color.statusCompleted : DS.Color.gold)
-            Text(event.collected ? "Coin already collected" : "Worth +\(event.points) points")
+            Text(event.collected ? "Testudo already collected" : "Worth +\(event.points) points")
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(DS.Color.campusNight)
         }
@@ -329,7 +329,7 @@ struct PinDetailBottomSheet: View {
                 .alert("Not close enough yet", isPresented: $showTooFarAlert) {
                     Button("OK", role: .cancel) {}
                 } message: {
-                    Text("Get within 0.1 miles of \(event.locationName) to collect its coin.")
+                    Text("Get within 0.1 miles of \(event.locationName) to collect its Testudo.")
                 }
             }
             .padding(.horizontal, 18)

@@ -58,6 +58,23 @@ final class AuthManager: ObservableObject {
         }
     }
 
+    /// Email/password sign-in for the one non-UMD account the backend allows
+    /// through its domain check (see `ALLOWED_EMAIL_EXCEPTIONS` in
+    /// backend/henson-backend/app/auth.py) — everyone else authenticates via
+    /// Google. This still produces a normal Supabase session, so every other
+    /// part of the app (BackendAPI, AppSession, etc.) works identically.
+    @discardableResult
+    func signInWithPassword(email: String, password: String) async -> Bool {
+        lastErrorMessage = nil
+        do {
+            try await client.auth.signIn(email: email, password: password)
+            return true
+        } catch {
+            lastErrorMessage = "Incorrect email or password."
+            return false
+        }
+    }
+
     func signOut() async {
         GIDSignIn.sharedInstance.signOut()
         try? await client.auth.signOut()

@@ -3,9 +3,10 @@
 //
 //  Full-screen AR flow for collecting an event's coin: every detected
 //  horizontal plane gets a translucent overlay; once one has been stable for
-//  a moment it auto-confirms and a gold coin spawns on it. Tapping the coin
-//  submits a collect request to the backend (which re-validates proximity
-//  server-side) and awards points on success.
+//  a moment it auto-confirms and a Testudo model spawns on it (falling back
+//  to a gold coin if the model hasn't loaded). Tapping it submits a collect
+//  request to the backend (which re-validates proximity server-side) and
+//  awards points on success.
 
 import SwiftUI
 import RealityKit
@@ -53,12 +54,31 @@ struct ARCoinCollectView: View {
         }
     }
 
+    /// Deterministically alternates between the available collectible models
+    /// based on the event's id, so the same event always shows the same
+    /// model (rather than reshuffling every time AR is reopened) while
+    /// different events are spread across both.
+    private var collectibleModelName: String {
+        let names = AppConstants.AR.collectibleModelNames
+        let sum = event.id.unicodeScalars.reduce(0) { $0 + Int($1.value) }
+        return names[sum % names.count]
+    }
+
+    /// User-facing name for whichever model `collectibleModelName` resolved to.
+    private var collectibleDisplayName: String {
+        switch collectibleModelName {
+        case "JimHensonPuppet": return "the Jim Henson puppet"
+        default: return "Testudo"
+        }
+    }
+
     var body: some View {
         ZStack {
             ARPlacementView(
                 canSpawnCollectible: !isCapturing,
                 isCapturing: isCapturing,
                 replaceToken: replaceToken,
+                modelName: collectibleModelName,
                 hasPlaced: $hasPlaced,
                 hasDetectedPlane: $hasDetectedPlane,
                 didTapCollectible: $didTapCollectible
@@ -133,7 +153,7 @@ struct ARCoinCollectView: View {
             promptCard(title: "Collecting…", subtitle: "Confirming with the server.")
         case .captured(let points):
             promptCard(
-                title: "You collected the coin! +\(points) pts",
+                title: "You collected \(collectibleDisplayName)! +\(points) pts",
                 subtitle: "Total points: \(appSession.profile?.totalPoints ?? 0)."
             )
         case .failed(let message):
@@ -174,7 +194,7 @@ struct ARCoinCollectView: View {
             .background(.black.opacity(0.55), in: Capsule())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Re-place the coin")
+        .accessibilityLabel("Re-place \(collectibleDisplayName)")
     }
 
     private func triggerReplace() {
@@ -281,6 +301,7 @@ struct ARPlacementView: UIViewRepresentable {
     let canSpawnCollectible: Bool
     let isCapturing: Bool
     let replaceToken: UUID
+    let modelName: String
     @Binding var hasPlaced: Bool
     @Binding var hasDetectedPlane: Bool
     @Binding var didTapCollectible: Bool
@@ -289,7 +310,7 @@ struct ARPlacementView: UIViewRepresentable {
         let arView = ARView(frame: .zero, cameraMode: .ar, automaticallyConfigureSession: false)
         wireCoordinatorCallbacks(context.coordinator)
         context.coordinator.lastSeenReplaceToken = replaceToken
-        context.coordinator.configure(arView)
+        context.coordinator.configure(arView, modelName: modelName)
         return arView
     }
 
@@ -322,9 +343,14 @@ struct ARPlacementView: UIViewRepresentable {
         private weak var arView: ARView?
 
         private var coinAnchor: AnchorEntity?
-        private var coinEntity: ModelEntity?
+        private var coinEntity: Entity?
         private var isCollectAnimationRunning = false
         private var hapticEngine: CHHapticEngine?
+
+        /// Preloaded once so placement (which needs to happen synchronously,
+        /// from an ARSessionDelegate callback) doesn't stall on a disk load.
+        private var collectibleTemplate: Entity?
+        private var collectibleLoadTask: Task<Void, Never>?
 
         private struct PlaneVisualization {
             let anchorEntity: AnchorEntity
@@ -349,7 +375,7 @@ struct ARPlacementView: UIViewRepresentable {
         var didLoseAllPlanes: (() -> Void)?
         var lastSeenReplaceToken: UUID?
 
-        func configure(_ arView: ARView) {
+        func configure(_ arView: ARView, modelName: String) {
             self.arView = arView
             arView.session.delegate = self
 
@@ -364,6 +390,12 @@ struct ARPlacementView: UIViewRepresentable {
 
             let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
             arView.addGestureRecognizer(tapGesture)
+
+            collectibleLoadTask?.cancel()
+            collectibleLoadTask = Task { [weak self] in
+                guard let self, let entity = try? await Entity(named: modelName) else { return }
+                self.collectibleTemplate = entity
+            }
         }
 
         func syncState(
@@ -658,16 +690,7 @@ struct ARPlacementView: UIViewRepresentable {
             arView.scene.addAnchor(anchor)
             coinAnchor = anchor
 
-            let mesh = MeshResource.generateCylinder(
-                height: AppConstants.AR.coinThicknessMeters,
-                radius: AppConstants.AR.coinRadiusMeters
-            )
-            var material = SimpleMaterial()
-            material.color = .init(tint: UIColor(DS.Color.gold), texture: nil)
-            material.metallic = .init(floatLiteral: 1.0)
-            material.roughness = .init(floatLiteral: 0.25)
-
-            let coin = ModelEntity(mesh: mesh, materials: [material])
+            let coin = makeCollectibleEntity()
             coin.name = coinEntityName
             coin.generateCollisionShapes(recursive: true)
             coin.components.set(InputTargetComponent())
@@ -691,6 +714,34 @@ struct ARPlacementView: UIViewRepresentable {
             coinAnchor?.removeFromParent()
             coinAnchor = nil
             confirmedPlaneID = nil
+        }
+
+        /// The Testudo model, scaled to fit `collectibleTargetSizeMeters`, or —
+        /// if it hasn't finished loading (or failed to) — the original gold
+        /// coin, so placement never blocks on the load.
+        private func makeCollectibleEntity() -> Entity {
+            guard let template = collectibleTemplate else { return fallbackCoinEntity() }
+
+            let clone = template.clone(recursive: true)
+            let extents = clone.visualBounds(relativeTo: nil).extents
+            let largestDimension = max(extents.x, extents.y, extents.z)
+            if largestDimension > 0 {
+                let scale = AppConstants.AR.collectibleTargetSizeMeters / largestDimension
+                clone.scale = SIMD3<Float>(repeating: scale)
+            }
+            return clone
+        }
+
+        private func fallbackCoinEntity() -> ModelEntity {
+            let mesh = MeshResource.generateCylinder(
+                height: AppConstants.AR.coinThicknessMeters,
+                radius: AppConstants.AR.coinRadiusMeters
+            )
+            var material = SimpleMaterial()
+            material.color = .init(tint: UIColor(DS.Color.gold), texture: nil)
+            material.metallic = .init(floatLiteral: 1.0)
+            material.roughness = .init(floatLiteral: 0.25)
+            return ModelEntity(mesh: mesh, materials: [material])
         }
 
         // Smooth ~0.5s swell — a wave that crests then fades, not a tap.

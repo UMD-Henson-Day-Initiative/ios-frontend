@@ -35,7 +35,7 @@ struct LeaderboardScreen: View {
                         ContentUnavailableView(
                             "No rankings yet",
                             systemImage: "trophy",
-                            description: Text("Collect a coin to appear on the leaderboard.")
+                            description: Text("Collect a Testudo to appear on the leaderboard.")
                         )
                         Spacer()
                     } else {

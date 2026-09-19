@@ -24,8 +24,8 @@ struct HomeScreen: View {
         ),
         HomeFeature(
             icon: "camera.viewfinder",
-            title: "Collect Coins",
-            description: "Once you're within 0.1 miles of an event, the Collect button unlocks — it opens your camera so you can grab the coin and earn points.",
+            title: "Collect Testudo",
+            description: "Once you're within 0.1 miles of an event, the Collect button unlocks — it opens your camera so you can grab Testudo and earn points.",
             tab: .map
         ),
         HomeFeature(
